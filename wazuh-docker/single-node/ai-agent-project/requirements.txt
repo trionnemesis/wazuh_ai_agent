@@ -1,0 +1,11 @@
+# requirements.txt
+fastapi
+uvicorn
+apscheduler
+langchain-openai
+langchain-google-genai
+langchain-anthropic
+langchain-community
+opensearch-py[async] # 使用 [async] 會自動安裝 aiohttp
+sentence-transformers
+python-dotenv

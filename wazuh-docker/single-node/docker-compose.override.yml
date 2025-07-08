@@ -1,0 +1,19 @@
+services:
+  ai-agent:
+    build:
+      context: ../single-node/ai-agent-project
+      dockerfile: Dockerfile
+    container_name: ai-agent
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - default
+    depends_on:
+      - wazuh.indexer
+
+# 關鍵部分：請確保 name 與您查到的結果一致
+networks:
+  default:
+    external: true
+    name: single-node_default # <-- 確保您檔案中的值是這個
