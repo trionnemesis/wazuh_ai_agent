@@ -131,6 +131,17 @@ docker-compose up -d
 - 若需擴充 LLM，請參考 ai-agent-project/app/main.py 的 get_llm 實作
 - 有任何問題請先查閱本說明與 Troubleshooting 區塊
 
+## 未來擴充方向
+
+1. **多模型支援與自動選擇機制**
+   - 除了現有的 Gemini/Claude，可擴充支援更多 LLM（如 OpenAI GPT-4、Llama 3、Azure OpenAI 等），並根據警報類型、語言或 SLA 自動選擇最適合的模型，提升彈性與準確度。
+
+2. **自訂化警報回應與自動化處置**
+   - 結合 SOAR（Security Orchestration, Automation and Response）功能，讓 AI 分析結果可自動觸發腳本、封鎖 IP、發送通知等自動化回應，實現從偵測到處置的全自動流程。
+
+3. **進階分析與威脅情報整合**
+   - 將外部威脅情報（Threat Intelligence Feed）與歷史警報資料納入 AI 分析，提升對新型攻擊的識別能力，並可產生趨勢報告、攻擊鏈分析等進階功能，協助資安團隊預防未來威脅。
+
 ---
 
 > 本專案由資深 AI 與 Wazuh 工程師維護，歡迎 issue/PR 與討論！
