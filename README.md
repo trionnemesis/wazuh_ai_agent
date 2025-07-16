@@ -16,41 +16,28 @@ config:
 ---
 flowchart TD
  subgraph subGraph0["Wazuh SIEM 核心"]
-        B["Wazuh Indexer - OpenSearch"]
+        B["Wazuh Indexer OpenSearch"]
         A["Wazuh Manager"]
         C["Wazuh Dashboard"]
   end
- subgraph subGraph1["Embedding 流程"]
-        D["AI Agent - FastAPI + LangChain"]
-        GE1["gemini-embedding-001"]
+ subgraph subGraph1["AI 智慧分析系統"]
+        D["AI Agent FastAPI + LangChain"]
+        E["外部大型語言模型 Google Gemini / Anthropic Claude"]
   end
- subgraph s1["查詢與分析流程"]
-        GE2["gemini-embedding-001"]
-        LLM["外部大型語言模型 - Google Gemini / Anthropic Claude"]
-  end
- subgraph subGraph3["AI 智慧分析系統 - RAG"]
-        subGraph1
-        s1
-  end
- subgraph subGraph4["Docker Host"]
+ subgraph subGraph2["Docker Host"]
         subGraph0
-        subGraph3
+        subGraph1
   end
     A -- 透過 Filebeat 傳送警報 --> B
     C -- 查詢與視覺化 --> B
     D -- "1. 定期查詢新警報" --> B
     B -- "2. 回傳未分析的警報" --> D
-    D -- "3. 使用 Gemini Embedding 將警報內容向量化" --> GE1
-    GE1 -- "4. 產生語意向量" --> D
-    D -- "5. 將向量與分析結果寫回警報" --> B
-    D -- "A. 將使用者查詢向量化" --> GE2
-    GE2 -- "B. 產生查詢向量" --> D
-    D -- "C. 在 Indexer 中進行向量搜尋" --> B
-    B -- "D. 回傳最相關的歷史警報" --> D
-    D -- "E. 結合情資送至 LLM 分析" --> LLM
-    LLM -- "F. 回傳分析報告" --> D
+    D -- "3. 將警報內容傳送至 LLM" --> E
+    E -- "4. 回傳分析結果" --> D
+    D -- "5. 將 AI 分析結果寫回警報" --> B
     Analyst["安全分析師"] -- 在儀表板查看附有 AI 註解的警報 --> C
     DataSource["日誌/事件來源"] --> A
+
 
 ```
 
