@@ -2,6 +2,19 @@
 
 本專案整合 **檢索增強生成 (RAG)** 與 **大型語言模型 (LLM)** 技術，為 [Wazuh](https://wazuh.com/) SIEM 系統提供先進的智慧化安全警報分析。透過 Google Gemini Embedding 的語意向量搜尋與 Anthropic Claude/Google Gemini 的分析能力，實現自動化的警報分流、風險評估與專業建議生成。
 
+## 🎯 專案現況 - Stage 2 RAG Implementation COMPLETED ✅
+
+### 當前實施狀態
+- ✅ **Stage 1**: 基礎向量化系統 (已完成)
+- ✅ **Stage 2**: 核心 RAG 檢索增強生成 (已完成)
+- 🔄 **Stage 3**: 進階功能與優化 (規劃中)
+
+### 最新功能亮點
+- **智慧歷史上下文檢索**: 使用 k-NN 向量搜尋找出語意相似的歷史警報
+- **上下文感知分析**: LLM 基於相似歷史事件提供更精準的威脅評估
+- **生產級 RAG 流程**: 完整的檢索-增強-生成工作流程
+- **模組化架構**: 高度可維護的程式碼結構
+
 ---
 
 ## 🏗️ 核心架構
@@ -18,52 +31,53 @@ flowchart TD
         C[Wazuh Dashboard<br/>視覺化介面]
     end
     
-    subgraph "AgenticRAG 智慧分析層"
+    subgraph "AgenticRAG 智慧分析層 (Stage 2)"
         D[AI Agent<br/>FastAPI 服務]
         E[Embedding Service<br/>Gemini text-embedding-004]
         F[Vector Store<br/>OpenSearch KNN]
         G[LLM Analysis<br/>Claude 3 / Gemini 1.5]
-        H[Context Builder<br/>語意搜尋與上下文建構]
+        H[RAG Retriever<br/>歷史上下文檢索]
+        I[Context Builder<br/>智慧上下文建構]
     end
     
-    subgraph "資料流程"
-        I[新警報]
-        J[向量化]
-        K[相似性搜尋]
-        L[上下文增強]
-        M[LLM 分析]
-        N[結果儲存]
+    subgraph "RAG 工作流程"
+        J[新警報] --> K[向量化]
+        K --> L[相似性搜尋]
+        L --> M[歷史上下文檢索]
+        M --> N[上下文增強分析]
+        N --> O[結果儲存]
     end
     
-    A --> I
-    I --> D
-    D --> J
-    J --> E
+    A --> J
+    J --> D
+    D --> K
+    K --> E
     E --> F
-    F --> K
-    K --> H
-    H --> L
-    L --> G
-    G --> M
-    M --> N
-    N --> B
+    F --> L
+    L --> H
+    H --> M
+    M --> I
+    I --> N
+    N --> G
+    G --> O
+    O --> B
     C --> B
 ```
 
-### 技術特色
+### Stage 2 核心技術組件
 
-| 類別 | 技術組件 | 實現詳情 |
-|------|----------|----------|
-| **向量化引擎** | Google Gemini Embedding | `text-embedding-004` 模型，768 維向量，支援 MRL 技術 |
-| **向量資料庫** | OpenSearch KNN | HNSW 索引，cosine 相似度，高效能近似最近鄰搜尋 |
-| **LLM 引擎** | Claude 3 / Gemini 1.5 | 可插拔式 LLM 架構，支援 Anthropic 與 Google 模型 |
-| **RAG 架構** | LangChain + 自建檢索器 | 專門的警報語意搜尋與上下文增強系統 |
-| **API 框架** | FastAPI | 非同步 RESTful API，支援自動化排程與健康檢查 |
-| **容器編排** | Docker Compose | 完整的容器化部署，包含 SSL 憑證與網路配置 |
+| 類別 | 技術組件 | 實現詳情 | Stage 2 增強 |
+|------|----------|----------|-------------|
+| **RAG 檢索器** | OpenSearch k-NN | HNSW 索引，cosine 相似度 | ✅ 語意相似警報檢索 |
+| **向量化引擎** | Google Gemini Embedding | `text-embedding-004` 模型，768 維向量 | ✅ MRL 技術支援 |
+| **上下文建構** | Custom Context Builder | 歷史警報格式化與摘要 | ✅ 智慧上下文增強 |
+| **LLM 引擎** | Claude 3 / Gemini 1.5 | 可插拔式 LLM 架構 | ✅ 上下文感知分析 |
+| **RAG 流程** | LangChain + 自建檢索器 | 完整 RAG 工作流程 | ✅ 端到端整合 |
+| **API 框架** | FastAPI | 非同步 RESTful API | ✅ RAG 健康檢查 |
 
 ---
 
-## 🧠 AgenticRAG 工作流程
+## 🧠 Stage 2 RAG 工作流程
 
 ### 1. 警報向量化階段
 ```python
@@ -75,25 +89,31 @@ alert_vector = await embedding_service.embed_alert_content({
 })
 ```
 
-### 2. 語意相似搜尋階段
+### 2. 歷史上下文檢索階段 (NEW in Stage 2)
 ```python
-# 使用向量搜尋找出語意相關的歷史警報
+# 使用 k-NN 搜尋找出語意相關的歷史警報
 similar_alerts = await find_similar_alerts(alert_vector, k=5)
 ```
 
-### 3. 上下文增強分析階段
+### 3. 上下文增強分析階段 (NEW in Stage 2)
 ```python
-# 結合當前警報與相似歷史警報進行 LLM 分析
+# 結合當前警報與相似歷史警報進行 RAG 分析
+context = format_historical_context(similar_alerts)
 analysis = await chain.ainvoke({
     "alert_summary": current_alert_summary,
-    "context": similar_alerts_context
+    "historical_context": context
 })
 ```
 
-### 4. 結果儲存與向量索引
+### 4. 增強結果儲存
 ```python
-# 將分析結果與向量一同儲存至 OpenSearch
-await update_alert_with_analysis(alert_id, analysis, alert_vector)
+# 將 RAG 分析結果與向量一同儲存至 OpenSearch
+await update_alert_with_analysis(alert_id, {
+    "triage_report": analysis_result,
+    "provider": LLM_PROVIDER,
+    "similar_alerts_count": len(similar_alerts),
+    "timestamp": datetime.utcnow().isoformat()
+}, alert_vector)
 ```
 
 ---
@@ -174,17 +194,17 @@ docker-compose up -d
 docker exec -it ai-agent python setup_index_template.py
 ```
 
-### 4. 驗證部署
+### 4. 驗證 RAG 部署
 
 #### a. 檢查服務狀態
 ```bash
 # 檢查所有容器
 docker ps
 
-# 檢查 AI Agent 健康狀態
+# 檢查 AI Agent RAG 健康狀態
 curl http://localhost:8000/health
 
-# 驗證向量化流程
+# 驗證 RAG 向量化流程
 docker exec -it ai-agent python verify_vectorization.py
 ```
 
@@ -195,228 +215,208 @@ docker exec -it ai-agent python verify_vectorization.py
 
 ---
 
-## 🔧 AgenticRAG 配置選項
+## 📊 Stage 2 RAG 功能展示
 
-### Embedding 設定
+### 分析品質提升對比
 
-| 參數 | 預設值 | 說明 |
-|------|--------|------|
-| `EMBEDDING_MODEL` | models/text-embedding-004 | Gemini Embedding 模型 |
-| `EMBEDDING_DIMENSION` | 768 | 向量維度 (支援 MRL: 1-768) |
-| `EMBEDDING_MAX_RETRIES` | 3 | API 呼叫重試次數 |
-| `EMBEDDING_RETRY_DELAY` | 1.0 | 重試間隔 (秒) |
+#### Stage 1 (基礎分析)
+```
+警報：SSH 登入失敗 - server01
+分析：檢測到 SSH 登入嘗試失敗，建議監控此 IP。
+```
 
-### LLM 模型選擇
+#### Stage 2 (RAG 增強分析)
+```
+警報：SSH 登入失敗 - server01
+RAG 分析：基於相似歷史警報分析，此 IP (192.168.1.100) 在過去 24 小時內
+已嘗試登入 3 次失敗。歷史模式顯示這是潛在暴力破解攻擊的早期階段。
+建議：1) 立即封鎖此 IP 2) 檢查其他伺服器的相同 IP 活動 3) 強化密碼策略
+風險等級：High (基於歷史攻擊模式)
+```
 
-| 提供商 | 模型 | 特色 | 適用場景 |
-|--------|------|------|----------|
-| `anthropic` | claude-3-haiku-20240307 | 快速、經濟 | 大量警報處理 |
-| `anthropic` | claude-3-sonnet-20240229 | 平衡效能 | 一般分析工作 |
-| `gemini` | gemini-1.5-flash | 多模態、快速 | 混合內容分析 |
-| `gemini` | gemini-1.5-pro | 高精度 | 複雜威脅分析 |
+### RAG 系統監控指標
 
-### 向量搜尋調優
+| 指標 | 描述 | 查詢方式 |
+|------|------|----------|
+| 已向量化警報數 | 包含向量的警報總數 | `curl -k -u admin:SecretPassword "https://localhost:9200/wazuh-alerts-*/_count?q=alert_vector:*"` |
+| RAG 分析成功率 | 包含歷史上下文的分析 | Docker logs 中的 `RAG-enhanced analysis` |
+| 相似警報檢索數 | 每次分析找到的相似警報 | `similar_alerts_count` 欄位 |
 
-```json
-{
-  "knn_settings": {
-    "index_options": {
-      "type": "hnsw",
-      "m": 16,
-      "ef_construction": 512
-    },
-    "similarity": "cosine"
-  }
-}
+---
+
+## 🔧 Stage 2 RAG 配置選項
+
+### 檢索參數調整
+
+```python
+# k-NN 檢索參數
+SIMILARITY_SEARCH_K = 5  # 檢索的相似警報數量
+SIMILARITY_THRESHOLD = 0.7  # 相似度門檻值
+CONTEXT_MAX_LENGTH = 2000  # 歷史上下文最大長度
+```
+
+### 進階 Embedding 設定
+
+| 參數 | 預設值 | Stage 2 功能 |
+|------|--------|-------------|
+| `EMBEDDING_MODEL` | models/text-embedding-004 | 支援 MRL 維度調整 |
+| `EMBEDDING_DIMENSION` | 768 | 可調整至 128-768 |
+| `EMBEDDING_MAX_RETRIES` | 3 | 增強穩定性 |
+| `EMBEDDING_RETRY_DELAY` | 1.0 | 智慧重試機制 |
+
+### RAG 提示範本優化
+
+```python
+prompt_template = """
+你是資深安全分析師。請根據以下歷史相似警報的上下文來分析新的 Wazuh 警報。
+
+**相關歷史警報：**
+{historical_context}
+
+**待分析的新警報：**
+{alert_summary}
+
+**分析任務：**
+1. 簡要總結新事件
+2. 基於歷史模式評估風險等級 (Critical, High, Medium, Low)
+3. 提供參考歷史案例的上下文感知建議
+
+**你的分流報告：**
+"""
 ```
 
 ---
 
-## 📊 系統監控與除錯
+## 🛠️ 進階 RAG 功能
 
-### API 端點
-
-| 端點 | 方法 | 功能 |
-|------|------|------|
-| `/health` | GET | 系統健康檢查 |
-| `/` | GET | 基本服務資訊 |
-
-### 健康檢查回應範例
-```json
-{
-  "status": "healthy",
-  "opensearch": "connected",
-  "embedding_service": "working",
-  "vector_dimension": 768,
-  "llm_provider": "anthropic",
-  "processed_alerts": 1247,
-  "vectorized_alerts": 1247
-}
-```
-
-### 日誌監控
-```bash
-# 即時監控 AI Agent 日誌
-docker logs ai-agent -f
-
-# 檢查向量化統計
-docker logs ai-agent | grep "Successfully updated alert"
-
-# 監控 Embedding API 使用
-docker logs ai-agent | grep "Embedding"
-```
-
-### 效能指標查詢
-```bash
-# 查詢已向量化警報數量
-curl -k -u admin:SecretPassword \
-  "https://localhost:9200/wazuh-alerts-*/_count?q=alert_vector:*"
-
-# 檢查索引大小
-curl -k -u admin:SecretPassword \
-  "https://localhost:9200/_cat/indices/wazuh-alerts-*?v&s=index"
-```
-
----
-
-## 🛠️ 進階功能
-
-### 自訂向量維度 (MRL 支援)
+### 向量搜尋優化查詢
 
 ```bash
-# 高效能模式 (128 維)
-EMBEDDING_DIMENSION=128
-
-# 平衡模式 (256 維)
-EMBEDDING_DIMENSION=256
-
-# 高精度模式 (768 維)
-EMBEDDING_DIMENSION=768
-```
-
-### 向量搜尋查詢範例
-
-```bash
-# 使用 OpenSearch API 進行向量搜尋
+# 執行語意相似搜尋
 curl -k -u admin:SecretPassword -X GET \
   "https://localhost:9200/wazuh-alerts-*/_search" \
   -H "Content-Type: application/json" \
   -d '{
     "query": {
-      "knn": {
-        "alert_vector": {
-          "vector": [0.1, 0.2, ...],
-          "k": 5
-        }
+      "bool": {
+        "must": [
+          {
+            "knn": {
+              "alert_vector": {
+                "vector": [0.1, 0.2, ...],
+                "k": 5
+              }
+            }
+          },
+          {
+            "exists": {
+              "field": "ai_analysis"
+            }
+          }
+        ]
       }
-    }
+    },
+    "_source": ["rule", "agent", "data", "ai_analysis.triage_report"]
   }'
 ```
 
-### 批次向量化腳本
+### 批次 RAG 處理
 
 ```python
-# 批次處理歷史警報
+# 批次處理歷史警報以建立向量資料庫
 python verify_vectorization.py --batch-process --limit=1000
 ```
 
 ---
 
-## 🔍 故障排除
+## 🔍 Stage 2 故障排除
 
-### 常見問題與解決方案
+### RAG 特定問題診斷
 
 | 問題現象 | 可能原因 | 解決方法 |
 |----------|----------|----------|
-| `ai-agent` 容器啟動失敗 | API Key 未設定 | 檢查 `.env` 檔案中的 API 金鑰 |
-| 向量搜尋無結果 | 索引範本未套用 | 重新執行 `setup_index_template.py` |
-| Embedding API 失敗 | 網路連線問題 | 檢查網路設定與 API 配額 |
-| OpenSearch 連線失敗 | SSL 憑證問題 | 重新生成憑證並重啟服務 |
+| 無歷史上下文 | 索引範本未正確設置 | 重新執行 `setup_index_template.py` |
+| 相似搜尋失敗 | 向量維度不匹配 | 檢查 `EMBEDDING_DIMENSION` 設定 |
+| 上下文格式錯誤 | 歷史警報結構問題 | 驗證 `format_historical_context` 函式 |
+| RAG 分析緩慢 | k-NN 參數過大 | 調整 `k=5` 為較小值 |
 
-### 診斷工具
+### RAG 診斷工具
 
 ```bash
-# 完整系統診斷
+# 完整 RAG 系統診斷
 docker exec -it ai-agent python verify_vectorization.py
 
-# 測試 Embedding 服務
+# 測試向量檢索功能
 docker exec -it ai-agent python -c "
-from embedding_service import GeminiEmbeddingService
 import asyncio
+from main import find_similar_alerts
 async def test():
-    service = GeminiEmbeddingService()
-    result = await service.test_connection()
-    print(f'Embedding 服務測試: {result}')
+    # 使用示例向量測試檢索
+    test_vector = [0.1] * 768
+    results = await find_similar_alerts(test_vector, k=3)
+    print(f'檢索到 {len(results)} 個相似警報')
 asyncio.run(test())
 "
 
-# 檢查向量索引結構
-curl -k -u admin:SecretPassword \
-  "https://localhost:9200/wazuh-alerts-*/_mapping?pretty"
+# 檢查 RAG 流程日誌
+docker logs ai-agent | grep -E "(RAG|similar_alerts|historical_context)"
 ```
 
 ---
 
 ## 🚀 未來發展規劃
 
-### 短期目標 (v3.0)
-- [ ] **多模態分析**：支援檔案、網路封包等非文字資料
-- [ ] **即時向量搜尋**：WebSocket 即時查詢介面
-- [ ] **自適應學習**：根據分析師回饋調整模型
-- [ ] **威脅情報整合**：外部 IOC 源整合
+### Stage 3 目標 (計劃中)
+- [ ] **即時 RAG 查詢**: WebSocket 即時向量搜尋介面
+- [ ] **多模態 RAG**: 支援檔案、網路封包等非文字資料檢索
+- [ ] **自適應學習**: 根據分析師回饋調整檢索權重
+- [ ] **威脅情報整合**: 外部 IOC 源的向量化整合
 
-### 中期目標 (v4.0)
-- [ ] **分散式部署**：支援多節點向量搜尋
-- [ ] **模型微調**：針對特定環境的模型訓練
-- [ ] **自動化回應**：SOAR 平台整合
-- [ ] **圖神經網路**：攻擊鏈關聯分析
-
-### 長期願景 (v5.0)
-- [ ] **AGI 整合**：多 Agent 協作分析
-- [ ] **預測性威脅檢測**：時間序列異常檢測
-- [ ] **自動化紅隊模擬**：內建滲透測試能力
-- [ ] **零信任架構**：動態威脅建模
+### Stage 4 目標 (長期)
+- [ ] **分散式 RAG**: 多節點向量搜尋叢集
+- [ ] **圖 RAG**: 基於攻擊鏈的圖神經網路檢索
+- [ ] **時序 RAG**: 時間序列感知的上下文檢索
+- [ ] **Agent RAG**: 多 Agent 協作的複合檢索
 
 ---
 
 ## 📚 技術文檔
 
-### 核心模組說明
+### Stage 2 核心模組
 
-- **`main.py`**：FastAPI 主應用程式，包含排程器與 API 端點
-- **`embedding_service.py`**：Gemini Embedding 服務封裝，支援 MRL 與重試機制
-- **`setup_index_template.py`**：OpenSearch 索引範本設置工具
-- **`verify_vectorization.py`**：系統驗證與診斷工具
+- **`main.py`**: RAG 增強的 FastAPI 主應用程式
+- **`embedding_service.py`**: Gemini Embedding 服務，支援 MRL
+- **`setup_index_template.py`**: 向量索引範本設置工具
+- **`verify_vectorization.py`**: RAG 系統驗證與診斷
+- **`wazuh-alerts-vector-template.json`**: OpenSearch 向量索引定義
 
-### API 參考
+### RAG API 參考
 
-#### 警報分析 API
+#### 歷史上下文檢索 API
 ```python
-# 內部 API - 自動化觸發
-async def analyze_alert(alert_data: Dict) -> Dict:
-    """分析單個警報並返回結構化結果"""
+async def find_similar_alerts(query_vector: List[float], k: int = 5) -> List[Dict]:
+    """基於向量相似度檢索歷史警報上下文"""
     pass
 ```
 
-#### 向量搜尋 API
+#### 上下文建構 API
 ```python
-# 內部 API - 語意搜尋
-async def find_similar_alerts(vector: List[float], k: int = 5) -> List[Dict]:
-    """基於向量相似度搜尋歷史警報"""
+def format_historical_context(alerts: List[Dict]) -> str:
+    """將檢索的歷史警報格式化為 LLM 上下文"""
     pass
 ```
 
-### 資料模型
+### Stage 2 資料模型增強
 
-#### 警報向量結構
+#### RAG 增強的警報結構
 ```json
 {
-  "alert_vector": [0.1, 0.2, ...],  // 768 維浮點數陣列
+  "alert_vector": [0.1, 0.2, ...],  // 768 維向量
   "ai_analysis": {
-    "triage_report": "詳細分析報告...",
+    "triage_report": "RAG 增強分析報告...",
     "provider": "anthropic",
     "timestamp": "2024-01-15T10:30:00Z",
-    "risk_level": "Medium",
+    "similar_alerts_count": 3,  // NEW: 檢索的相似警報數
     "vector_dimension": 768,
     "processing_time_ms": 1250
   }
@@ -427,24 +427,25 @@ async def find_similar_alerts(vector: List[float], k: int = 5) -> List[Dict]:
 
 ## 🤝 社群貢獻
 
-### 貢獻指南
+### Stage 2 貢獻重點
 
-1. **Issues**：使用 GitHub Issues 回報問題或提出功能需求
-2. **Pull Requests**：遵循程式碼規範，包含測試與文檔
-3. **討論**：參與 Discussions 分享使用經驗與最佳實踐
+1. **RAG 算法優化**: 改進檢索算法和相似度計算
+2. **上下文品質**: 優化歷史上下文的格式化和摘要
+3. **效能調優**: 向量搜尋和索引效能改進
+4. **多語言支援**: 擴展非英語安全警報的 RAG 支援
 
 ### 開發環境設置
 
 ```bash
-# 開發模式啟動
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# Stage 2 開發模式
+docker-compose -f docker-compose.yml -f docker-compose.override.yml up -d
 
-# 程式碼格式檢查
-docker exec -it ai-agent python -m black --check .
+# RAG 功能測試
+docker exec -it ai-agent python -m pytest tests/ -v -k "test_rag"
+
+# 程式碼品質檢查
+docker exec -it ai-agent python -m black . --check
 docker exec -it ai-agent python -m flake8 .
-
-# 單元測試
-docker exec -it ai-agent python -m pytest tests/
 ```
 
 ---
@@ -454,28 +455,27 @@ docker exec -it ai-agent python -m pytest tests/
 ### 授權條款
 本專案採用 **GPL v2** 授權條款，詳見 [LICENSE](wazuh-docker/LICENSE) 文件。
 
-### 致謝
-- **Wazuh Team**：提供優秀的開源 SIEM 平台
-- **Google AI**：Gemini 系列模型與 Embedding 服務
-- **Anthropic**：Claude 系列語言模型
-- **OpenSearch Project**：高效能搜尋與向量資料庫
-- **LangChain Community**：優秀的 LLM 應用開發框架
+### Stage 2 特別致謝
+- **LangChain Community**: 優秀的 RAG 框架支援
+- **OpenSearch Team**: 高效能向量搜尋功能
+- **Google AI**: Gemini Embedding 模型與 MRL 技術
+- **Anthropic**: Claude 模型的優秀上下文理解能力
 
 ---
 
 ## 📞 支援與聯絡
 
 ### 技術支援
-- **文檔**：完整的技術文檔與 API 參考
-- **範例**：實際部署與使用範例
-- **故障排除**：常見問題與解決方案
+- **Stage 2 文檔**: 完整的 RAG 實施指南
+- **故障排除**: RAG 特定問題解決方案
+- **最佳實踐**: 生產環境 RAG 優化建議
 
 ### 社群資源
-- **GitHub**：原始碼、Issues、討論區
-- **Docker Hub**：預建容器映像檔
-- **技術部落格**：深度技術文章與最佳實踐
+- **GitHub**: [專案原始碼與 Issues](https://github.com/your-repo)
+- **討論區**: RAG 功能討論與經驗分享
+- **技術部落格**: AgenticRAG 深度技術文章
 
 ---
 
-**Wazuh AgenticRAG** - 讓 AI 驅動您的安全營運，將威脅檢測提升到智慧化新境界。
+**Wazuh AgenticRAG Stage 2** - 透過智慧檢索增強生成，讓 AI 具備歷史記憶，提供更精準的安全威脅分析。將您的安全營運提升到上下文感知的智慧化新境界。
 
