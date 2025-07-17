@@ -2,8 +2,8 @@ import os
 import logging
 import traceback
 import asyncio
-from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+from datetime import datetime, timedelta
 from fastapi import FastAPI
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -63,22 +63,33 @@ def get_llm():
 # Initialize LangChain components
 llm = get_llm()
 
-# Stage 2: Updated Prompt Template for RAG with Historical Context
+# Stage 3: Enhanced prompt template for multi-source context correlation
 prompt_template = ChatPromptTemplate.from_template(
-    """You are a senior security analyst. Analyze the new Wazuh alert below, using the provided historical context from similar past alerts to inform your assessment.
+    """You are a senior security analyst with expertise in correlating security events with system performance data. Analyze the new Wazuh alert below using the provided multi-source contextual information.
 
-**Relevant Historical Alerts:**
-{historical_context}
+**Historical Similar Alerts:**
+{similar_alerts_context}
+
+**Correlated System Metrics:**
+{system_metrics_context}
+
+**Process Information:**
+{process_context}
+
+**Network Data:**
+{network_context}
 
 **New Wazuh Alert to Analyze:**
 {alert_summary}
 
 **Your Analysis Task:**
 1. Briefly summarize the new event.
-2. Assess its risk level (Critical, High, Medium, Low, Informational), considering any patterns from the historical context.
-3. Provide a clear, context-aware recommendation that references relevant patterns from similar past alerts.
+2. Correlate the alert with system performance data and other contextual information.
+3. Assess its risk level (Critical, High, Medium, Low, Informational) considering all available context.
+4. Identify any patterns or anomalies by cross-referencing different data sources.
+5. Provide actionable recommendations based on the comprehensive analysis.
 
-**Your Triage Report:**
+**Your Comprehensive Triage Report:**
 """
 )
 
@@ -88,21 +99,201 @@ chain = prompt_template | llm | output_parser
 # Initialize embedding service
 embedding_service = GeminiEmbeddingService()
 
-# === Stage 2: Core RAG Implementation Functions ===
+# === Stage 3: Agentic Context Correlation Implementation ===
 
-async def find_similar_alerts(query_vector: List[float], k: int = 5) -> List[Dict[Any, Any]]:
+def determine_contextual_queries(alert: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    Stage 2: 實現檢索模組 - 使用 k-NN 搜尋找到相似的歷史警報
+    Stage 3: Decision engine that determines what contextual information is needed
+    based on the alert type and content.
     
     Args:
-        query_vector: 新警報的向量表示
-        k: 要檢索的相似警報數量
+        alert: The new alert document from OpenSearch
         
     Returns:
-        List[Dict]: 最相似的k個歷史警報文檔
+        List of query specifications for different types of contextual data
+    """
+    queries = []
+    alert_source = alert.get('_source', {})
+    rule = alert_source.get('rule', {})
+    agent = alert_source.get('agent', {})
+    timestamp = alert_source.get('timestamp')
+    
+    rule_description = rule.get('description', '').lower()
+    rule_groups = rule.get('groups', [])
+    host_name = agent.get('name', '')
+    
+    logger.info(f"Determining contextual queries for alert: {rule_description}")
+    
+    # Default: Always perform k-NN search for similar historical alerts
+    queries.append({
+        'type': 'vector_similarity',
+        'description': 'Similar historical alerts',
+        'parameters': {
+            'k': 5,
+            'include_ai_analysis': True
+        }
+    })
+    
+    # Resource monitoring correlation rules
+    resource_keywords = ['high cpu usage', 'excessive ram consumption', 'memory usage', 
+                         'disk space', 'cpu utilization', 'system overload', 'performance']
+    
+    if any(keyword in rule_description for keyword in resource_keywords):
+        logger.info("Resource-related alert detected - adding process list query")
+        queries.append({
+            'type': 'keyword_time_range',
+            'description': 'Process information from same host',
+            'parameters': {
+                'keywords': ['process list', 'top processes', 'running processes'],
+                'host': host_name,
+                'time_window_minutes': 5,
+                'timestamp': timestamp
+            }
+        })
+    
+    # Security event correlation rules
+    security_keywords = ['ssh brute-force', 'web attack', 'authentication failed', 
+                         'login attempt', 'intrusion', 'malware', 'suspicious activity']
+    
+    if any(keyword in rule_description for keyword in security_keywords):
+        logger.info("Security event detected - adding system metrics correlation")
+        
+        # Add CPU metrics query
+        queries.append({
+            'type': 'keyword_time_range',
+            'description': 'CPU metrics from same host',
+            'parameters': {
+                'keywords': ['cpu usage', 'cpu utilization', 'processor'],
+                'host': host_name,
+                'time_window_minutes': 1,
+                'timestamp': timestamp
+            }
+        })
+        
+        # Add network I/O metrics query
+        queries.append({
+            'type': 'keyword_time_range',
+            'description': 'Network I/O metrics from same host',
+            'parameters': {
+                'keywords': ['network traffic', 'network io', 'bandwidth', 'packets'],
+                'host': host_name,
+                'time_window_minutes': 1,
+                'timestamp': timestamp
+            }
+        })
+    
+    # SSH-specific correlation
+    if 'ssh' in rule_description:
+        logger.info("SSH-related alert detected - adding SSH-specific metrics")
+        queries.append({
+            'type': 'keyword_time_range',
+            'description': 'SSH connection logs',
+            'parameters': {
+                'keywords': ['ssh connection', 'port 22', 'sshd'],
+                'host': host_name,
+                'time_window_minutes': 2,
+                'timestamp': timestamp
+            }
+        })
+    
+    # Web-related correlation
+    if any(web_term in rule_description for web_term in ['web', 'http', 'apache', 'nginx']):
+        logger.info("Web-related alert detected - adding web server metrics")
+        queries.append({
+            'type': 'keyword_time_range',
+            'description': 'Web server metrics',
+            'parameters': {
+                'keywords': ['apache', 'nginx', 'web server', 'http requests'],
+                'host': host_name,
+                'time_window_minutes': 2,
+                'timestamp': timestamp
+            }
+        })
+    
+    logger.info(f"Generated {len(queries)} contextual queries for correlation analysis")
+    return queries
+
+async def execute_retrieval(queries: List[Dict[str, Any]], alert_vector: List[float]) -> Dict[str, Any]:
+    """
+    Stage 3: Generic retrieval function that executes multiple types of queries
+    and aggregates results into a structured context object.
+    
+    Args:
+        queries: List of query specifications from determine_contextual_queries
+        alert_vector: Vector representation of the current alert
+        
+    Returns:
+        Dictionary containing aggregated results from all queries
+    """
+    context_data = {
+        'similar_alerts': [],
+        'cpu_metrics': [],
+        'network_logs': [],
+        'process_data': [],
+        'ssh_logs': [],
+        'web_metrics': []
+    }
+    
+    logger.info(f"Executing {len(queries)} retrieval queries")
+    
+    for query in queries:
+        query_type = query['type']
+        description = query['description']
+        parameters = query['parameters']
+        
+        try:
+            logger.info(f"Executing query: {description}")
+            
+            if query_type == 'vector_similarity':
+                # K-NN vector search for similar alerts
+                results = await execute_vector_search(alert_vector, parameters)
+                context_data['similar_alerts'].extend(results)
+                
+            elif query_type == 'keyword_time_range':
+                # Keyword and time-based search
+                results = await execute_keyword_time_search(parameters)
+                
+                # Categorize results based on description
+                if 'cpu' in description.lower():
+                    context_data['cpu_metrics'].extend(results)
+                elif 'network' in description.lower():
+                    context_data['network_logs'].extend(results)
+                elif 'process' in description.lower():
+                    context_data['process_data'].extend(results)
+                elif 'ssh' in description.lower():
+                    context_data['ssh_logs'].extend(results)
+                elif 'web' in description.lower():
+                    context_data['web_metrics'].extend(results)
+                    
+        except Exception as e:
+            logger.error(f"Error executing query '{description}': {str(e)}")
+            continue
+    
+    # Log retrieval summary
+    total_results = sum(len(results) for results in context_data.values())
+    logger.info(f"Retrieval completed - Total results: {total_results}")
+    for category, results in context_data.items():
+        if results:
+            logger.info(f"  {category}: {len(results)} items")
+    
+    return context_data
+
+async def execute_vector_search(alert_vector: List[float], parameters: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Execute k-NN vector similarity search for historical alerts.
+    
+    Args:
+        alert_vector: Vector representation of the current alert
+        parameters: Search parameters including k and filters
+        
+    Returns:
+        List of similar alert documents
     """
     try:
-        # 構建 OpenSearch k-NN 搜尋查詢，使用餘弦相似度
+        k = parameters.get('k', 5)
+        include_ai_analysis = parameters.get('include_ai_analysis', True)
+        
+        # Build k-NN search query
         knn_search_body = {
             "size": k,
             "query": {
@@ -110,154 +301,192 @@ async def find_similar_alerts(query_vector: List[float], k: int = 5) -> List[Dic
                     "must": [
                         {
                             "knn": {
-                                "alert_vector": {  # 使用一致的字段名稱
-                                    "vector": query_vector,
+                                "alert_vector": { # FIX: Changed from 'alert_embedding' to 'alert_vector' to match template
+                                    "vector": alert_vector,
                                     "k": k
                                 }
-                            }
-                        }
-                    ],
-                    "filter": [
-                        {
-                            "exists": {
-                                "field": "ai_analysis"  # 只檢索已經分析過的歷史警報
                             }
                         }
                     ]
                 }
             },
-            "_source": ["rule", "agent", "ai_analysis", "timestamp"]  # 只獲取需要的字段
+            "_source": ["rule", "agent", "ai_analysis", "timestamp"]
         }
         
-        logger.info(f"Executing k-NN search for {k} similar alerts")
-        logger.debug(f"k-NN query: {knn_search_body}")
+        # Add filter for alerts with AI analysis if requested
+        if include_ai_analysis:
+            # Ensure filter list exists before appending
+            if "filter" not in knn_search_body["query"]["bool"]:
+                knn_search_body["query"]["bool"]["filter"] = []
+            knn_search_body["query"]["bool"]["filter"].append(
+                {"exists": {"field": "ai_analysis"}}
+            )
         
-        # 執行搜尋
         response = await client.search(
             index="wazuh-alerts-*",
             body=knn_search_body
         )
         
         similar_alerts = response.get('hits', {}).get('hits', [])
-        logger.info(f"Found {len(similar_alerts)} similar historical alerts")
-        
+        logger.debug(f"Vector search returned {len(similar_alerts)} similar alerts")
         return similar_alerts
         
     except Exception as e:
-        logger.error(f"Error in find_similar_alerts: {str(e)}")
+        logger.error(f"Vector search failed: {str(e)}")
         return []
 
-def format_historical_context(alerts: List[Dict[Any, Any]]) -> str:
+async def execute_keyword_time_search(parameters: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    Stage 2: 格式化歷史上下文函式 - 將檢索到的警報格式化為可讀字串
+    Execute keyword and time-range search for system metrics and logs.
     
     Args:
-        alerts: find_similar_alerts 返回的警報文檔列表
+        parameters: Search parameters including keywords, host, and time window
         
     Returns:
-        str: 格式化的歷史上下文字串
+        List of matching documents
     """
-    if not alerts:
-        return "No relevant historical alerts found."
-    
-    context_parts = []
-    for i, alert in enumerate(alerts, 1):
-        source = alert.get('_source', {})
-        rule = source.get('rule', {})
-        agent = source.get('agent', {})
-        timestamp = source.get('timestamp', 'Unknown time')
-        
-        # 提取 AI 分析結果
-        ai_analysis = source.get('ai_analysis', {})
-        previous_analysis = ai_analysis.get('triage_report', 'No previous analysis available')
-        
-        # 格式化每個歷史警報
-        context_part = f"""
-{i}. **Timestamp:** {timestamp}
-   **Host:** {agent.get('name', 'Unknown')}
-   **Rule:** {rule.get('description', 'N/A')} (Level: {rule.get('level', 'N/A')})
-   **Previous Analysis:** {previous_analysis[:200]}{'...' if len(previous_analysis) > 200 else ''}
-   **Similarity Score:** {alert.get('_score', 'N/A')}
-"""
-        context_parts.append(context_part)
-    
-    return "\n".join(context_parts)
-
-async def process_single_alert(alert: Dict[Any, Any]) -> None:
-    """
-    Stage 2: 修改後的單一警報處理流程 - 整合 RAG 功能
-    
-    處理順序:
-    1. 獲取新警報
-    2. 向量化新警報
-    3. 檢索相似歷史警報
-    4. 格式化歷史上下文
-    5. 調用 LLM 分析
-    6. 更新結果到 OpenSearch
-    """
-    alert_id = alert['_id']
-    alert_index = alert['_index']
-    alert_source = alert['_source']
-    rule = alert_source.get('rule', {})
-    agent = alert_source.get('agent', {})
-    
-    # 步驟 1: 準備警報摘要
-    alert_summary = f"Rule: {rule.get('description', 'N/A')} (Level: {rule.get('level', 'N/A')}) on Host: {agent.get('name', 'N/A')}"
-    logger.info(f"Processing alert {alert_id}: {alert_summary}")
-
     try:
-        # 步驟 2: 向量化新警報
-        logger.info(f"Vectorizing alert {alert_id}")
-        alert_vector = await embedding_service.embed_alert_content(alert_source)
+        keywords = parameters.get('keywords', [])
+        host = parameters.get('host', '')
+        time_window_minutes = parameters.get('time_window_minutes', 5)
+        timestamp = parameters.get('timestamp')
         
-        # 步驟 3: 檢索相似歷史警報
-        logger.info(f"Retrieving similar alerts for {alert_id}")
-        similar_alerts = await find_similar_alerts(alert_vector, k=5)
+        if not timestamp:
+            logger.warning("No timestamp provided for time-range search")
+            return []
         
-        # 步驟 4: 格式化歷史上下文
-        historical_context = format_historical_context(similar_alerts)
+        # Parse timestamp and calculate time range
+        if isinstance(timestamp, str):
+            alert_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        else:
+            alert_time = datetime.utcnow()
         
-        # 步驟 5: 調用 LLM 分析 (包含歷史上下文)
-        logger.info(f"Generating AI analysis for {alert_id} with historical context")
-        analysis_result = await chain.ainvoke({
-            "alert_summary": alert_summary,
-            "historical_context": historical_context
-        })
+        start_time = alert_time - timedelta(minutes=time_window_minutes)
+        end_time = alert_time + timedelta(minutes=time_window_minutes)
         
-        logger.info(f"AI Analysis generated for {alert_id}: {analysis_result[:100]}...")
-        
-        # 步驟 6: 更新 OpenSearch 文檔
-        update_body = {
-            "doc": {
-                "ai_analysis": {
-                    "triage_report": analysis_result,
-                    "provider": LLM_PROVIDER,
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "similar_alerts_count": len(similar_alerts)
-                },
-                "alert_vector": alert_vector  # 儲存向量以供未來檢索
-            }
+        # Build keyword and time-range query
+        search_body = {
+            "size": 10,
+            "query": {
+                "bool": {
+                    "must": [
+                        {
+                            "multi_match": {
+                                "query": " ".join(keywords),
+                                "fields": ["rule.description", "data.*", "full_log"],
+                                "type": "best_fields",
+                                "fuzziness": "AUTO"
+                            }
+                        }
+                    ],
+                    "filter": [
+                        {
+                            "range": {
+                                "timestamp": {
+                                    "gte": start_time.isoformat(),
+                                    "lte": end_time.isoformat()
+                                }
+                            }
+                        }
+                    ]
+                }
+            },
+            "sort": [{"timestamp": {"order": "desc"}}]
         }
         
-        await client.update(index=alert_index, id=alert_id, body=update_body)
-        logger.info(f"Successfully updated alert {alert_id} with RAG-enhanced analysis")
+        # Add host filter if specified
+        if host:
+            search_body["query"]["bool"]["filter"].append({
+                "term": {"agent.name.keyword": host}
+            })
+        
+        response = await client.search(
+            index="wazuh-alerts-*",
+            body=search_body
+        )
+        
+        results = response.get('hits', {}).get('hits', [])
+        logger.debug(f"Keyword/time search returned {len(results)} results for keywords: {keywords}")
+        return results
         
     except Exception as e:
-        logger.error(f"Error processing alert {alert_id}: {str(e)}")
-        raise
+        logger.error(f"Keyword/time search failed: {str(e)}")
+        return []
 
-async def query_new_alerts(limit: int = 10) -> List[Dict[str, Any]]:
+def format_multi_source_context(context_data: Dict[str, Any]) -> Dict[str, str]:
     """
-    Query OpenSearch for new alerts that haven't been analyzed yet.
+    Stage 3: Format the multi-source context data for LLM consumption.
     
     Args:
-        limit: Maximum number of alerts to retrieve
+        context_data: Aggregated context from execute_retrieval
         
     Returns:
-        List of alert documents
+        Dictionary with formatted context strings for each category
     """
+    formatted_context = {}
+    
+    # Format similar alerts
+    similar_alerts = context_data.get('similar_alerts', [])
+    if similar_alerts:
+        context_parts = []
+        for i, alert in enumerate(similar_alerts, 1):
+            source = alert.get('_source', {})
+            rule = source.get('rule', {})
+            agent = source.get('agent', {})
+            ai_analysis = source.get('ai_analysis', {})
+            
+            context_part = f"""
+{i}. **Timestamp:** {source.get('timestamp', 'Unknown')}
+   **Host:** {agent.get('name', 'Unknown')}
+   **Rule:** {rule.get('description', 'N/A')} (Level: {rule.get('level', 'N/A')})
+   **Previous Analysis:** {ai_analysis.get('triage_report', 'N/A')[:150]}...
+   **Similarity Score:** {alert.get('_score', 'N/A')}"""
+            context_parts.append(context_part)
+        formatted_context['similar_alerts_context'] = "\n".join(context_parts)
+    else:
+        formatted_context['similar_alerts_context'] = "No similar historical alerts found."
+    
+    # Format system metrics
+    cpu_metrics = context_data.get('cpu_metrics', [])
+    if cpu_metrics:
+        cpu_parts = []
+        for metric in cpu_metrics:
+            source = metric.get('_source', {})
+            rule = source.get('rule', {})
+            cpu_parts.append(f"- {source.get('timestamp', 'Unknown')}: {rule.get('description', 'CPU metric')}")
+        formatted_context['system_metrics_context'] = "\n".join(cpu_parts)
+    else:
+        formatted_context['system_metrics_context'] = "No correlated system metrics found."
+    
+    # Format process data
+    process_data = context_data.get('process_data', [])
+    if process_data:
+        process_parts = []
+        for proc in process_data:
+            source = proc.get('_source', {})
+            rule = source.get('rule', {})
+            process_parts.append(f"- {source.get('timestamp', 'Unknown')}: {rule.get('description', 'Process info')}")
+        formatted_context['process_context'] = "\n".join(process_parts)
+    else:
+        formatted_context['process_context'] = "No process information found."
+    
+    # Format network data
+    network_logs = context_data.get('network_logs', [])
+    if network_logs:
+        network_parts = []
+        for net in network_logs:
+            source = net.get('_source', {})
+            rule = source.get('rule', {})
+            network_parts.append(f"- {source.get('timestamp', 'Unknown')}: {rule.get('description', 'Network activity')}")
+        formatted_context['network_context'] = "\n".join(network_parts)
+    else:
+        formatted_context['network_context'] = "No correlated network data found."
+    
+    return formatted_context
+
+async def query_new_alerts(limit: int = 10) -> List[Dict[str, Any]]:
+    """Query OpenSearch for new unanalyzed alerts"""
     try:
-        # 查找未分析的警報
         response = await client.search(
             index="wazuh-alerts-*",
             body={
@@ -266,12 +495,12 @@ async def query_new_alerts(limit: int = 10) -> List[Dict[str, Any]]:
                         "must_not": [{"exists": {"field": "ai_analysis"}}]
                     }
                 },
-                "sort": [{"timestamp": {"order": "desc"}}]
-            },
-            size=limit
+                "sort": [{"timestamp": {"order": "desc"}}],
+                "size": limit
+            }
         )
         
-        alerts = response['hits']['hits']
+        alerts = response.get('hits', {}).get('hits', [])
         logger.info(f"Found {len(alerts)} new alerts to process")
         return alerts
         
@@ -279,76 +508,87 @@ async def query_new_alerts(limit: int = 10) -> List[Dict[str, Any]]:
         logger.error(f"Failed to query new alerts: {str(e)}")
         raise
 
-async def ensure_index_template() -> None:
-    """Ensure OpenSearch index template exists with vector field mapping"""
-    template_name = "wazuh-alerts-vector-template"
-    template_body = {
-        "index_patterns": ["wazuh-alerts-*"],
-        "priority": 1,
-        "template": {
-            "settings": {
-                "number_of_shards": 1,
-                "number_of_replicas": 1,
-                "index": {
-                    "knn": True,
-                    "knn.algo_param.ef_search": 512
-                }
-            },
-            "mappings": {
-                "properties": {
-                    "alert_vector": {
-                        "type": "dense_vector",
-                        "dims": 768,
-                        "index": True,
-                        "similarity": "cosine",
-                        "index_options": {
-                            "type": "hnsw",
-                            "m": 16,
-                            "ef_construction": 512
-                        }
-                    },
-                    "ai_analysis": {
-                        "type": "object",
-                        "properties": {
-                            "triage_report": {"type": "text"},
-                            "provider": {"type": "keyword"},
-                            "timestamp": {"type": "date"},
-                            "similar_alerts_count": {"type": "integer"}
-                        }
-                    }
-                }
+async def process_single_alert(alert: Dict[str, Any]) -> None:
+    """
+    Stage 3: Enhanced single alert processing with agentic context correlation.
+    
+    Processing workflow:
+    1. Fetch new alert
+    2. Vectorize alert
+    3. Decide: Call determine_contextual_queries to get required contextual queries
+    4. Retrieve: Call execute_retrieval with query list to fetch all required data
+    5. Format: Update context formatting to handle multi-source context
+    6. Analyze: Send comprehensive context to LLM
+    7. Update: Store results
+    """
+    alert_id = alert['_id']
+    alert_index = alert['_index']
+    alert_source = alert['_source']
+    rule = alert_source.get('rule', {})
+    agent = alert_source.get('agent', {})
+    
+    # Step 1: Prepare alert summary
+    alert_summary = f"Rule: {rule.get('description', 'N/A')} (Level: {rule.get('level', 'N/A')}) on Host: {agent.get('name', 'N/A')}"
+    logger.info(f"Processing alert {alert_id}: {alert_summary}")
+
+    try:
+        # Step 2: Vectorize new alert
+        logger.info(f"Vectorizing alert {alert_id}")
+        # FIX: Changed from embed_query to embed_alert_content for better context
+        alert_vector = await embedding_service.embed_alert_content(alert_source)
+        
+        # Step 3: Decide - Determine contextual queries needed
+        logger.info(f"Determining contextual queries for alert {alert_id}")
+        contextual_queries = determine_contextual_queries(alert)
+        
+        # Step 4: Retrieve - Execute all contextual queries
+        logger.info(f"Executing {len(contextual_queries)} contextual queries for alert {alert_id}")
+        context_data = await execute_retrieval(contextual_queries, alert_vector)
+        
+        # Step 5: Format - Prepare multi-source context for LLM
+        logger.info(f"Formatting multi-source context for alert {alert_id}")
+        formatted_context = format_multi_source_context(context_data)
+        
+        # Step 6: Analyze - Send comprehensive context to LLM
+        logger.info(f"Generating comprehensive AI analysis for alert {alert_id}")
+        analysis_result = await chain.ainvoke({
+            "alert_summary": alert_summary,
+            **formatted_context
+        })
+        
+        logger.info(f"AI Analysis generated for {alert_id}: {analysis_result[:100]}...")
+        
+        # Step 7: Update - Store results in OpenSearch
+        update_body = {
+            "doc": {
+                "ai_analysis": {
+                    "triage_report": analysis_result,
+                    "provider": LLM_PROVIDER,
+                    "timestamp": alert_source.get('timestamp'),
+                    "context_sources": len(contextual_queries),
+                    "similar_alerts_count": len(context_data.get('similar_alerts', [])),
+                    "cpu_metrics_count": len(context_data.get('cpu_metrics', [])),
+                    "network_logs_count": len(context_data.get('network_logs', [])),
+                    "process_data_count": len(context_data.get('process_data', []))
+                },
+                "alert_vector": alert_vector # FIX: Changed from 'alert_embedding' to 'alert_vector'
             }
         }
-    }
-    
-    try:
-        # Check if template already exists
-        try:
-            await client.indices.get_index_template(name=template_name)
-            logger.info(f"Index template {template_name} already exists")
-        except Exception:
-            # Template doesn't exist, create it
-            await client.indices.put_index_template(name=template_name, body=template_body)
-            logger.info(f"Successfully created index template: {template_name}")
-            
+        
+        await client.update(index=alert_index, id=alert_id, body=update_body)
+        logger.info(f"Successfully updated alert {alert_id} with agentic context correlation analysis")
+        
     except Exception as e:
-        logger.error(f"Failed to ensure index template: {str(e)}")
+        logger.error(f"Error processing alert {alert_id}: {str(e)}")
         raise
 
-# === Main Processing Function ===
-
 async def triage_new_alerts():
-    """
-    Stage 2: 修改主要 triage 函式以使用新的 RAG 流程
-    """
-    print("--- TRIAGE JOB EXECUTING WITH RAG FUNCTIONALITY ---")
-    logger.info(f"Analyzing alerts with {LLM_PROVIDER} model and RAG retrieval...")
+    """Main alert triage task with Stage 3 agentic context correlation"""
+    print("--- STAGE 3 AGENTIC CONTEXT CORRELATION TRIAGE JOB EXECUTING ---")
+    logger.info(f"Analyzing alerts with {LLM_PROVIDER} model and agentic context correlation...")
     
     try:
-        # 1. Ensure index template exists
-        await ensure_index_template()
-        
-        # 2. Query new alerts
+        # Query new alerts
         alerts = await query_new_alerts(limit=10)
         
         if not alerts:
@@ -356,47 +596,48 @@ async def triage_new_alerts():
             logger.info("No new alerts found.")
             return
             
-        logger.info(f"Found {len(alerts)} new alerts to process with RAG")
+        logger.info(f"Found {len(alerts)} new alerts to process with agentic context correlation")
         
-        # 3. Process each alert using new RAG workflow
-        processed_count = 0
+        # Process each alert with enhanced agentic workflow
         for alert in alerts:
             try:
                 await process_single_alert(alert)
-                processed_count += 1
-                print(f"--- Successfully processed alert {alert['_id']} with RAG ---")
+                print(f"--- Successfully processed alert {alert['_id']} ---")
             except Exception as e:
                 print(f"--- Error processing alert {alert['_id']}: {str(e)} ---")
                 logger.error(f"Failed to process alert {alert['_id']}: {str(e)}")
                 continue
-        
-        print(f"--- RAG batch processing completed: {processed_count}/{len(alerts)} alerts ---")
-        logger.info(f"RAG batch processing completed: {processed_count}/{len(alerts)} alerts")
-        
+            
     except Exception as e:
-        print(f"!!!!!! A CRITICAL ERROR OCCURRED IN RAG TRIAGE JOB !!!!!!")
-        logger.error(f"An error occurred during RAG triage: {e}", exc_info=True)
+        print(f"!!!!!! A CRITICAL ERROR OCCURRED IN AGENTIC TRIAGE JOB !!!!!!")
+        logger.error(f"An error occurred during agentic triage: {e}", exc_info=True)
         traceback.print_exc()
 
 # === FastAPI Application and Scheduler ===
 
-app = FastAPI(title="Wazuh AI Triage Agent - Stage 2 RAG")
+app = FastAPI(title="Wazuh AI Triage Agent - Stage 3 Agentic Context Correlation")
 
 scheduler = AsyncIOScheduler()
 
 @app.on_event("startup")
 async def startup_event():
-    logger.info("AI Agent with RAG functionality starting up...")
-    scheduler.add_job(triage_new_alerts, 'interval', seconds=60, id='triage_job', misfire_grace_time=30)
+    logging.info("AI Agent with Stage 3 Agentic Context Correlation starting up...")
+    scheduler.add_job(triage_new_alerts, 'interval', seconds=60, id='agentic_triage_job', misfire_grace_time=30)
     scheduler.start()
-    logger.info("Scheduler started. RAG Triage job scheduled.")
+    logging.info("Scheduler started. Agentic Context Correlation Triage job scheduled.")
 
 @app.get("/")
 def read_root():
     return {
-        "status": "AI Triage Agent with RAG is running", 
+        "status": "AI Triage Agent with Agentic Context Correlation is running", 
         "scheduler_status": str(scheduler.get_jobs()),
-        "stage": "Stage 2 - Core RAG Implementation"
+        "stage": "Stage 3 - Agentic Context Correlation",
+        "features": [
+            "Dynamic contextual query generation",
+            "Multi-source data retrieval",
+            "Cross-referential analysis",
+            "Enhanced decision engine"
+        ]
     }
 
 @app.on_event("shutdown")
