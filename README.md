@@ -520,35 +520,5 @@ async def find_similar_alerts(query_vector: List[float], k: int = 5) -> List[Dic
 }
 ```
 
----
-
-## 🤝 貢獻指南
-
-我們歡迎社群貢獻！請參考以下步驟：
-
-1. **Fork** 此專案
-2. 建立您的功能分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交您的變更 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 開啟一個 **Pull Request**
-
----
-
-## 📄 授權條款
-
-本專案採用 MIT 授權條款 - 詳見 [LICENSE](LICENSE) 檔案。
-
----
-
-## 📞 聯絡資訊
-
-如有任何問題或建議，歡迎聯絡：
-- **專案維護者**: AgenticRAG Team
-- **問題回報**: GitHub Issues
-- **技術討論**: GitHub Discussions
-
----
-
-*最後更新: 2024年1月*
 
 
