@@ -1,238 +1,312 @@
-# Wazuh AI Agent - 智慧安全警報分析助手
+# Wazuh AgenticRAG - 智慧安全警報分析系統
 
-本專案整合大型語言模型 (LLM) 與 Google Gemini Embedding，為 [Wazuh](https://wazuh.com/) SIEM 系統提供智慧化的安全警報分析。透過先進的語意理解與向量搜尋技術，自動產生事件摘要、風險評估與具體建議，並將分析結果寫回警報，大幅提升安全維運效率。
+> **一個結合先進向量搜尋技術與大型語言模型的下一代SIEM智慧分析平台**
 
----
-
-## 🚀 核心特色
-
-### 🧠 智慧語意分析
-- **Gemini Embedding 整合**：採用 Google 最新的 `text-embedding-004` 模型，提供卓越的語意理解能力
-- **MRL 技術支援**：俄羅斯套娃娃表示法 (Matryoshka Representation Learning)，支援彈性維度調整（1-768 維）
-- **多語言支援**：支援超過 100 種語言，適用於多元化的國際環境
-
-### 🎯 進階檢索增強
-- **向量語意搜尋**：基於語意相似性檢索歷史警報，提供更豐富的分析上下文
-- **RAG 架構**：檢索增強生成 (Retrieval-Augmented Generation) 提升分析準確度
-- **智慧上下文建構**：自動關聯相似警報，協助分析師快速理解事件背景
-
-### 🔧 靈活的模型選擇
-- **多 LLM 支援**：支援 Google Gemini 與 Anthropic Claude 模型
-- **動態模型切換**：透過環境變數輕鬆切換不同的 LLM 提供商
-- **成本效益優化**：可依需求選擇不同效能與成本的模型組合
+本專案基於 **AgenticRAG** (Agent-based Retrieval-Augmented Generation) 架構，整合 **Google Gemini Embedding** 與多種大型語言模型，為 [Wazuh](https://wazuh.com/) SIEM 系統提供革命性的智慧化安全警報分析。透過 **Matryoshka Representation Learning (MRL)** 技術與向量語意搜尋，實現自動化事件關聯、風險評估與回應建議，將AI分析結果無縫整合至警報系統中。
 
 ---
 
-## 📊 專案架構
+## 🎯 AgenticRAG 核心架構
 
-本專案採用 Docker 容器化部署，將 Wazuh SIEM 與 AI Agent 服務隔離，確保穩定與可擴充性。
+### 🧠 智慧語意向量化
+- **Google Gemini `text-embedding-004`**：採用最新的多語言嵌入模型，支援超過100種語言
+- **Matryoshka 向量技術**：靈活的維度調整能力（1-768維），在效能與精度間取得最佳平衡
+- **異步向量處理**：高效率的批次向量化處理，支援大規模警報分析
 
-### 系統架構圖
+### 🔍 進階向量檢索系統
+- **OpenSearch KNN**：基於 HNSW 算法的高效向量搜尋引擎
+- **餘弦相似度計算**：精確的語意相似性比對
+- **語意警報關聯**：自動發現歷史相關事件，建構豐富的分析上下文
+
+### 🤖 多模型 LLM 整合
+- **Google Gemini系列**：`gemini-1.5-pro`、`gemini-1.5-flash` 
+- **Anthropic Claude系列**：`claude-3-opus`、`claude-3-sonnet`、`claude-3-haiku`
+- **動態模型選擇**：根據警報複雜度自動選擇最適合的LLM模型
+
+---
+
+## 🏗️ 系統架構圖
 
 ```mermaid
-flowchart TD
-    subgraph "Wazuh SIEM 核心"
-        A[Wazuh Manager]
-        B[Wazuh Indexer OpenSearch<br/>+ 向量搜尋支援]
-        C[Wazuh Dashboard]
+graph TB
+    subgraph "安全事件來源"
+        A1[端點代理]
+        A2[網路監控]
+        A3[日誌收集器]
     end
     
-    subgraph "AI 智慧分析系統"
-        D[AI Agent<br/>FastAPI + LangChain]
-        E[Gemini Embedding<br/>語意向量化]
-        F[LLM 模型<br/>Google Gemini / Anthropic Claude]
+    subgraph "Wazuh SIEM 核心 (v4.7.4)"
+        B1[Wazuh Manager<br/>規則引擎 & 警報生成]
+        B2[Wazuh Indexer<br/>OpenSearch + KNN向量搜尋]
+        B3[Wazuh Dashboard<br/>AI增強型可視化]
     end
     
-    subgraph "外部資源"
-        G[日誌/事件來源]
-        H[安全分析師]
+    subgraph "AgenticRAG 智慧分析引擎"
+        C1[FastAPI Agent Service<br/>異步任務調度]
+        C2[Gemini Embedding Service<br/>MRL向量化引擎]
+        C3[Vector Retrieval Engine<br/>語意相似性搜尋]
+        C4[Multi-LLM Analysis<br/>智慧推理與生成]
+        C5[Context Builder<br/>上下文聚合器]
     end
     
-    G --> A
-    A -->|透過 Filebeat 傳送警報| B
-    C -->|查詢與視覺化| B
-    D -->|1. 定期查詢新警報| B
-    B -->|2. 回傳未分析的警報| D
-    D -->|3. 生成警報向量| E
-    E -->|4. 回傳向量表示| D
-    D -->|5. 向量搜尋相似警報| B
-    B -->|6. 回傳歷史相關警報| D
-    D -->|7. 構建豐富上下文| F
-    F -->|8. 回傳分析結果| D
-    D -->|9. 儲存分析結果與向量| B
-    H -->|在儀表板查看附有 AI 註解的警報| C
+    subgraph "外部AI服務"
+        D1[Google Gemini API<br/>Embedding + LLM]
+        D2[Anthropic Claude API<br/>推理與分析]
+    end
+    
+    A1 --> B1
+    A2 --> B1
+    A3 --> B1
+    
+    B1 -->|Filebeat傳輸| B2
+    B3 --> B2
+    
+    C1 -->|1.查詢新警報| B2
+    B2 -->|2.回傳警報數據| C1
+    C1 --> C2
+    C2 -->|3.向量化請求| D1
+    D1 -->|4.向量表示| C2
+    C2 --> C3
+    C3 -->|5.向量搜尋| B2
+    B2 -->|6.相似警報| C3
+    C3 --> C5
+    C5 --> C4
+    C4 -->|7.分析請求| D1
+    C4 -->|7.分析請求| D2
+    D1 -->|8.智慧分析| C4
+    D2 -->|8.智慧分析| C4
+    C4 --> C1
+    C1 -->|9.更新警報+向量| B2
+    
+    style C1 fill:#e1f5fe
+    style C2 fill:#f3e5f5
+    style C3 fill:#e8f5e8
+    style C4 fill:#fff3e0
+    style C5 fill:#fce4ec
 ```
 
-### 工作流程
-1. **警報生成**：Wazuh Manager 監控端點，根據規則產生警報
-2. **數據索引**：警報經 Filebeat 傳送至 Wazuh Indexer (OpenSearch)
-3. **AI Agent 智慧分析**：
-   - 定期查詢未分析警報
-   - 使用 Gemini Embedding 將警報內容向量化
-   - 透過向量搜尋找出語意相似的歷史警報
-   - 構建豐富的上下文資訊
-   - 將上下文與當前警報送至 LLM 進行分析
-   - 取得結構化分析報告（摘要、風險、建議）
-   - 將分析結果與向量表示寫回警報
-4. **視覺化**：分析師於 Dashboard 查看含 AI 分析的警報
+---
+
+## 🚀 技術堆疊
+
+| 分層 | 技術組件 | 版本 | 功能說明 |
+|------|----------|------|----------|
+| **SIEM層** | Wazuh Manager | 4.7.4 | 事件收集、規則引擎、警報生成 |
+| | Wazuh Indexer (OpenSearch) | 4.7.4 | 數據索引、KNN向量搜尋 |
+| | Wazuh Dashboard | 4.7.4 | AI增強型安全運營中心 |
+| **AgenticRAG層** | FastAPI | 0.104.0+ | 高效能API框架與異步處理 |
+| | LangChain | 0.1.0+ | LLM應用開發框架 |
+| | APScheduler | 3.10.4+ | 定時任務調度器 |
+| **AI模型層** | Google Gemini | text-embedding-004 | 多語言向量嵌入 |
+| | Anthropic Claude | 3.x | 高級推理與分析 |
+| | Google Gemini LLM | 1.5-pro/flash | 快速智慧分析 |
+| **向量搜尋** | OpenSearch KNN | 2.4.0+ | HNSW算法、餘弦相似度 |
+| **容器化** | Docker | 20.10+ | 微服務容器化部署 |
+| | Docker Compose | 2.0+ | 多服務編排 |
 
 ---
 
-## 🛠️ 技術堆疊
+## 📦 快速部署指南
 
-| 類別 | 技術 | 說明 |
-|------|------|------|
-| **SIEM** | Wazuh 4.7.4 | 開源安全資訊與事件管理系統 |
-| **容器化** | Docker, Docker Compose | 打包、部署及管理所有服務 |
-| **AI Agent** | FastAPI | Python Web 框架，建構 AI Agent API |
-| | LangChain | LLM 應用開發框架，串接 Prompt 與 LLM |
-| | Google Gemini / Claude | 可插拔大型語言模型 |
-| | Gemini Embedding | Google text-embedding-004 模型，支援 MRL 技術 |
-| | OpenSearch Client | 與 Wazuh Indexer 非同步通訊，支援向量搜尋 |
-| | APScheduler | Python 排程函式庫，定時觸發分析任務 |
-| **向量搜尋** | OpenSearch KNN | 支援 cosine similarity 的向量搜尋 |
-| **安全通訊** | SSL/TLS | 服務間通訊皆加密 |
-
----
-
-## 🚀 快速部署指南
-
-### 1. 前置準備
+### 1. 環境準備
 
 **系統需求：**
-- Docker 20.10+ 與 Docker Compose 2.0+
-- Git
-- 主機記憶體建議至少 8GB
-- 磁碟空間至少 20GB
-
-**API 金鑰準備：**
-- [Google AI Studio](https://aistudio.google.com/app/apikey) - 取得 Gemini 與 Embedding API Key
-- [Anthropic Console](https://console.anthropic.com/) - 取得 Claude API Key
-
-### 2. 環境設定
-
-#### a. 複製專案
 ```bash
-git clone https://github.com/your-username/wazuh_ai_agent.git
-cd wazuh_ai_agent/wazuh-docker/single-node
+# 最低系統需求
+- CPU: 4核心以上
+- RAM: 8GB以上 (推薦16GB)
+- 磁碟: 50GB可用空間
+- OS: Linux (建議Ubuntu 20.04+)
+
+# 軟體需求
+- Docker Engine 20.10+
+- Docker Compose 2.0+
+- Git 2.0+
 ```
 
-#### b. 設定 AI Agent 環境變數
+**API金鑰申請：**
+- 🔑 [Google AI Studio](https://aistudio.google.com/app/apikey) - Gemini API Key
+- 🔑 [Anthropic Console](https://console.anthropic.com/) - Claude API Key
+
+### 2. 部署流程
+
+#### Step 1: 複製專案
 ```bash
+git clone https://github.com/your-repo/wazuh-agenticrag.git
+cd wazuh-agenticrag/wazuh-docker/single-node
+```
+
+#### Step 2: 配置環境變數
+```bash
+# 進入AI Agent專案目錄
 cd ai-agent-project
+
+# 建立環境變數文件
 cat > .env << 'EOF'
-# OpenSearch 配置
+# ===========================================
+# OpenSearch 連接配置
+# ===========================================
 OPENSEARCH_URL=https://wazuh.indexer:9200
 OPENSEARCH_USER=admin
 OPENSEARCH_PASSWORD=SecretPassword
 
-# LLM 配置
+# ===========================================
+# LLM 提供商選擇 (gemini/anthropic)
+# ===========================================
 LLM_PROVIDER=gemini
+
+# ===========================================
+# Google Gemini API 配置
+# ===========================================
 GEMINI_API_KEY=your_gemini_api_key_here
+GOOGLE_API_KEY=your_google_api_key_here
+
+# ===========================================
+# Anthropic Claude API 配置
+# ===========================================
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
 
-# Gemini Embedding 配置
-GOOGLE_API_KEY=your_google_api_key_here
+# ===========================================
+# Embedding 配置 (MRL技術)
+# ===========================================
 EMBEDDING_MODEL=models/text-embedding-004
 EMBEDDING_DIMENSION=256
+EMBEDDING_MAX_RETRIES=3
+EMBEDDING_RETRY_DELAY=1.0
 
+# ===========================================
 # 應用程式配置
+# ===========================================
 LOG_LEVEL=INFO
 EOF
+
+# 設定API金鑰權限
+chmod 600 .env
 ```
 
-> ⚠️ **重要**：請將 `your_*_api_key_here` 替換為您的實際 API 金鑰
-
-### 3. 部署 Wazuh 環境
-
-#### a. 調整系統參數 (Linux/WSL)
+#### Step 3: 系統參數調整
 ```bash
+# 調整虛擬記憶體參數 (Ubuntu/Debian)
 sudo sysctl -w vm.max_map_count=262144
 echo 'vm.max_map_count=262144' | sudo tee -a /etc/sysctl.conf
+
+# CentOS/RHEL
+sudo sysctl -w vm.max_map_count=262144
+echo 'vm.max_map_count=262144' >> /etc/sysctl.conf
 ```
 
-#### b. 產生 SSL 憑證
+#### Step 4: 生成SSL憑證
 ```bash
-cd ..  # 回到 single-node 目錄
+cd ../  # 回到 single-node 目錄
 docker-compose -f generate-indexer-certs.yml run --rm generator
 ```
 
-#### c. 啟動所有服務
+#### Step 5: 啟動完整系統
 ```bash
+# 啟動所有服務
 docker-compose up -d
+
+# 檢視啟動日誌
+docker-compose logs -f
 ```
 
-### 4. 驗證部署
+### 3. 部署驗證
 
-#### a. 檢查容器狀態
+#### 服務狀態檢查
 ```bash
+# 檢查所有容器狀態
 docker ps
+
+# 預期輸出應包含：
+# - single-node-wazuh.manager-1    (Running)
+# - single-node-wazuh.indexer-1   (Running) 
+# - single-node-wazuh.dashboard-1 (Running)
+# - ai-agent                      (Running)
 ```
-預期看到以下容器運行中：
-- `single-node-wazuh.manager-1`
-- `single-node-wazuh.indexer-1`
-- `single-node-wazuh.dashboard-1`
-- `ai-agent`
 
-#### b. 驗證服務
+#### 功能測試
 ```bash
-# 檢查 OpenSearch 狀態
-curl -k -u admin:SecretPassword https://localhost:9200/_cluster/health
+# 1. 測試OpenSearch連線
+curl -k -u admin:SecretPassword \
+  "https://localhost:9200/_cluster/health?pretty"
 
-# 檢查 AI Agent 狀態
+# 2. 測試AI Agent服務
 curl http://localhost:8000/
 
-# 查看 AI Agent 日誌
-docker logs ai-agent -f
+# 3. 測試向量搜尋功能
+curl -k -u admin:SecretPassword \
+  "https://localhost:9200/wazuh-alerts-*/_search" \
+  -H 'Content-Type: application/json' \
+  -d '{"query": {"exists": {"field": "alert_embedding"}}}'
+
+# 4. 檢查AI Agent日誌
+docker logs ai-agent -f | grep "Successfully"
 ```
 
-#### c. 登入 Dashboard
-- 網址：https://localhost
-- 帳號：admin
-- 密碼：SecretPassword
+#### Dashboard存取
+- 🌐 **URL**: https://localhost
+- 👤 **使用者**: admin  
+- 🔐 **密碼**: SecretPassword
 
 ---
 
-## 🔧 進階配置
+## ⚙️ 進階配置
 
-### Embedding 維度調整
+### MRL向量維度優化
 
-利用 MRL 技術，您可以在不重新訓練模型的情況下調整向量維度：
+根據不同使用場景調整向量維度：
 
-```env
-# 高精度模式（預設）
+```bash
+# 高精度模式（適合複雜威脅分析）
 EMBEDDING_DIMENSION=768
 
-# 平衡模式（推薦）
+# 平衡模式（推薦用於生產環境）
 EMBEDDING_DIMENSION=256
 
-# 高效能模式
+# 高效能模式（適合大量警報處理）
 EMBEDDING_DIMENSION=128
 ```
 
-### 模型選擇建議
+### LLM模型選擇策略
 
-| 使用場景 | LLM 模型 | Embedding 維度 | 特色 |
-|----------|----------|----------------|------|
-| 生產環境 | gemini-1.5-flash | 256 | 平衡效能與成本 |
-| 高精度分析 | claude-3-sonnet | 768 | 最高分析品質 |
-| 大量警報處理 | claude-3-haiku | 128 | 快速處理 |
+| 使用場景 | LLM模型 | 向量維度 | 特色 |
+|----------|---------|----------|------|
+| **生產環境** | `gemini-1.5-flash` | 256 | 快速回應，成本效益高 |
+| **深度分析** | `claude-3-sonnet` | 512 | 高品質分析，準確度佳 |
+| **大規模處理** | `claude-3-haiku` | 128 | 超高速處理，適合批量 |
+| **極致精度** | `gemini-1.5-pro` | 768 | 最高分析品質 |
 
-### OpenSearch 索引配置
+### OpenSearch索引模板配置
 
-系統會自動配置支援向量搜尋的索引映射：
+系統會自動建立向量搜尋索引：
 
 ```json
 {
-  "mappings": {
-    "properties": {
-      "alert_embedding": {
-        "type": "knn_vector",
-        "dimension": 256,
-        "method": {
-          "name": "hnsw",
-          "space_type": "cosinesimil",
-          "engine": "nmslib"
+  "index_patterns": ["wazuh-alerts-*"],
+  "template": {
+    "mappings": {
+      "properties": {
+        "alert_embedding": {
+          "type": "knn_vector",
+          "dimension": 256,
+          "method": {
+            "name": "hnsw",
+            "space_type": "cosinesimil",
+            "engine": "nmslib",
+            "parameters": {
+              "ef_construction": 128,
+              "m": 24
+            }
+          }
+        },
+        "ai_analysis": {
+          "type": "object",
+          "properties": {
+            "summary": {"type": "text"},
+            "risk_level": {"type": "keyword"},
+            "recommendations": {"type": "text"},
+            "confidence": {"type": "float"}
+          }
         }
       }
     }
@@ -242,163 +316,237 @@ EMBEDDING_DIMENSION=128
 
 ---
 
-## 🔍 故障排除
+## 🔧 故障排除
 
-### 常見問題
+### 常見問題診斷
 
-| 問題現象 | 可能原因 | 解決方法 |
+| 問題症狀 | 根本原因 | 解決方案 |
 |----------|----------|----------|
-| 容器啟動失敗 | 記憶體不足、參數錯誤 | 檢查主機資源、重啟 Docker |
-| Wazuh Indexer 啟動錯誤 | 未調整 vm.max_map_count | 重新執行 sysctl 指令 |
-| AI Agent 無法連接 LLM | API Key 未設定或無效 | 檢查 .env 文件中的 API Key |
-| Embedding 服務失敗 | GOOGLE_API_KEY 未設定 | 確認 API Key 並重啟容器 |
-| 向量搜尋無結果 | 索引映射未正確配置 | 檢查 OpenSearch 索引設定 |
-| Dashboard 無法登入 | 憑證問題或服務未啟動 | 檢查容器狀態和憑證 |
+| 🔴 容器啟動失敗 | 記憶體不足 | 增加系統記憶體或調整Docker資源限制 |
+| 🔴 Indexer無法啟動 | `vm.max_map_count`過低 | 執行 `sudo sysctl -w vm.max_map_count=262144` |
+| 🔴 AI Agent連接失敗 | API Key無效 | 檢查並重新設定 `.env` 中的API金鑰 |
+| 🔴 向量搜尋無結果 | 索引模板未建立 | 重啟AI Agent服務，確保索引模板建立 |
+| 🔴 Embedding服務異常 | 網路連接問題 | 檢查防火牆設定與API配額 |
 
-### 診斷指令
+### 詳細診斷指令
 
 ```bash
-# 查看所有容器狀態
-docker ps -a
+# === 系統診斷 ===
+# 檢查系統資源
+free -h
+df -h
+docker system df
 
-# 查看特定容器日誌
-docker logs <container_name> -f
+# === 服務診斷 ===
+# 檢查所有容器詳細狀態
+docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
-# 檢查 OpenSearch 健康狀態
-curl -k -u admin:SecretPassword https://localhost:9200/_cluster/health?pretty
+# 檢查特定服務日誌
+docker logs wazuh.manager --tail 50
+docker logs wazuh.indexer --tail 50  
+docker logs ai-agent --tail 50
 
-# 測試向量搜尋功能
-curl -k -u admin:SecretPassword -X GET "https://localhost:9200/wazuh-alerts-*/_search" \
-  -H 'Content-Type: application/json' \
-  -d '{"query": {"exists": {"field": "alert_embedding"}}}'
+# === 網路診斷 ===
+# 檢查網路連通性
+docker network ls
+docker exec ai-agent ping -c 3 wazuh.indexer
 
-# 測試 AI Agent API
-curl http://localhost:8000/health
+# === API診斷 ===
+# 測試OpenSearch健康度
+curl -k -u admin:SecretPassword \
+  "https://localhost:9200/_cat/health?v"
 
-# 檢查 Embedding API 連線
+# 檢查索引狀態
+curl -k -u admin:SecretPassword \
+  "https://localhost:9200/_cat/indices/wazuh-alerts-*?v&s=index"
+
+# 測試向量嵌入服務
 docker exec ai-agent python -c "
-import os
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-client = GoogleGenerativeAIEmbeddings(
-    model='models/text-embedding-004',
-    google_api_key=os.getenv('GOOGLE_API_KEY')
-)
-print('Embedding API 連線成功')
+import asyncio
+from embedding_service import GeminiEmbeddingService
+
+async def test():
+    service = GeminiEmbeddingService()
+    result = await service.embed_text('測試文本')
+    print(f'向量維度: {len(result)}')
+
+asyncio.run(test())
 "
+
+# === 效能監控 ===
+# 監控容器資源使用
+docker stats --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}"
+
+# 檢查AI Agent處理統計
+docker logs ai-agent | grep -E "(Successfully|Error|WARNING)" | tail -20
 ```
 
 ---
 
-## 📊 效能監控
+## 📊 效能監控與調優
 
-### 關鍵指標
+### 關鍵性能指標 (KPI)
 
-- **分析延遲**：警報產生到完成 AI 分析的時間
-- **向量搜尋效能**：語意搜尋的回應時間
-- **API 調用成本**：LLM 與 Embedding API 的使用量
-- **準確度指標**：AI 分析結果的準確性評估
+| 指標類別 | 監控項目 | 目標值 | 監控方法 |
+|----------|----------|--------|----------|
+| **延遲性能** | 警報分析時間 | < 30秒 | AI Agent日誌 |
+| **向量搜尋** | 搜尋回應時間 | < 5秒 | OpenSearch metrics |
+| **API調用** | Embedding生成時間 | < 3秒 | 服務日誌分析 |
+| **系統負載** | CPU使用率 | < 80% | `docker stats` |
+| **記憶體** | 記憶體使用率 | < 85% | 系統監控 |
+| **準確性** | AI分析準確度 | > 90% | 人工驗證 |
 
-### 監控指令
+### 效能調優建議
 
 ```bash
-# 查看 AI Agent 處理統計
-docker logs ai-agent | grep "Successfully updated alert"
+# === OpenSearch調優 ===
+# 調整JVM堆記憶體
+echo "ES_JAVA_OPTS=-Xms4g -Xmx4g" >> config/wazuh_indexer/opensearch.yml
 
-# 檢查向量數據量
-curl -k -u admin:SecretPassword "https://localhost:9200/wazuh-alerts-*/_count?q=alert_embedding:*"
+# === AI Agent調優 ===
+# 調整並發處理數量
+echo "MAX_CONCURRENT_ANALYSIS=5" >> ai-agent-project/.env
 
-# 監控容器資源使用
-docker stats ai-agent
+# 調整向量搜尋參數
+echo "VECTOR_SEARCH_SIZE=20" >> ai-agent-project/.env
+echo "SIMILARITY_THRESHOLD=0.7" >> ai-agent-project/.env
 
-# 查看 OpenSearch 索引大小
-curl -k -u admin:SecretPassword "https://localhost:9200/_cat/indices/wazuh-alerts-*?v&s=index"
+# === 系統層調優 ===
+# 調整Docker資源限制
+docker update --memory=4g --cpus=2 ai-agent
 ```
 
 ---
 
-## 🚀 未來發展方向
+## 🔮 發展藍圖
 
-### 1. 多模型支援與自動選擇
-- 支援更多 LLM 模型（OpenAI GPT-4、Llama 3、Azure OpenAI）
-- 根據警報類型自動選擇最適合的模型
-- 實現模型負載均衡與容錯機制
+### 🎯 第二階段：高級威脅獵捕
+- [ ] **威脅情報整合**：外部IOC/TTPs數據源整合
+- [ ] **攻擊鏈重建**：MITRE ATT&CK框架自動映射
+- [ ] **異常行為檢測**：無監督學習異常檢測
+- [ ] **預測性分析**：基於歷史數據的威脅預測
 
-### 2. 進階向量搜尋技術
-- 整合 Faiss、Pinecone 等向量搜尋引擎
-- 建構安全事件知識圖譜
-- 支援混合搜尋（向量 + 關鍵字）
+### 🎯 第三階段：自動化回應
+- [ ] **SOAR整合**：自動化安全編排與回應
+- [ ] **動態防禦**：實時威脅阻斷與隔離
+- [ ] **智慧調查**：自動化數位鑑識與證據收集
+- [ ] **適應性學習**：基於回饋的模型優化
 
-### 3. 自動化回應機制
-- 整合 SOAR 平台
-- 自動化威脅處置流程
-- 智慧化警報優先級排序
-
-### 4. 威脅情報整合
-- 外部威脅情報源整合
-- 攻擊鏈分析
-- 預測性威脅分析
+### 🎯 第四階段：企業級部署
+- [ ] **多租戶支援**：企業級多組織架構
+- [ ] **高可用性**：分散式部署與容錯機制
+- [ ] **合規報告**：自動化法規遵循報告
+- [ ] **角色權限**：細粒度存取控制
 
 ---
 
-## 📚 參考資源
+## 🤝 社群與貢獻
+
+### 參與方式
+
+| 貢獻類型 | 說明 | 入門指南 |
+|----------|------|----------|
+| 🐛 **Bug回報** | 回報問題與錯誤 | [Issues模板](https://github.com/your-repo/issues/new) |
+| ✨ **功能建議** | 提出新功能需求 | [Feature Request](https://github.com/your-repo/issues/new) |
+| 📝 **文檔改進** | 改善文檔品質 | [文檔指南](docs/CONTRIBUTING.md) |
+| 💻 **程式碼貢獻** | 提交程式碼改進 | [開發指南](docs/DEVELOPMENT.md) |
+
+### 開發環境設定
+
+```bash
+# 克隆開發分支
+git clone -b development https://github.com/your-repo/wazuh-agenticrag.git
+cd wazuh-agenticrag
+
+# 設定開發環境
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# 或 venv\Scripts\activate  # Windows
+
+# 安裝開發依賴
+pip install -r requirements-dev.txt
+
+# 執行測試套件
+pytest tests/ -v
+
+# 程式碼品質檢查
+flake8 wazuh-docker/single-node/ai-agent-project/app/
+black wazuh-docker/single-node/ai-agent-project/app/
+```
+
+---
+
+## 📚 學習資源
 
 ### 官方文檔
-- [Wazuh 官方文檔](https://documentation.wazuh.com/)
-- [Google Gemini API 文檔](https://ai.google.dev/docs)
-- [Anthropic Claude API 文檔](https://docs.anthropic.com/)
-- [LangChain 文檔](https://python.langchain.com/)
-- [OpenSearch 向量搜尋文檔](https://opensearch.org/docs/latest/search-plugins/knn/index/)
+- 📖 [Wazuh官方文檔](https://documentation.wazuh.com/) - SIEM系統完整指南
+- 📖 [Google Gemini API](https://ai.google.dev/docs) - Embedding與LLM API文檔
+- 📖 [Anthropic Claude](https://docs.anthropic.com/) - Claude模型使用指南
+- 📖 [OpenSearch](https://opensearch.org/docs/latest/) - 向量搜尋與KNN配置
+- 📖 [LangChain](https://python.langchain.com/) - LLM應用開發框架
+
+### 技術深度文章
+- 📄 [AgenticRAG架構設計原理](docs/agenticrag-architecture.md)
+- 📄 [Matryoshka向量技術解析](docs/mrl-embedding.md)
+- 📄 [SIEM與AI融合最佳實踐](docs/siem-ai-integration.md)
+- 📄 [向量搜尋效能調優指南](docs/vector-search-optimization.md)
 
 ### 社群資源
-- [Wazuh 社群論壇](https://wazuh.com/community/)
-- [GitHub Issues](https://github.com/your-username/wazuh_ai_agent/issues)
-- [技術部落格](https://your-blog-url.com)
+- 💬 [Discord社群](https://discord.gg/your-server) - 即時技術討論
+- 💬 [GitHub Discussions](https://github.com/your-repo/discussions) - 深度技術交流
+- 📺 [YouTube教學頻道](https://youtube.com/your-channel) - 影片教學與案例分享
 
 ---
 
-## 🤝 貢獻指南
+## 📄 授權與版權
 
-我們歡迎社群貢獻！請遵循以下指南：
+### 開源授權
+本專案採用 **GNU General Public License v2.0** 授權條款：
 
-### 回報問題
-1. 使用 [GitHub Issues](https://github.com/your-username/wazuh_ai_agent/issues) 回報問題
-2. 提供詳細的錯誤資訊和復現步驟
-3. 包含系統環境資訊
+- ✅ **商業使用**：允許商業環境使用
+- ✅ **修改**：允許修改原始碼
+- ✅ **分發**：允許分發軟體
+- ✅ **專利授權**：提供專利保護
+- ❌ **責任免責**：作者不承擔使用責任
+- ❌ **保固免責**：不提供軟體保固
 
-### 提交程式碼
-1. Fork 本專案
-2. 創建功能分支：`git checkout -b feature/your-feature`
-3. 提交變更：`git commit -m 'Add some feature'`
-4. 推送到分支：`git push origin feature/your-feature`
-5. 提交 Pull Request
+### 第三方授權
+- **Wazuh**: GPLv2授權
+- **OpenSearch**: Apache License 2.0
+- **FastAPI**: MIT授權
+- **LangChain**: MIT授權
 
-### 開發規範
-- 遵循 PEP 8 程式碼風格
-- 添加適當的註釋和文檔
-- 確保通過所有測試
-
----
-
-## 📄 版本歷史
-
-### v2.0.0 (2024-01-15)
-- ✨ 整合 Google Gemini Embedding 語意搜尋
-- 🚀 支援 MRL 技術的彈性維度調整
-- 🌐 增強多語言支援能力
-- 📊 新增向量搜尋與 RAG 架構
-- 🔧 優化 AI Agent 效能與穩定性
-
-### v1.0.0 (2023-12-01)
-- 🎯 基礎 LLM 整合（Gemini/Claude）
-- 📋 自動警報分析與註解
-- 🐳 Docker 容器化部署
-- 📊 FastAPI + LangChain 架構
+詳細授權條款請參閱 [LICENSE](LICENSE) 文件。
 
 ---
 
-## 📜 授權條款
+## 📞 技術支援
 
-本專案採用 GPLv2 授權條款，詳見 [LICENSE](LICENSE) 文件。
+### 取得協助
+
+| 支援類型 | 聯絡方式 | 回應時間 |
+|----------|----------|----------|
+| 🆘 **緊急問題** | [GitHub Issues](https://github.com/your-repo/issues) | 24小時內 |
+| 💬 **一般諮詢** | [Discussions](https://github.com/your-repo/discussions) | 2-3工作日 |
+| 📧 **商業合作** | security@your-domain.com | 1週內 |
+| 🐛 **Bug回報** | [Bug模板](https://github.com/your-repo/issues/new) | 48小時內 |
+
+### 版本資訊
+- **目前版本**: v2.1.0
+- **Wazuh版本**: 4.7.4
+- **最後更新**: 2024年1月
+- **相容性**: Docker 20.10+, Python 3.11+
 
 ---
+
+<div align="center">
+
+### 🌟 如果這個專案對您有幫助，請給我們一個星星！
+
+[![GitHub stars](https://img.shields.io/github/stars/your-repo/wazuh-agenticrag.svg?style=social&label=Star)](https://github.com/your-repo/wazuh-agenticrag)
+[![GitHub forks](https://img.shields.io/github/forks/your-repo/wazuh-agenticrag.svg?style=social&label=Fork)](https://github.com/your-repo/wazuh-agenticrag/fork)
+
+**讓我們一起建構更安全的數位世界** 🛡️
+
+</div>
 
