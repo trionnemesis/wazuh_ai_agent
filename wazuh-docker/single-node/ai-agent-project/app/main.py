@@ -5,6 +5,7 @@ import asyncio
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from datetime import datetime
 
 # <--- 新增: 匯入新的 LLM 類別 ---
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -63,20 +64,25 @@ def get_llm():
 # 1. LLM 模型 (透過新函式動態選擇)
 llm = get_llm()
 
-# 2. 提示模板 (維持不變)
+# 2. 提示模板 - 更新為支援 RAG 的版本
 prompt_template = ChatPromptTemplate.from_template(
-    """You are a senior security analyst. Your task is to triage a Wazuh alert based on the alert data and relevant log context.
+    """You are a senior security analyst. Analyze the new Wazuh alert below, using the provided historical context from similar past alerts to inform your assessment.
 
-    **Wazuh Alert:**
+    **Relevant Historical Alerts:**
+    {historical_context}
+
+    **New Wazuh Alert to Analyze:**
     {alert_summary}
 
-    **Relevant Log Context from the same host:**
-    {context}
-
     **Your Analysis Task:**
-    1. Briefly summarize the event.
-    2. Assess the potential risk level (Critical, High, Medium, Low, Informational).
-    3. Provide a clear recommendation for the next step (e.g., "Investigate user activity", "Block IP address", "No action needed").
+    1. Briefly summarize the new event.
+    2. Assess its risk level (Critical, High, Medium, Low, Informational), considering any patterns from the historical context.
+    3. Provide a clear, context-aware recommendation that references similar past incidents when relevant.
+
+    **Guidelines:**
+    - If historical alerts show similar patterns, mention them explicitly (e.g., "This is the 3rd SSH failure from this IP in recent hours")
+    - Consider the frequency and timing of similar alerts when assessing risk
+    - Provide actionable recommendations based on past successful resolutions
 
     **Your Triage Report:**
     """
@@ -99,6 +105,10 @@ embedding_service = GeminiEmbeddingService()
 async def ensure_index_template():
     """確保 OpenSearch 索引範本包含向量欄位"""
     template_name = "wazuh-alerts-vector-template"
+    
+    # 獲取實際的向量維度
+    vector_dimension = embedding_service.get_vector_dimension()
+    
     template_body = {
         "index_patterns": ["wazuh-alerts-*"],
         "priority": 1,
@@ -106,10 +116,13 @@ async def ensure_index_template():
             "mappings": {
                 "properties": {
                     "alert_vector": {
-                        "type": "dense_vector",
-                        "dims": 768,  # Gemini text-embedding-004 預設維度
-                        "index": True,
-                        "similarity": "cosine"
+                        "type": "knn_vector",
+                        "dimension": vector_dimension,
+                        "method": {
+                            "name": "hnsw",
+                            "space_type": "cosinesimil",
+                            "engine": "nmslib"
+                        }
                     },
                     "ai_analysis": {
                         "type": "object",
@@ -134,7 +147,7 @@ async def ensure_index_template():
         # 範本不存在，建立新範本
         try:
             await client.indices.put_index_template(name=template_name, body=template_body)
-            logging.info(f"成功建立索引範本: {template_name}")
+            logging.info(f"成功建立索引範本: {template_name}，向量維度: {vector_dimension}")
         except Exception as e:
             logging.error(f"建立索引範本失敗: {str(e)}")
             raise
@@ -176,69 +189,116 @@ async def vectorize_alert(alert_data: Dict[str, Any]) -> List[float]:
         logging.error(f"警報向量化失敗: {str(e)}")
         raise
 
-async def find_similar_alerts(alert_vector: List[float], k: int = 5) -> List[Dict[str, Any]]:
-    """使用向量搜尋找相似的歷史警報"""
+async def find_similar_alerts(query_vector: List[float], k: int = 5) -> List[Dict[str, Any]]:
+    """使用 k-NN 搜尋找相似的歷史警報 - Stage 2 RAG 實現"""
     try:
-        vector_search_body = {
+        # 構建 k-NN 搜尋查詢，目標 alert_vector 欄位，使用 cosine similarity
+        knn_search_body = {
+            "size": k,
             "query": {
                 "bool": {
                     "must": [
-                        {
-                            "knn": {
-                                "alert_vector": {
-                                    "vector": alert_vector,
-                                    "k": k
-                                }
-                            }
-                        },
                         {
                             "exists": {"field": "ai_analysis"}
                         }
                     ]
                 }
             },
-            "_source": ["rule", "agent", "ai_analysis", "timestamp"]
+            "knn": {
+                "field": "alert_vector",
+                "query_vector": query_vector,
+                "k": k,
+                "num_candidates": k * 2  # 搜尋更多候選者以提高相關性
+            },
+            "_source": [
+                "rule.description", 
+                "rule.level", 
+                "rule.id",
+                "rule.groups",
+                "agent.name", 
+                "ai_analysis.triage_report",
+                "ai_analysis.risk_level",
+                "timestamp",
+                "data"
+            ]
         }
+        
+        logging.info(f"執行 k-NN 搜尋查詢，k={k}，向量維度={len(query_vector)}")
         
         similar_alerts_response = await client.search(
             index="wazuh-alerts-*", 
-            body=vector_search_body,
-            size=k
+            body=knn_search_body
         )
         
         similar_alerts = similar_alerts_response['hits']['hits']
-        logging.debug(f"找到 {len(similar_alerts)} 個相似的歷史警報")
+        
+        # 記錄搜尋結果
+        logging.info(f"k-NN 搜尋找到 {len(similar_alerts)} 個相似的歷史警報")
+        
+        if similar_alerts:
+            # 記錄相似度分數以便調試
+            for i, alert in enumerate(similar_alerts):
+                score = alert.get('_score', 'N/A')
+                rule_desc = alert['_source'].get('rule', {}).get('description', 'N/A')
+                logging.debug(f"相似警報 {i+1}: 分數={score}, 規則={rule_desc[:50]}")
+        
         return similar_alerts
         
     except Exception as e:
-        logging.warning(f"向量搜尋失敗: {str(e)}")
+        logging.warning(f"k-NN 向量搜尋失敗: {str(e)}")
         return []
 
-async def build_context(similar_alerts: List[Dict[str, Any]]) -> str:
-    """根據相似警報構建分析上下文"""
-    if not similar_alerts:
+def format_historical_context(alerts: List[Dict[str, Any]]) -> str:
+    """格式化歷史警報上下文 - Stage 2 專用格式化函式"""
+    if not alerts:
         return "No similar historical alerts found for reference."
     
-    context_parts = ["相關歷史警報分析:"]
+    context_parts = [f"Found {len(alerts)} similar historical alerts for context:"]
+    context_parts.append("=" * 60)
     
-    for i, similar_alert in enumerate(similar_alerts, 1):
-        source = similar_alert['_source']
+    for i, alert in enumerate(alerts, 1):
+        source = alert['_source']
         rule = source.get('rule', {})
+        agent = source.get('agent', {})
         ai_analysis = source.get('ai_analysis', {})
+        timestamp = source.get('timestamp', 'Unknown')
+        score = alert.get('_score', 'N/A')
         
-        context_parts.append(f"""
-{i}. Rule: {rule.get('description', 'N/A')} (Level: {rule.get('level', 'N/A')})
-   Previous Analysis: {ai_analysis.get('triage_report', 'N/A')[:200]}...
-        """.strip())
+        # 提取重要資訊
+        rule_desc = rule.get('description', 'N/A')
+        rule_level = rule.get('level', 'N/A')
+        rule_groups = ', '.join(rule.get('groups', [])) if rule.get('groups') else 'N/A'
+        host_name = agent.get('name', 'N/A')
+        previous_analysis = ai_analysis.get('triage_report', 'N/A')
+        risk_level = ai_analysis.get('risk_level', 'N/A')
+        
+        # 截斷過長的分析報告
+        if len(previous_analysis) > 200:
+            previous_analysis = previous_analysis[:200] + "..."
+        
+        context_entry = f"""
+Alert #{i} (Similarity Score: {score})
+├─ Time: {timestamp}
+├─ Rule: {rule_desc} (Level: {rule_level})
+├─ Groups: {rule_groups}
+├─ Host: {host_name}
+├─ Previous Risk Assessment: {risk_level}
+└─ Previous Analysis: {previous_analysis}
+        """.strip()
+        
+        context_parts.append(context_entry)
+        
+        if i < len(alerts):
+            context_parts.append("-" * 40)
     
     return "\n".join(context_parts)
 
-async def analyze_alert(alert_summary: str, context: str) -> str:
-    """使用 LLM 分析警報"""
+async def analyze_alert(alert_summary: str, historical_context: str) -> str:
+    """使用 LLM 分析警報，包含歷史上下文"""
     try:
         analysis_result = await chain.ainvoke({
             "alert_summary": alert_summary, 
-            "context": context
+            "historical_context": historical_context
         })
         
         logging.debug(f"LLM 分析完成，結果長度: {len(analysis_result)}")
@@ -280,7 +340,7 @@ async def update_alert_with_analysis(
         raise
 
 async def process_single_alert(alert: Dict[str, Any]) -> None:
-    """處理單個警報的完整流程"""
+    """處理單個警報的完整流程 - Stage 2 RAG 增強版本"""
     alert_id = alert['_id']
     alert_index = alert['_index']
     alert_source = alert['_source']
@@ -293,19 +353,21 @@ async def process_single_alert(alert: Dict[str, Any]) -> None:
         
         logging.info(f"開始處理警報: {alert_id} - {alert_summary}")
         
-        # 2. 向量化警報
+        # 2. 向量化新警報
         alert_vector = await vectorize_alert(alert)
         
-        # 3. 搜尋相似的歷史警報
-        similar_alerts = await find_similar_alerts(alert_vector)
+        # 3. 檢索：使用 k-NN 搜尋相似的歷史警報
+        similar_alerts = await find_similar_alerts(alert_vector, k=5)
         
-        # 4. 構建分析上下文
-        context = await build_context(similar_alerts)
+        # 4. 格式化：構建歷史上下文
+        historical_context = format_historical_context(similar_alerts)
         
-        # 5. LLM 分析
-        analysis_result = await analyze_alert(alert_summary, context)
+        logging.info(f"為警報 {alert_id} 構建了包含 {len(similar_alerts)} 個相似警報的歷史上下文")
         
-        # 6. 更新警報
+        # 5. 分析：將新警報和歷史上下文送至 LLM
+        analysis_result = await analyze_alert(alert_summary, historical_context)
+        
+        # 6. 更新：將結果寫回 OpenSearch
         await update_alert_with_analysis(
             alert_index, 
             alert_id, 
@@ -314,16 +376,16 @@ async def process_single_alert(alert: Dict[str, Any]) -> None:
             alert_source.get('timestamp')
         )
         
-        logging.info(f"警報 {alert_id} 處理完成")
+        logging.info(f"警報 {alert_id} RAG 分析完成")
         
     except Exception as e:
         logging.error(f"處理警報 {alert_id} 時發生錯誤: {str(e)}")
         raise
 
 async def triage_new_alerts():
-    """主要的警報分流任務 - 重構後的模組化版本"""
-    print("--- TRIAGE JOB EXECUTING NOW ---")
-    logging.info(f"開始使用 {LLM_PROVIDER} 模型和 Gemini Embedding 分析警報...")
+    """主要的警報分流任務 - Stage 2 RAG 版本"""
+    print("--- RAG TRIAGE JOB EXECUTING NOW ---")
+    logging.info(f"開始使用 {LLM_PROVIDER} 模型和 Gemini Embedding 進行 RAG 分析...")
     
     try:
         # 1. 確保索引範本存在
@@ -338,30 +400,32 @@ async def triage_new_alerts():
             return
         
         # 3. 處理每個警報
+        processed_count = 0
         for alert in alerts:
             try:
                 await process_single_alert(alert)
-                print(f"--- 成功處理警報 {alert['_id']} ---")
+                processed_count += 1
+                print(f"--- 成功處理警報 {alert['_id']} (包含 RAG 上下文) ---")
             except Exception as e:
                 print(f"--- 處理警報 {alert['_id']} 時發生錯誤: {str(e)} ---")
                 # 記錄錯誤但繼續處理其他警報
                 continue
         
-        print(f"--- 批次處理完成，共處理 {len(alerts)} 個警報 ---")
-        logging.info(f"批次處理完成，共處理 {len(alerts)} 個警報")
+        print(f"--- RAG 批次處理完成，共處理 {processed_count}/{len(alerts)} 個警報 ---")
+        logging.info(f"RAG 批次處理完成，共處理 {processed_count}/{len(alerts)} 個警報")
         
     except Exception as e:
-        print(f"!!!!!! 分流任務發生嚴重錯誤 !!!!!!")
-        logging.error(f"分流任務發生錯誤: {e}", exc_info=True)
+        print(f"!!!!!! RAG 分流任務發生嚴重錯誤 !!!!!!")
+        logging.error(f"RAG 分流任務發生錯誤: {e}", exc_info=True)
         traceback.print_exc()
 
 # --- FastAPI 應用與排程 (維持不變) ---
-app = FastAPI(title="Wazuh AI Triage Agent")
+app = FastAPI(title="Wazuh AI Triage Agent - Stage 2 RAG")
 scheduler = AsyncIOScheduler()
 
 @app.on_event("startup")
 async def startup_event():
-    logging.info("AI Agent starting up...")
+    logging.info("AI Agent (Stage 2 RAG) starting up...")
     # 啟動時先確保索引範本存在
     try:
         await ensure_index_template()
@@ -370,11 +434,15 @@ async def startup_event():
     
     scheduler.add_job(triage_new_alerts, 'interval', seconds=60, id='triage_job', misfire_grace_time=30)
     scheduler.start()
-    logging.info("Scheduler started. Triage job scheduled.")
+    logging.info("Scheduler started. RAG Triage job scheduled.")
 
 @app.get("/")
 def read_root():
-    return {"status": "AI Triage Agent is running", "scheduler_status": str(scheduler.get_jobs())}
+    return {
+        "status": "AI Triage Agent (Stage 2 RAG) is running", 
+        "scheduler_status": str(scheduler.get_jobs()),
+        "rag_features": ["k-NN vector search", "historical context", "enhanced prompts"]
+    }
 
 @app.get("/health")
 async def health_check():
@@ -386,12 +454,21 @@ async def health_check():
         # 檢查 embedding 服務
         test_vector = await embedding_service.embed_query("test")
         
+        # 測試 k-NN 搜尋功能
+        try:
+            test_search = await find_similar_alerts(test_vector, k=1)
+            knn_status = "working" if isinstance(test_search, list) else "failed"
+        except Exception:
+            knn_status = "failed"
+        
         return {
             "status": "healthy",
             "opensearch": "connected",
             "embedding_service": "working",
+            "knn_search": knn_status,
             "vector_dimension": len(test_vector),
-            "llm_provider": LLM_PROVIDER
+            "llm_provider": LLM_PROVIDER,
+            "stage": "2 - RAG Implementation"
         }
     except Exception as e:
         return {
