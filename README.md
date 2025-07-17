@@ -4,8 +4,24 @@
 [![OpenSearch](https://img.shields.io/badge/OpenSearch-Vector_Search-green.svg)](https://opensearch.org/)
 [![Google Gemini](https://img.shields.io/badge/Embedding-Gemini_text--embedding--004-orange.svg)](https://ai.google.dev/)
 [![Claude AI](https://img.shields.io/badge/LLM-Claude_3_Haiku-purple.svg)](https://www.anthropic.com/)
+[![RAG Status](https://img.shields.io/badge/RAG-Stage_2_Complete-success.svg)](https://github.com)
 
 本專案實現了針對 **Wazuh SIEM** 系統的智能化安全警報分析解決方案，結合**檢索增強生成 (RAG)** 架構與先進的語言模型技術。通過 Google Gemini Embedding 的語義向量化與 Anthropic Claude/Google Gemini 的分析能力，實現自動化的警報風險評估、威脅關聯與專業建議生成。
+
+---
+
+## 🎯 專案現況 - Stage 2 RAG Implementation COMPLETED ✅
+
+### 當前實施狀態
+- ✅ **Stage 1**: 基礎向量化系統 (已完成)
+- ✅ **Stage 2**: 核心 RAG 檢索增強生成 (已完成)
+- 🔄 **Stage 3**: 進階功能與優化 (規劃中)
+
+### 最新功能亮點
+- **智慧歷史上下文檢索**: 使用 k-NN 向量搜尋找出語意相似的歷史警報
+- **上下文感知分析**: LLM 基於相似歷史事件提供更精準的威脅評估
+- **生產級 RAG 流程**: 完整的檢索-增強-生成工作流程
+- **模組化架構**: 高度可維護的程式碼結構
 
 ---
 
@@ -82,7 +98,7 @@ flowchart TD
 # 1. 向量化新警報
 alert_vector = await embedding_service.embed_alert_content({
     'rule': alert['_source']['rule'],
-    'agent': alert['_source']['agent'], 
+    'agent': alert['_source']['agent'],  
     'data': alert['_source']['data']
 })
 
@@ -136,6 +152,7 @@ echo 'vm.max_map_count=262144' | sudo tee -a /etc/sysctl.conf
 ### 3. 環境配置
 
 建立 `.env` 檔案：
+
 ```bash
 cat > .env << 'EOF'
 # === OpenSearch 連接配置 ===
@@ -217,9 +234,9 @@ curl http://localhost:8000/health
 {
   "index_options": {
     "type": "hnsw",
-    "m": 16,              // 連接數 (16: 平衡, 32: 高精度)
+    "m": 16,               // 連接數 (16: 平衡, 32: 高精度)
     "ef_construction": 512, // 構建時探索深度
-    "ef_search": 512       // 搜索時探索深度
+    "ef_search": 512        // 搜索時探索深度
   }
 }
 ```
@@ -237,7 +254,7 @@ curl http://localhost:8000/health
 # 預期回應
 {
   "status": "healthy",
-  "opensearch": "connected", 
+  "opensearch": "connected",  
   "embedding_service": "working",
   "vector_dimension": 768,
   "llm_provider": "anthropic",
@@ -279,7 +296,7 @@ docker logs ai-agent | grep -E "(Embedding|embed_alert_content)"
 
 ---
 
-## 🔍 故障排除
+## 🔍 Stage 2 故障排除
 
 ### 常見問題診斷
 
@@ -294,7 +311,7 @@ docker logs ai-agent | grep -E "(Embedding|embed_alert_content)"
 ### 診斷工具集
 
 ```bash
-# 完整系統診斷
+# 完整 RAG 系統診斷
 docker exec -it ai-agent python verify_vectorization.py
 
 # 測試 Embedding 服務連接
@@ -429,7 +446,7 @@ curl -k -u admin:SecretPassword -X POST \
 
 ### v3.0 - 多模態分析 (規劃中)
 - [ ] 文件內容向量化支持
-- [ ] 網路流量模式分析  
+- [ ] 網路流量模式分析
 - [ ] 圖像與二進制文件分析
 - [ ] 實時威脅情報整合
 
@@ -474,7 +491,7 @@ async def process_single_alert(alert: Dict) -> None:
     """
 ```
 
-#### 向量檢索 API  
+#### 向量檢索 API
 ```python
 async def find_similar_alerts(query_vector: List[float], k: int = 5) -> List[Dict]:
     """
@@ -493,7 +510,7 @@ async def find_similar_alerts(query_vector: List[float], k: int = 5) -> List[Dic
     "ai_analysis": {
       "triage_report": "威脅分析詳細報告...",
       "provider": "anthropic",
-      "timestamp": "2024-01-15T10:30:00Z", 
+      "timestamp": "2024-01-15T10:30:00Z",  
       "risk_level": "Medium",
       "similar_alerts_count": 3,
       "vector_dimension": 768,
@@ -504,5 +521,34 @@ async def find_similar_alerts(query_vector: List[float], k: int = 5) -> List[Dic
 ```
 
 ---
+
+## 🤝 貢獻指南
+
+我們歡迎社群貢獻！請參考以下步驟：
+
+1. **Fork** 此專案
+2. 建立您的功能分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交您的變更 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 開啟一個 **Pull Request**
+
+---
+
+## 📄 授權條款
+
+本專案採用 MIT 授權條款 - 詳見 [LICENSE](LICENSE) 檔案。
+
+---
+
+## 📞 聯絡資訊
+
+如有任何問題或建議，歡迎聯絡：
+- **專案維護者**: AgenticRAG Team
+- **問題回報**: GitHub Issues
+- **技術討論**: GitHub Discussions
+
+---
+
+*最後更新: 2024年1月*
 
 
