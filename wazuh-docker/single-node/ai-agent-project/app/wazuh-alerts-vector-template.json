@@ -1,0 +1,54 @@
+{
+  "name": "wazuh-alerts-vector-template",
+  "index_patterns": ["wazuh-alerts-*"],
+  "priority": 1,
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 1,
+      "index": {
+        "knn": true,
+        "knn.algo_param.ef_search": 512
+      }
+    },
+    "mappings": {
+      "properties": {
+        "alert_vector": {
+          "type": "dense_vector",
+          "dims": 768,
+          "index": true,
+          "similarity": "cosine",
+          "index_options": {
+            "type": "hnsw",
+            "m": 16,
+            "ef_construction": 512
+          }
+        },
+        "ai_analysis": {
+          "type": "object",
+          "properties": {
+            "triage_report": {
+              "type": "text",
+              "analyzer": "standard"
+            },
+            "provider": {
+              "type": "keyword"
+            },
+            "timestamp": {
+              "type": "date"
+            },
+            "risk_level": {
+              "type": "keyword"
+            },
+            "vector_dimension": {
+              "type": "integer"
+            },
+            "processing_time_ms": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    }
+  }
+}
