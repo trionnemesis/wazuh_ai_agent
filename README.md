@@ -4,8 +4,24 @@
 [![OpenSearch](https://img.shields.io/badge/OpenSearch-Vector_Search-green.svg)](https://opensearch.org/)
 [![Google Gemini](https://img.shields.io/badge/Embedding-Gemini_text--embedding--004-orange.svg)](https://ai.google.dev/)
 [![Claude AI](https://img.shields.io/badge/LLM-Claude_3_Haiku-purple.svg)](https://www.anthropic.com/)
+[![RAG Status](https://img.shields.io/badge/RAG-Stage_2_Complete-success.svg)](https://github.com)
 
 本專案實現了針對 **Wazuh SIEM** 系統的智能化安全警報分析解決方案，結合**檢索增強生成 (RAG)** 架構與先進的語言模型技術。通過 Google Gemini Embedding 的語義向量化與 Anthropic Claude/Google Gemini 的分析能力，實現自動化的警報風險評估、威脅關聯與專業建議生成。
+
+---
+
+## 🎯 專案現況 - Stage 2 RAG Implementation COMPLETED ✅
+
+### 當前實施狀態
+- ✅ **Stage 1**: 基礎向量化系統 (已完成)
+- ✅ **Stage 2**: 核心 RAG 檢索增強生成 (已完成)
+- 🔄 **Stage 3**: 進階功能與優化 (規劃中)
+
+### 最新功能亮點
+- **智慧歷史上下文檢索**: 使用 k-NN 向量搜尋找出語意相似的歷史警報
+- **上下文感知分析**: LLM 基於相似歷史事件提供更精準的威脅評估
+- **生產級 RAG 流程**: 完整的檢索-增強-生成工作流程
+- **模組化架構**: 高度可維護的程式碼結構
 
 ---
 
@@ -217,12 +233,14 @@ contextual_queries = [
 
 **代理決策結果**：
 ```python
+
 contextual_queries = [
     {'type': 'vector_similarity', 'description': 'Similar historical alerts'},
     {'type': 'keyword_time_range', 'description': 'CPU metrics from same host'},
     {'type': 'keyword_time_range', 'description': 'Network I/O metrics from same host'},
     {'type': 'keyword_time_range', 'description': 'SSH connection logs'}
 ]
+
 ```
 
 **LLM 關聯分析輸出**：
@@ -262,6 +280,7 @@ echo 'vm.max_map_count=262144' | sudo tee -a /etc/sysctl.conf
 ### 3. 環境配置
 
 建立 `.env` 檔案：
+
 ```bash
 cat > .env << 'EOF'
 # === OpenSearch 連接配置 ===
@@ -378,9 +397,9 @@ time_windows = {
 {
   "index_options": {
     "type": "hnsw",
-    "m": 16,              // 連接數 (16: 平衡, 32: 高精度)
+    "m": 16,               // 連接數 (16: 平衡, 32: 高精度)
     "ef_construction": 512, // 構建時探索深度
-    "ef_search": 512       // 搜索時探索深度
+    "ef_search": 512        // 搜索時探索深度
   }
 }
 ```
@@ -398,6 +417,7 @@ curl http://localhost:8000/health
 # 預期回應
 {
   "status": "healthy",
+
   "timestamp": "2024-01-15T10:30:00.000Z",
   "version": "3.0",
   "stage": "Stage 3 - Agentic Context Correlation",
@@ -425,6 +445,7 @@ curl http://localhost:8000/health
     "multi_source_retrieval": "enabled",
     "correlation_rules": 4
   }
+
 }
 ```
 
@@ -480,7 +501,7 @@ docker logs ai-agent | grep -E "(multi-source context|comprehensive analysis)"
 
 ---
 
-## 🔍 故障排除
+## 🔍 Stage 2 故障排除
 
 ### 常見問題診斷
 
@@ -495,7 +516,9 @@ docker logs ai-agent | grep -E "(multi-source context|comprehensive analysis)"
 ### Stage 3 專用診斷工具
 
 ```bash
+
 # 測試代理決策引擎
+
 docker exec -it ai-agent python -c "
 from main import determine_contextual_queries
 test_alert = {
@@ -612,11 +635,13 @@ for key, value in formatted.items():
 
 ## 🚀 路線圖與發展方向
 
+
 ### v3.1 - 代理優化 (開發中)
 - [ ] **自適應決策**: 基於歷史成功率的決策規則優化
 - [ ] **平行檢索**: 多源查詢的異步並行執行
 - [ ] **智能快取**: 常用關聯資料的記憶體快取機制
 - [ ] **效能監控**: Grafana 儀表板與指標追蹤
+
 
 ### v4.0 - 分散式架構 (規劃中)
 - [ ] **多節點部署**: 分散式向量搜索集群
@@ -719,7 +744,9 @@ def format_multi_source_context(context_data: Dict[str, Any]) -> Dict[str, str]:
     """
 ```
 
+
 #### 警報處理增強 API
+
 ```python
 async def process_single_alert(alert: Dict[str, Any]) -> None:
     """
@@ -758,7 +785,9 @@ async def find_similar_alerts(query_vector: List[float], k: int = 5) -> List[Dic
     "ai_analysis": {
       "triage_report": "綜合威脅關聯分析報告...",
       "provider": "anthropic",
+
       "timestamp": "2024-01-15T10:30:00Z",
+
       "risk_level": "Medium",
       
       // Stage 2: RAG統計
@@ -779,6 +808,7 @@ async def find_similar_alerts(query_vector: List[float], k: int = 5) -> List[Dic
   }
 }
 ```
+
 
 #### 代理決策查詢規格
 ```json
@@ -838,9 +868,5 @@ async def find_similar_alerts(query_vector: List[float], k: int = 5) -> List[Dic
 - **隱私保護**: 向量化技術確保敏感資料脫敏
 
 ---
-
-**AgenticRAG v3.0** - 業界領先的智能安全運營分析平台
-
-*結合先進的向量搜索、大型語言模型與代理關聯技術，為企業安全團隊提供前所未有的威脅分析能力。*
 
 
