@@ -91,6 +91,9 @@ prompt_template = ChatPromptTemplate.from_template(
 **Network Data:**
 {network_context}
 
+**Additional Context:**
+{additional_context}
+
 **待分析的新 Wazuh 警報：**
 {alert_summary}
 
@@ -111,12 +114,12 @@ chain = prompt_template | llm | output_parser
 # 初始化嵌入服務
 embedding_service = GeminiEmbeddingService()
 
-# === Stage 3: Agentic Context Correlation Implementation ===
+# === Stage 3: Enhanced Agentic Context Correlation Implementation ===
 
 def determine_contextual_queries(alert: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    Stage 3: Decision engine that determines what contextual information is needed
-    based on the alert type and content.
+    Stage 3: Enhanced decision engine that determines what contextual information is needed
+    based on the alert type and content using more sophisticated, human-like reasoning.
     
     Args:
         alert: The new alert document from OpenSearch
@@ -128,106 +131,218 @@ def determine_contextual_queries(alert: Dict[str, Any]) -> List[Dict[str, Any]]:
     alert_source = alert.get('_source', {})
     rule = alert_source.get('rule', {})
     agent = alert_source.get('agent', {})
+    data = alert_source.get('data', {})
     timestamp = alert_source.get('timestamp')
     
     rule_description = rule.get('description', '').lower()
     rule_groups = rule.get('groups', [])
+    rule_level = rule.get('level', 0)
     host_name = agent.get('name', '')
     
-    logger.info(f"Determining contextual queries for alert: {rule_description}")
+    logger.info(f"🤖 AGENTIC DECISION ENGINE: Analyzing alert for contextual needs")
+    logger.info(f"   Alert: {rule_description}")
+    logger.info(f"   Level: {rule_level}, Host: {host_name}")
+    logger.info(f"   Groups: {', '.join(rule_groups)}")
     
     # Default: Always perform k-NN search for similar historical alerts
     queries.append({
         'type': 'vector_similarity',
         'description': 'Similar historical alerts',
+        'priority': 'high',
         'parameters': {
-            'k': 5,
+            'k': 7,  # Increased for better context
             'include_ai_analysis': True
         }
     })
+    logger.info("✅ DECISION: Adding vector similarity search (always required)")
     
-    # Resource monitoring correlation rules
-    resource_keywords = ['high cpu usage', 'excessive ram consumption', 'memory usage', 
-                         'disk space', 'cpu utilization', 'system overload', 'performance']
+    # Enhanced Resource monitoring correlation rules
+    resource_keywords = [
+        'high cpu usage', 'excessive ram consumption', 'memory usage', 'memory leak',
+        'disk space', 'cpu utilization', 'system overload', 'performance', 
+        'resource exhaustion', 'out of memory', 'cpu spike', 'high load'
+    ]
     
-    if any(keyword in rule_description for keyword in resource_keywords):
-        logger.info("Resource-related alert detected - adding process list query")
+    if any(keyword in rule_description for keyword in resource_keywords) or 'system' in rule_groups:
+        logger.info("🔍 DECISION: Resource-related alert detected - correlating with system data")
+        
+        # Process information query
         queries.append({
             'type': 'keyword_time_range',
             'description': 'Process information from same host',
+            'priority': 'high',
             'parameters': {
-                'keywords': ['process list', 'top processes', 'running processes'],
+                'keywords': ['process list', 'top processes', 'running processes', 'ps aux', 'htop'],
+                'host': host_name,
+                'time_window_minutes': 10,  # Wider window for resource issues
+                'timestamp': timestamp
+            }
+        })
+        
+        # Memory usage correlation
+        queries.append({
+            'type': 'keyword_time_range',
+            'description': 'Memory usage metrics',
+            'priority': 'medium',
+            'parameters': {
+                'keywords': ['memory usage', 'ram utilization', 'swap usage', 'free memory'],
+                'host': host_name,
+                'time_window_minutes': 15,
+                'timestamp': timestamp
+            }
+        })
+        
+        logger.info("   ✅ Added process and memory correlation queries")
+    
+    # Enhanced Security event correlation rules
+    security_keywords = [
+        'ssh brute-force', 'web attack', 'authentication failed', 'login attempt',
+        'intrusion', 'malware', 'suspicious activity', 'unauthorized access',
+        'privilege escalation', 'command injection', 'sql injection',
+        'cross-site scripting', 'buffer overflow', 'trojan', 'backdoor'
+    ]
+    
+    security_groups = ['authentication', 'attack', 'malware', 'intrusion_detection', 'web']
+    
+    if (any(keyword in rule_description for keyword in security_keywords) or 
+        any(group in rule_groups for group in security_groups) or 
+        rule_level >= 7):  # High-level alerts likely security-related
+        
+        logger.info("🛡️ DECISION: Security event detected - adding comprehensive correlation")
+        
+        # CPU metrics for detecting resource-intensive attacks
+        queries.append({
+            'type': 'keyword_time_range',
+            'description': 'CPU metrics during security event',
+            'priority': 'high',
+            'parameters': {
+                'keywords': ['cpu usage', 'cpu utilization', 'processor load', 'high cpu'],
+                'host': host_name,
+                'time_window_minutes': 2,  # Tight window for security correlation
+                'timestamp': timestamp
+            }
+        })
+        
+        # Network activity correlation
+        queries.append({
+            'type': 'keyword_time_range',
+            'description': 'Network activity during security event',
+            'priority': 'high',
+            'parameters': {
+                'keywords': ['network traffic', 'network io', 'bandwidth', 'packets', 'connections'],
+                'host': host_name,
+                'time_window_minutes': 3,
+                'timestamp': timestamp
+            }
+        })
+        
+        # User activity correlation
+        queries.append({
+            'type': 'keyword_time_range',
+            'description': 'User activity correlation',
+            'priority': 'medium',
+            'parameters': {
+                'keywords': ['user login', 'user activity', 'session', 'authentication'],
                 'host': host_name,
                 'time_window_minutes': 5,
                 'timestamp': timestamp
             }
         })
-    
-    # Security event correlation rules
-    security_keywords = ['ssh brute-force', 'web attack', 'authentication failed', 
-                         'login attempt', 'intrusion', 'malware', 'suspicious activity']
-    
-    if any(keyword in rule_description for keyword in security_keywords):
-        logger.info("Security event detected - adding system metrics correlation")
         
-        # Add CPU metrics query
+        logger.info("   ✅ Added security event correlation queries (CPU, Network, User)")
+    
+    # SSH-specific enhanced correlation
+    if 'ssh' in rule_description or 'sshd' in rule_description:
+        logger.info("🔑 DECISION: SSH-related alert - adding SSH-specific correlation")
+        
         queries.append({
             'type': 'keyword_time_range',
-            'description': 'CPU metrics from same host',
+            'description': 'SSH connection patterns',
+            'priority': 'high',
             'parameters': {
-                'keywords': ['cpu usage', 'cpu utilization', 'processor'],
+                'keywords': ['ssh connection', 'port 22', 'sshd', 'ssh login', 'ssh session'],
                 'host': host_name,
-                'time_window_minutes': 1,
+                'time_window_minutes': 5,
                 'timestamp': timestamp
             }
         })
         
-        # Add network I/O metrics query
+        # Look for brute force patterns
+        if 'brute' in rule_description or 'failed' in rule_description:
+            queries.append({
+                'type': 'keyword_time_range',
+                'description': 'SSH failure patterns',
+                'priority': 'high',
+                'parameters': {
+                    'keywords': ['ssh failed', 'authentication failure', 'invalid user', 'connection refused'],
+                    'host': host_name,
+                    'time_window_minutes': 10,  # Wider window for brute force detection
+                    'timestamp': timestamp
+                }
+            })
+            logger.info("   ✅ Added SSH brute force correlation")
+    
+    # Web-related enhanced correlation
+    web_indicators = ['web', 'http', 'apache', 'nginx', 'php', 'sql injection', 'xss']
+    if any(indicator in rule_description for indicator in web_indicators):
+        logger.info("🌐 DECISION: Web-related alert - adding web server correlation")
+        
         queries.append({
             'type': 'keyword_time_range',
-            'description': 'Network I/O metrics from same host',
+            'description': 'Web server performance',
+            'priority': 'medium',
             'parameters': {
-                'keywords': ['network traffic', 'network io', 'bandwidth', 'packets'],
+                'keywords': ['apache', 'nginx', 'web server', 'http requests', 'response time'],
                 'host': host_name,
-                'time_window_minutes': 1,
+                'time_window_minutes': 3,
                 'timestamp': timestamp
             }
         })
-    
-    # SSH-specific correlation
-    if 'ssh' in rule_description:
-        logger.info("SSH-related alert detected - adding SSH-specific metrics")
+        
         queries.append({
             'type': 'keyword_time_range',
-            'description': 'SSH connection logs',
+            'description': 'Web access logs',
+            'priority': 'high',
             'parameters': {
-                'keywords': ['ssh connection', 'port 22', 'sshd'],
+                'keywords': ['access log', 'http status', 'user agent', 'request uri'],
                 'host': host_name,
                 'time_window_minutes': 2,
                 'timestamp': timestamp
             }
         })
+        
+        logger.info("   ✅ Added web server correlation queries")
     
-    # Web-related correlation
-    if any(web_term in rule_description for web_term in ['web', 'http', 'apache', 'nginx']):
-        logger.info("Web-related alert detected - adding web server metrics")
+    # File system correlation for critical alerts
+    if rule_level >= 10 or 'file' in rule_description:
+        logger.info("📁 DECISION: High-level/file-related alert - adding filesystem correlation")
+        
         queries.append({
             'type': 'keyword_time_range',
-            'description': 'Web server metrics',
+            'description': 'File system activity',
+            'priority': 'medium',
             'parameters': {
-                'keywords': ['apache', 'nginx', 'web server', 'http requests'],
+                'keywords': ['file created', 'file modified', 'file deleted', 'disk usage', 'inode'],
                 'host': host_name,
-                'time_window_minutes': 2,
+                'time_window_minutes': 5,
                 'timestamp': timestamp
             }
         })
+        
+        logger.info("   ✅ Added filesystem correlation")
     
-    logger.info(f"Generated {len(queries)} contextual queries for correlation analysis")
+    # Summary logging
+    total_queries = len(queries)
+    high_priority = len([q for q in queries if q.get('priority') == 'high'])
+    logger.info(f"🎯 AGENTIC DECISION COMPLETE: Generated {total_queries} contextual queries")
+    logger.info(f"   High priority: {high_priority}, Total sources: {total_queries}")
+    logger.info(f"   Query types: {', '.join(set(q['type'] for q in queries))}")
+    
     return queries
 
 async def execute_retrieval(queries: List[Dict[str, Any]], alert_vector: List[float]) -> Dict[str, Any]:
     """
-    Stage 3: Generic retrieval function that executes multiple types of queries
+    Stage 3: Enhanced retrieval function that executes multiple types of queries
     and aggregates results into a structured context object.
     
     Args:
@@ -243,29 +358,38 @@ async def execute_retrieval(queries: List[Dict[str, Any]], alert_vector: List[fl
         'network_logs': [],
         'process_data': [],
         'ssh_logs': [],
-        'web_metrics': []
+        'web_metrics': [],
+        'user_activity': [],
+        'memory_metrics': [],
+        'filesystem_data': [],
+        'additional_context': []
     }
     
-    logger.info(f"Executing {len(queries)} retrieval queries")
+    logger.info(f"🔄 EXECUTING RETRIEVAL: Processing {len(queries)} contextual queries")
     
-    for query in queries:
+    # Sort queries by priority for optimal execution order
+    sorted_queries = sorted(queries, key=lambda x: {'high': 0, 'medium': 1, 'low': 2}.get(x.get('priority', 'medium'), 1))
+    
+    for i, query in enumerate(sorted_queries, 1):
         query_type = query['type']
         description = query['description']
+        priority = query.get('priority', 'medium')
         parameters = query['parameters']
         
         try:
-            logger.info(f"Executing query: {description}")
+            logger.info(f"   [{i}/{len(queries)}] 🔍 {priority.upper()}: {description}")
             
             if query_type == 'vector_similarity':
                 # K-NN vector search for similar alerts
                 results = await execute_vector_search(alert_vector, parameters)
                 context_data['similar_alerts'].extend(results)
+                logger.info(f"      ✅ Found {len(results)} similar alerts")
                 
             elif query_type == 'keyword_time_range':
                 # Keyword and time-based search
                 results = await execute_keyword_time_search(parameters)
                 
-                # Categorize results based on description
+                # Enhanced categorization based on description
                 if 'cpu' in description.lower():
                     context_data['cpu_metrics'].extend(results)
                 elif 'network' in description.lower():
@@ -276,17 +400,27 @@ async def execute_retrieval(queries: List[Dict[str, Any]], alert_vector: List[fl
                     context_data['ssh_logs'].extend(results)
                 elif 'web' in description.lower():
                     context_data['web_metrics'].extend(results)
+                elif 'user' in description.lower():
+                    context_data['user_activity'].extend(results)
+                elif 'memory' in description.lower():
+                    context_data['memory_metrics'].extend(results)
+                elif 'file' in description.lower():
+                    context_data['filesystem_data'].extend(results)
+                else:
+                    context_data['additional_context'].extend(results)
+                
+                logger.info(f"      ✅ Found {len(results)} contextual records")
                     
         except Exception as e:
-            logger.error(f"Error executing query '{description}': {str(e)}")
+            logger.error(f"      ❌ Query failed: {str(e)}")
             continue
     
-    # Log retrieval summary
+    # Enhanced retrieval summary
     total_results = sum(len(results) for results in context_data.values())
-    logger.info(f"Retrieval completed - Total results: {total_results}")
+    logger.info(f"📊 RETRIEVAL SUMMARY: {total_results} total contextual records")
     for category, results in context_data.items():
         if results:
-            logger.info(f"  {category}: {len(results)} items")
+            logger.info(f"   {category}: {len(results)} records")
     
     return context_data
 
@@ -313,7 +447,7 @@ async def execute_vector_search(alert_vector: List[float], parameters: Dict[str,
                     "must": [
                         {
                             "knn": {
-                                "alert_vector": { # FIX: Changed from 'alert_embedding' to 'alert_vector' to match template
+                                "alert_vector": {
                                     "vector": alert_vector,
                                     "k": k
                                 }
@@ -322,12 +456,11 @@ async def execute_vector_search(alert_vector: List[float], parameters: Dict[str,
                     ]
                 }
             },
-            "_source": ["rule", "agent", "ai_analysis", "timestamp"]
+            "_source": ["rule", "agent", "ai_analysis", "timestamp", "data"]
         }
         
         # Add filter for alerts with AI analysis if requested
         if include_ai_analysis:
-            # Ensure filter list exists before appending
             if "filter" not in knn_search_body["query"]["bool"]:
                 knn_search_body["query"]["bool"]["filter"] = []
             knn_search_body["query"]["bool"]["filter"].append(
@@ -340,7 +473,6 @@ async def execute_vector_search(alert_vector: List[float], parameters: Dict[str,
         )
         
         similar_alerts = response.get('hits', {}).get('hits', [])
-        logger.debug(f"Vector search returned {len(similar_alerts)} similar alerts")
         return similar_alerts
         
     except Exception as e:
@@ -349,7 +481,7 @@ async def execute_vector_search(alert_vector: List[float], parameters: Dict[str,
 
 async def execute_keyword_time_search(parameters: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    Execute keyword and time-range search for system metrics and logs.
+    Enhanced keyword and time-range search for system metrics and logs.
     
     Args:
         parameters: Search parameters including keywords, host, and time window
@@ -376,18 +508,23 @@ async def execute_keyword_time_search(parameters: Dict[str, Any]) -> List[Dict[s
         start_time = alert_time - timedelta(minutes=time_window_minutes)
         end_time = alert_time + timedelta(minutes=time_window_minutes)
         
-        # Build keyword and time-range query
+        # Build enhanced keyword and time-range query
         search_body = {
-            "size": 10,
+            "size": 15,  # Increased for better context
             "query": {
                 "bool": {
-                    "must": [
+                    "should": [  # Using should for better matching flexibility
                         {
                             "multi_match": {
                                 "query": " ".join(keywords),
-                                "fields": ["rule.description", "data.*", "full_log"],
+                                "fields": ["rule.description^2", "data.*", "full_log", "location"],
                                 "type": "best_fields",
                                 "fuzziness": "AUTO"
+                            }
+                        },
+                        {
+                            "terms": {
+                                "rule.description.keyword": keywords
                             }
                         }
                     ],
@@ -400,10 +537,14 @@ async def execute_keyword_time_search(parameters: Dict[str, Any]) -> List[Dict[s
                                 }
                             }
                         }
-                    ]
+                    ],
+                    "minimum_should_match": 1
                 }
             },
-            "sort": [{"timestamp": {"order": "desc"}}]
+            "sort": [
+                {"timestamp": {"order": "desc"}},
+                {"_score": {"order": "desc"}}
+            ]
         }
         
         # Add host filter if specified
@@ -418,7 +559,6 @@ async def execute_keyword_time_search(parameters: Dict[str, Any]) -> List[Dict[s
         )
         
         results = response.get('hits', {}).get('hits', [])
-        logger.debug(f"Keyword/time search returned {len(results)} results for keywords: {keywords}")
         return results
         
     except Exception as e:
@@ -427,7 +567,7 @@ async def execute_keyword_time_search(parameters: Dict[str, Any]) -> List[Dict[s
 
 def format_multi_source_context(context_data: Dict[str, Any]) -> Dict[str, str]:
     """
-    Stage 3: Format the multi-source context data for LLM consumption.
+    Stage 3: Enhanced formatting of multi-source context data for LLM consumption.
     
     Args:
         context_data: Aggregated context from execute_retrieval
@@ -437,7 +577,7 @@ def format_multi_source_context(context_data: Dict[str, Any]) -> Dict[str, str]:
     """
     formatted_context = {}
     
-    # Format similar alerts
+    # Format similar alerts with enhanced details
     similar_alerts = context_data.get('similar_alerts', [])
     if similar_alerts:
         context_parts = []
@@ -447,26 +587,38 @@ def format_multi_source_context(context_data: Dict[str, Any]) -> Dict[str, str]:
             agent = source.get('agent', {})
             ai_analysis = source.get('ai_analysis', {})
             
+            # Extract risk level from previous analysis if available
+            prev_analysis = ai_analysis.get('triage_report', '')
+            risk_level = "Unknown"
+            for level in ['Critical', 'High', 'Medium', 'Low']:
+                if level.lower() in prev_analysis.lower():
+                    risk_level = level
+                    break
+            
             context_part = f"""
-{i}. **Timestamp:** {source.get('timestamp', 'Unknown')}
-   **Host:** {agent.get('name', 'Unknown')}
-   **Rule:** {rule.get('description', 'N/A')} (Level: {rule.get('level', 'N/A')})
-   **Previous Analysis:** {ai_analysis.get('triage_report', 'N/A')[:150]}...
-   **Similarity Score:** {alert.get('_score', 'N/A')}"""
+{i}. **Alert:** {rule.get('description', 'N/A')} (Level: {rule.get('level', 'N/A')})
+   **Host:** {agent.get('name', 'Unknown')} | **Time:** {source.get('timestamp', 'Unknown')}
+   **Previous Risk Assessment:** {risk_level}
+   **Similarity Score:** {alert.get('_score', 'N/A'):.3f}
+   **Analysis Preview:** {prev_analysis[:200]}..."""
             context_parts.append(context_part)
         formatted_context['similar_alerts_context'] = "\n".join(context_parts)
     else:
         formatted_context['similar_alerts_context'] = "No similar historical alerts found."
     
-    # Format system metrics
+    # Format system metrics with enhanced correlation info
     cpu_metrics = context_data.get('cpu_metrics', [])
-    if cpu_metrics:
-        cpu_parts = []
-        for metric in cpu_metrics:
+    memory_metrics = context_data.get('memory_metrics', [])
+    all_system_metrics = cpu_metrics + memory_metrics
+    
+    if all_system_metrics:
+        metric_parts = []
+        for metric in all_system_metrics[:10]:  # Limit for readability
             source = metric.get('_source', {})
             rule = source.get('rule', {})
-            cpu_parts.append(f"- {source.get('timestamp', 'Unknown')}: {rule.get('description', 'CPU metric')}")
-        formatted_context['system_metrics_context'] = "\n".join(cpu_parts)
+            timestamp = source.get('timestamp', 'Unknown')
+            metric_parts.append(f"- {timestamp}: {rule.get('description', 'System metric')}")
+        formatted_context['system_metrics_context'] = "\n".join(metric_parts)
     else:
         formatted_context['system_metrics_context'] = "No correlated system metrics found."
     
@@ -474,25 +626,60 @@ def format_multi_source_context(context_data: Dict[str, Any]) -> Dict[str, str]:
     process_data = context_data.get('process_data', [])
     if process_data:
         process_parts = []
-        for proc in process_data:
+        for proc in process_data[:8]:
             source = proc.get('_source', {})
             rule = source.get('rule', {})
-            process_parts.append(f"- {source.get('timestamp', 'Unknown')}: {rule.get('description', 'Process info')}")
+            timestamp = source.get('timestamp', 'Unknown')
+            process_parts.append(f"- {timestamp}: {rule.get('description', 'Process info')}")
         formatted_context['process_context'] = "\n".join(process_parts)
     else:
         formatted_context['process_context'] = "No process information found."
     
-    # Format network data
+    # Format network data with enhanced details
     network_logs = context_data.get('network_logs', [])
-    if network_logs:
+    ssh_logs = context_data.get('ssh_logs', [])
+    all_network_data = network_logs + ssh_logs
+    
+    if all_network_data:
         network_parts = []
-        for net in network_logs:
+        for net in all_network_data[:10]:
             source = net.get('_source', {})
             rule = source.get('rule', {})
-            network_parts.append(f"- {source.get('timestamp', 'Unknown')}: {rule.get('description', 'Network activity')}")
+            timestamp = source.get('timestamp', 'Unknown')
+            data = source.get('data', {})
+            
+            # Extract relevant network details
+            details = []
+            if data.get('srcip'):
+                details.append(f"SRC:{data['srcip']}")
+            if data.get('dstip'):
+                details.append(f"DST:{data['dstip']}")
+            if data.get('srcport'):
+                details.append(f"PORT:{data['srcport']}")
+            
+            detail_str = f" ({', '.join(details)})" if details else ""
+            network_parts.append(f"- {timestamp}: {rule.get('description', 'Network activity')}{detail_str}")
         formatted_context['network_context'] = "\n".join(network_parts)
     else:
         formatted_context['network_context'] = "No correlated network data found."
+    
+    # Format additional context from various sources
+    additional_sources = []
+    for category in ['web_metrics', 'user_activity', 'filesystem_data', 'additional_context']:
+        category_data = context_data.get(category, [])
+        if category_data:
+            additional_sources.extend(category_data[:5])  # Limit each category
+    
+    if additional_sources:
+        additional_parts = []
+        for item in additional_sources:
+            source = item.get('_source', {})
+            rule = source.get('rule', {})
+            timestamp = source.get('timestamp', 'Unknown')
+            additional_parts.append(f"- {timestamp}: {rule.get('description', 'Additional context')}")
+        formatted_context['additional_context'] = "\n".join(additional_parts)
+    else:
+        formatted_context['additional_context'] = "No additional contextual data found."
     
     return formatted_context
 
@@ -545,32 +732,59 @@ async def process_single_alert(alert: Dict[str, Any]) -> None:
 
     try:
         # Step 2: Vectorize new alert
-        logger.info(f"Vectorizing alert {alert_id}")
-        # FIX: Changed from embed_query to embed_alert_content for better context
+        logger.info(f"🔮 STEP 2: Vectorizing alert {alert_id}")
         alert_vector = await embedding_service.embed_alert_content(alert_source)
+        logger.info(f"   ✅ Alert vectorized (dimension: {len(alert_vector)})")
         
         # Step 3: Decide - Determine contextual queries needed
-        logger.info(f"Determining contextual queries for alert {alert_id}")
+        logger.info(f"🧠 STEP 3: AGENTIC DECISION - Determining contextual needs for alert {alert_id}")
         contextual_queries = determine_contextual_queries(alert)
         
         # Step 4: Retrieve - Execute all contextual queries
-        logger.info(f"Executing {len(contextual_queries)} contextual queries for alert {alert_id}")
+        logger.info(f"📡 STEP 4: CONTEXTUAL RETRIEVAL - Executing {len(contextual_queries)} queries for alert {alert_id}")
         context_data = await execute_retrieval(contextual_queries, alert_vector)
         
         # Step 5: Format - Prepare multi-source context for LLM
-        logger.info(f"Formatting multi-source context for alert {alert_id}")
+        logger.info(f"📋 STEP 5: CONTEXT FORMATTING - Preparing multi-source context for alert {alert_id}")
         formatted_context = format_multi_source_context(context_data)
         
+        # Log context summary for verification
+        total_context_items = sum(len(ctx.split('\n')) for ctx in formatted_context.values() if ctx and "No " not in ctx)
+        logger.info(f"   📊 Context summary: {total_context_items} total contextual items prepared")
+        
         # Step 6: Analyze - Send comprehensive context to LLM
-        logger.info(f"Generating comprehensive AI analysis for alert {alert_id}")
+        logger.info(f"🤖 STEP 6: LLM ANALYSIS - Generating comprehensive AI analysis for alert {alert_id}")
         analysis_result = await chain.ainvoke({
             "alert_summary": alert_summary,
             **formatted_context
         })
         
-        logger.info(f"已為警報 {alert_id} 生成 AI 分析: {analysis_result[:100]}...")
+        # Extract risk level for logging
+        risk_level = "Unknown"
+        for level in ['Critical', 'High', 'Medium', 'Low', 'Informational']:
+            if level.lower() in analysis_result.lower():
+                risk_level = level
+                break
+        
+        logger.info(f"   ✅ AI Analysis generated (Risk: {risk_level}): {analysis_result[:150]}...")
         
         # Step 7: Update - Store results in OpenSearch
+        logger.info(f"💾 STEP 7: STORING RESULTS - Updating alert {alert_id} with agentic analysis")
+        
+        # Enhanced metadata for Stage 3
+        context_metadata = {
+            "similar_alerts_count": len(context_data.get('similar_alerts', [])),
+            "cpu_metrics_count": len(context_data.get('cpu_metrics', [])),
+            "memory_metrics_count": len(context_data.get('memory_metrics', [])),
+            "network_logs_count": len(context_data.get('network_logs', [])),
+            "ssh_logs_count": len(context_data.get('ssh_logs', [])),
+            "process_data_count": len(context_data.get('process_data', [])),
+            "web_metrics_count": len(context_data.get('web_metrics', [])),
+            "user_activity_count": len(context_data.get('user_activity', [])),
+            "filesystem_data_count": len(context_data.get('filesystem_data', [])),
+            "additional_context_count": len(context_data.get('additional_context', []))
+        }
+        
         update_body = {
             "doc": {
                 "ai_analysis": {
@@ -578,51 +792,75 @@ async def process_single_alert(alert: Dict[str, Any]) -> None:
                     "provider": LLM_PROVIDER,
                     "timestamp": alert_source.get('timestamp'),
                     "context_sources": len(contextual_queries),
-                    "similar_alerts_count": len(context_data.get('similar_alerts', [])),
-                    "cpu_metrics_count": len(context_data.get('cpu_metrics', [])),
-                    "network_logs_count": len(context_data.get('network_logs', [])),
-                    "process_data_count": len(context_data.get('process_data', []))
+                    "extracted_risk_level": risk_level,
+                    "stage": "Stage 3 - Agentic Context Correlation",
+                    **context_metadata
                 },
-                "alert_vector": alert_vector # FIX: Changed from 'alert_embedding' to 'alert_vector'
+                "alert_vector": alert_vector
             }
         }
         
         await client.update(index=alert_index, id=alert_id, body=update_body)
-        logger.info(f"Successfully updated alert {alert_id} with agentic context correlation analysis")
+        
+        logger.info(f"🎉 AGENTIC PROCESSING COMPLETE: Alert {alert_id} successfully updated")
+        logger.info(f"   📈 Context correlation metadata stored for future analysis")
         
     except Exception as e:
-        logger.error(f"處理警報 {alert_id} 時發生錯誤: {str(e)}")
+        logger.error(f"❌ PROCESSING FAILED for alert {alert_id}: {str(e)}")
+        logger.error(f"   Stack trace: {traceback.format_exc()}")
         raise
 
 async def triage_new_alerts():
     """Main alert triage task with Stage 3 agentic context correlation"""
-    print("--- STAGE 3 AGENTIC CONTEXT CORRELATION TRIAGE JOB EXECUTING ---")
-    logger.info(f"Analyzing alerts with {LLM_PROVIDER} model and agentic context correlation...")
+    print("🚀 === STAGE 3 AGENTIC CONTEXT CORRELATION TRIAGE JOB EXECUTING ===")
+    logger.info(f"🔬 Analyzing alerts with {LLM_PROVIDER} model and enhanced agentic context correlation...")
     
     try:
         # Query new alerts
         alerts = await query_new_alerts(limit=10)
         
         if not alerts:
-            print("--- 未找到新警報 ---")
-            logger.info("未找到新警報")
+            print("📭 --- No new alerts found ---")
+            logger.info("No new alerts requiring agentic analysis")
             return
             
-        logger.info(f"Found {len(alerts)} new alerts to process with agentic context correlation")
+        logger.info(f"🎯 Found {len(alerts)} new alerts to process with agentic context correlation")
         
         # Process each alert with enhanced agentic workflow
-        for alert in alerts:
+        successful_processing = 0
+        failed_processing = 0
+        
+        for i, alert in enumerate(alerts, 1):
+            alert_id = alert['_id']
+            rule_desc = alert.get('_source', {}).get('rule', {}).get('description', 'Unknown')
+            
             try:
+                logger.info(f"🔄 [{i}/{len(alerts)}] Processing alert: {alert_id}")
+                logger.info(f"   Rule: {rule_desc}")
+                
                 await process_single_alert(alert)
-                print(f"--- Successfully processed alert {alert['_id']} ---")
+                
+                successful_processing += 1
+                print(f"✅ [{i}/{len(alerts)}] Successfully processed alert {alert_id}")
+                logger.info(f"✅ Alert {alert_id} processing completed successfully")
+                
             except Exception as e:
-                print(f"--- 處理警報 {alert['_id']} 時發生錯誤: {str(e)} ---")
-                logger.error(f"處理警報 {alert['_id']} 失敗: {str(e)}")
+                failed_processing += 1
+                print(f"❌ [{i}/{len(alerts)}] Failed to process alert {alert_id}: {str(e)}")
+                logger.error(f"❌ Alert {alert_id} processing failed: {str(e)}")
                 continue
+        
+        # Summary logging
+        print(f"📊 === AGENTIC TRIAGE BATCH SUMMARY ===")
+        print(f"   ✅ Successful: {successful_processing}")
+        print(f"   ❌ Failed: {failed_processing}")
+        print(f"   📈 Success Rate: {(successful_processing/len(alerts)*100):.1f}%")
+        
+        logger.info(f"🎯 Agentic triage batch completed: {successful_processing}/{len(alerts)} successful")
             
     except Exception as e:
-        print(f"!!!!!! A CRITICAL ERROR OCCURRED IN AGENTIC TRIAGE JOB !!!!!!")
-        logger.error(f"An error occurred during agentic triage: {e}", exc_info=True)
+        print(f"💥 !!! CRITICAL ERROR IN AGENTIC TRIAGE JOB !!!")
+        logger.error(f"Critical error during agentic triage: {e}", exc_info=True)
         traceback.print_exc()
 
 # === FastAPI 應用程式與排程器 ===
@@ -698,13 +936,26 @@ async def health_check():
             body={"query": {"exists": {"field": "alert_vector"}}}
         )
         
+        # 檢查 Stage 3 分析統計
+        stage3_analysis_response = await client.count(
+            index="wazuh-alerts-*",
+            body={"query": {"bool": {"must": [
+                {"exists": {"field": "ai_analysis"}},
+                {"term": {"ai_analysis.stage.keyword": "Stage 3 - Agentic Context Correlation"}}
+            ]}}}
+        )
+        
         total_alerts_response = await client.count(index="wazuh-alerts-*")
         
         health_status["processing_stats"] = {
             "vectorized_alerts": vectorized_count_response.get("count", 0),
+            "stage3_analyzed_alerts": stage3_analysis_response.get("count", 0),
             "total_alerts": total_alerts_response.get("count", 0),
             "vectorization_rate": round(
                 (vectorized_count_response.get("count", 0) / max(total_alerts_response.get("count", 1), 1)) * 100, 2
+            ),
+            "stage3_analysis_rate": round(
+                (stage3_analysis_response.get("count", 0) / max(total_alerts_response.get("count", 1), 1)) * 100, 2
             )
         }
         
