@@ -91,6 +91,9 @@ chain = prompt_template | llm | output_parser
 # --- 新增 Embedding 服務 ---
 from embedding_service import GeminiEmbeddingService
 
+# --- 新增 Embedding 服務 ---
+embedding_service = GeminiEmbeddingService()
+
 # 在 triage_new_alerts 函式中整合語意搜尋
 async def triage_new_alerts():
     print("--- TRIAGE JOB EXECUTING NOW ---")
