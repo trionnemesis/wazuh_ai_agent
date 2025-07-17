@@ -1,15 +1,3 @@
-# Wazuh AI Agent - 智慧安全警報分析助手
-
-本專案整合大型語言模型 (LLM)，為 [Wazuh](https://wazuh.com/) SIEM 系統自動分析安全警報，產生事件摘要、風險評估與具體建議，並將分析結果寫回警報，大幅提升安全維運效率。
-
----
-
-## 專案架構
-
-本專案採用 Docker 容器化部署，將 Wazuh SIEM 與 AI Agent 服務隔離，確保穩定與可擴充性。
-
-### 架構圖
-```
 ---
 config:
   layout: dagre
