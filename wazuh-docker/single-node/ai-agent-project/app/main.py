@@ -136,7 +136,7 @@ def determine_contextual_queries(alert: Dict[str, Any]) -> List[Dict[str, Any]]:
     
     # Resource monitoring correlation rules
     resource_keywords = ['high cpu usage', 'excessive ram consumption', 'memory usage', 
-                        'disk space', 'cpu utilization', 'system overload', 'performance']
+                         'disk space', 'cpu utilization', 'system overload', 'performance']
     
     if any(keyword in rule_description for keyword in resource_keywords):
         logger.info("Resource-related alert detected - adding process list query")
@@ -153,7 +153,7 @@ def determine_contextual_queries(alert: Dict[str, Any]) -> List[Dict[str, Any]]:
     
     # Security event correlation rules
     security_keywords = ['ssh brute-force', 'web attack', 'authentication failed', 
-                        'login attempt', 'intrusion', 'malware', 'suspicious activity']
+                         'login attempt', 'intrusion', 'malware', 'suspicious activity']
     
     if any(keyword in rule_description for keyword in security_keywords):
         logger.info("Security event detected - adding system metrics correlation")
@@ -301,7 +301,7 @@ async def execute_vector_search(alert_vector: List[float], parameters: Dict[str,
                     "must": [
                         {
                             "knn": {
-                                "alert_embedding": {
+                                "alert_vector": { # FIX: Changed from 'alert_embedding' to 'alert_vector' to match template
                                     "vector": alert_vector,
                                     "k": k
                                 }
@@ -309,14 +309,18 @@ async def execute_vector_search(alert_vector: List[float], parameters: Dict[str,
                         }
                     ]
                 }
-            }
+            },
+            "_source": ["rule", "agent", "ai_analysis", "timestamp"]
         }
         
         # Add filter for alerts with AI analysis if requested
         if include_ai_analysis:
-            knn_search_body["query"]["bool"]["filter"] = [
+            # Ensure filter list exists before appending
+            if "filter" not in knn_search_body["query"]["bool"]:
+                knn_search_body["query"]["bool"]["filter"] = []
+            knn_search_body["query"]["bool"]["filter"].append(
                 {"exists": {"field": "ai_analysis"}}
-            ]
+            )
         
         response = await client.search(
             index="wazuh-alerts-*",
@@ -530,7 +534,8 @@ async def process_single_alert(alert: Dict[str, Any]) -> None:
     try:
         # Step 2: Vectorize new alert
         logger.info(f"Vectorizing alert {alert_id}")
-        alert_vector = await embedding_service.embed_query(alert_summary)
+        # FIX: Changed from embed_query to embed_alert_content for better context
+        alert_vector = await embedding_service.embed_alert_content(alert_source)
         
         # Step 3: Decide - Determine contextual queries needed
         logger.info(f"Determining contextual queries for alert {alert_id}")
@@ -566,7 +571,7 @@ async def process_single_alert(alert: Dict[str, Any]) -> None:
                     "network_logs_count": len(context_data.get('network_logs', [])),
                     "process_data_count": len(context_data.get('process_data', []))
                 },
-                "alert_embedding": alert_vector
+                "alert_vector": alert_vector # FIX: Changed from 'alert_embedding' to 'alert_vector'
             }
         }
         
@@ -595,7 +600,13 @@ async def triage_new_alerts():
         
         # Process each alert with enhanced agentic workflow
         for alert in alerts:
-            await process_single_alert(alert)
+            try:
+                await process_single_alert(alert)
+                print(f"--- Successfully processed alert {alert['_id']} ---")
+            except Exception as e:
+                print(f"--- Error processing alert {alert['_id']}: {str(e)} ---")
+                logger.error(f"Failed to process alert {alert['_id']}: {str(e)}")
+                continue
             
     except Exception as e:
         print(f"!!!!!! A CRITICAL ERROR OCCURRED IN AGENTIC TRIAGE JOB !!!!!!")
