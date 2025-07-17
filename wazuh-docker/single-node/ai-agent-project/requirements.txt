@@ -9,3 +9,6 @@ langchain-community
 opensearch-py[async] # 使用 [async] 會自動安裝 aiohttp
 sentence-transformers
 python-dotenv
+google-generativeai
+langchain-google-genai>=1.0.0
+numpy

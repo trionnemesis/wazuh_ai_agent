@@ -88,18 +88,26 @@ output_parser = StrOutputParser()
 # 4. 組成 LangChain 鏈
 chain = prompt_template | llm | output_parser
 
+# --- 新增 Embedding 服務 ---
+from embedding_service import GeminiEmbeddingService
 
-# --- 核心工作函式 (維持不變) ---
+# 在 triage_new_alerts 函式中整合語意搜尋
 async def triage_new_alerts():
     print("--- TRIAGE JOB EXECUTING NOW ---")
-    logging.info(f"Analyzing alerts with {LLM_PROVIDER} model...")
+    logging.info(f"Analyzing alerts with {LLM_PROVIDER} model and Gemini Embedding...")
     try:
-        response = await client.search(index="wazuh-alerts-*", body={"query":{"bool":{"must_not":[{"exists":{"field":"ai_analysis"}}]}}}, size=10)
+        response = await client.search(
+            index="wazuh-alerts-*", 
+            body={"query": {"bool": {"must_not": [{"exists": {"field": "ai_analysis"}}]}}}, 
+            size=10
+        )
         alerts = response['hits']['hits']
+        
         if not alerts:
             print("--- No new alerts found. ---")
             logging.info("No new alerts found.")
             return
+            
         for alert in alerts:
             alert_id = alert['_id']
             alert_index = alert['_index']
@@ -111,13 +119,58 @@ async def triage_new_alerts():
             print(f"--- Found alert to process: {alert_id} ---")
             logging.info(f"Found new alert to process: {alert_id} - {alert_summary}")
 
-            context = "No additional context retrieved for this example."
+            # 使用 Gemini Embedding 進行語意搜尋
+            try:
+                alert_embedding = await embedding_service.embed_query(alert_summary)
+                
+                # 在 OpenSearch 中進行向量搜尋找相關歷史警報
+                vector_search_body = {
+                    "query": {
+                        "knn": {
+                            "alert_embedding": {
+                                "vector": alert_embedding,
+                                "k": 5
+                            }
+                        }
+                    }
+                }
+                
+                similar_alerts = await client.search(
+                    index="wazuh-alerts-*", 
+                    body=vector_search_body,
+                    size=5
+                )
+                
+                # 構建更豐富的上下文
+                context = "相關歷史警報:\n"
+                for similar_alert in similar_alerts['hits']['hits']:
+                    similar_rule = similar_alert['_source'].get('rule', {})
+                    context += f"- {similar_rule.get('description', 'N/A')} (Level: {similar_rule.get('level', 'N/A')})\n"
+                
+            except Exception as e:
+                logging.warning(f"向量搜尋失敗，使用預設上下文: {str(e)}")
+                context = "No additional context retrieved for this example."
             
-            analysis_result = await chain.ainvoke({"alert_summary": alert_summary, "context": context})
+            analysis_result = await chain.ainvoke({
+                "alert_summary": alert_summary, 
+                "context": context
+            })
+            
             print(f"--- AI Analysis received: {analysis_result[:100]}... ---")
             logging.info(f"AI Analysis for {alert_id}: {analysis_result}")
             
-            update_body = {"doc": {"ai_analysis": {"triage_report": analysis_result, "provider": LLM_PROVIDER, "timestamp": alert_source.get('timestamp')}}}
+            # 儲存警報向量以供未來搜尋
+            update_body = {
+                "doc": {
+                    "ai_analysis": {
+                        "triage_report": analysis_result, 
+                        "provider": LLM_PROVIDER, 
+                        "timestamp": alert_source.get('timestamp')
+                    },
+                    "alert_embedding": alert_embedding  # 儲存向量
+                }
+            }
+            
             await client.update(index=alert_index, id=alert_id, body=update_body)
             print(f"--- Successfully updated alert {alert_id} ---")
             logging.info(f"Successfully updated alert {alert_id} with AI analysis.")
