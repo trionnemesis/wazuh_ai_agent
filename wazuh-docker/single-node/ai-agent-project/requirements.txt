@@ -1,14 +1,27 @@
-# requirements.txt
-fastapi
-uvicorn
-apscheduler
-langchain-openai
-langchain-google-genai
-langchain-anthropic
-langchain-community
-opensearch-py[async] # 使用 [async] 會自動安裝 aiohttp
-sentence-transformers
-python-dotenv
-google-generativeai
-langchain-google-genai>=1.0.0
-numpy
+# AgenticRAG AI 代理服務 Python 依賴項清單
+# 此檔案定義了所有必要的 Python 套件及其版本要求
+
+# === Web 框架與 API 服務 ===
+fastapi          # 現代、快速的 Web 框架，用於建構 RESTful API
+uvicorn          # ASGI 伺服器，用於執行 FastAPI 應用程式
+
+# === 任務排程 ===
+apscheduler      # 高級 Python 排程器，用於定期執行警報分析任務
+
+# === LangChain 生態系統 ===
+langchain-openai         # LangChain OpenAI 整合（雖未直接使用，但為相容性保留）
+langchain-google-genai   # LangChain Google Gemini 整合，支援 LLM 和嵌入服務
+langchain-anthropic      # LangChain Anthropic Claude 整合，提供替代 LLM 選項
+langchain-community      # LangChain 社群貢獻的工具和整合
+langchain-google-genai>=1.0.0  # 確保使用最新版本以獲得最佳效能
+
+# === 資料庫與搜尋引擎 ===
+opensearch-py[async]     # OpenSearch Python 客戶端，[async] 功能包含 aiohttp 支援
+
+# === 機器學習與嵌入 ===
+sentence-transformers    # 用於文字嵌入和語意相似度計算的工具庫
+google-generativeai      # Google Generative AI API 官方 Python SDK
+numpy                    # 數值計算基礎庫，向量操作必需
+
+# === 配置管理 ===
+python-dotenv           # 環境變數管理工具，從 .env 檔案載入配置
