@@ -7,33 +7,33 @@ from datetime import datetime, timedelta
 from fastapi import FastAPI
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-# LangChain imports
+# LangChain 相關套件引入
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
-# OpenSearch client
+# OpenSearch 客戶端
 from opensearchpy import AsyncOpenSearch, AsyncHttpConnection
 
-# Import our embedding service
+# 引入自定義的嵌入服務模組
 from embedding_service import GeminiEmbeddingService
 
-# Configure logging
+# 配置日誌系統
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Environment configuration
+# 環境變數配置
 OPENSEARCH_URL = os.getenv("OPENSEARCH_URL", "https://wazuh.indexer:9200")
 OPENSEARCH_USER = os.getenv("OPENSEARCH_USER", "admin")
 OPENSEARCH_PASSWORD = os.getenv("OPENSEARCH_PASSWORD", "SecretPassword")
 
-# LLM configuration
+# 大型語言模型配置
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic").lower()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
-# Initialize OpenSearch client
+# 初始化 OpenSearch 非同步客戶端
 client = AsyncOpenSearch(
     hosts=[OPENSEARCH_URL],
     http_auth=(OPENSEARCH_USER, OPENSEARCH_PASSWORD),
@@ -44,23 +44,35 @@ client = AsyncOpenSearch(
 )
 
 def get_llm():
-    """Initialize LLM based on environment configuration"""
-    logger.info(f"Initializing LLM provider: {LLM_PROVIDER}")
+    """
+    根據環境配置初始化大型語言模型
+    
+    支援的提供商：
+    - gemini: Google Gemini 1.5 Flash 模型
+    - anthropic: Anthropic Claude 3 Haiku 模型
+    
+    Returns:
+        ChatModel: 配置完成的語言模型實例
+        
+    Raises:
+        ValueError: 當提供商不支援或 API 金鑰未設定時
+    """
+    logger.info(f"正在初始化 LLM 提供商: {LLM_PROVIDER}")
     
     if LLM_PROVIDER == 'gemini':
         if not GEMINI_API_KEY:
-            raise ValueError("LLM_PROVIDER is 'gemini' but GEMINI_API_KEY is not set.")
+            raise ValueError("LLM_PROVIDER 設為 'gemini' 但 GEMINI_API_KEY 未設定")
         return ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=GEMINI_API_KEY)
     
     elif LLM_PROVIDER == 'anthropic':
         if not ANTHROPIC_API_KEY:
-            raise ValueError("LLM_PROVIDER is 'anthropic' but ANTHROPIC_API_KEY is not set.")
+            raise ValueError("LLM_PROVIDER 設為 'anthropic' 但 ANTHROPIC_API_KEY 未設定")
         return ChatAnthropic(model="claude-3-haiku-20240307", anthropic_api_key=ANTHROPIC_API_KEY)
     
     else:
-        raise ValueError(f"Unsupported LLM_PROVIDER: {LLM_PROVIDER}. Please choose 'gemini' or 'anthropic'.")
+        raise ValueError(f"不支援的 LLM_PROVIDER: {LLM_PROVIDER}。請選擇 'gemini' 或 'anthropic'")
 
-# Initialize LangChain components
+# 初始化 LangChain 組件
 llm = get_llm()
 
 # Stage 3: Enhanced prompt template for multi-source context correlation
@@ -79,7 +91,7 @@ prompt_template = ChatPromptTemplate.from_template(
 **Network Data:**
 {network_context}
 
-**New Wazuh Alert to Analyze:**
+**待分析的新 Wazuh 警報：**
 {alert_summary}
 
 **Your Analysis Task:**
@@ -96,7 +108,7 @@ prompt_template = ChatPromptTemplate.from_template(
 output_parser = StrOutputParser()
 chain = prompt_template | llm | output_parser
 
-# Initialize embedding service
+# 初始化嵌入服務
 embedding_service = GeminiEmbeddingService()
 
 # === Stage 3: Agentic Context Correlation Implementation ===
@@ -556,7 +568,7 @@ async def process_single_alert(alert: Dict[str, Any]) -> None:
             **formatted_context
         })
         
-        logger.info(f"AI Analysis generated for {alert_id}: {analysis_result[:100]}...")
+        logger.info(f"已為警報 {alert_id} 生成 AI 分析: {analysis_result[:100]}...")
         
         # Step 7: Update - Store results in OpenSearch
         update_body = {
@@ -579,7 +591,7 @@ async def process_single_alert(alert: Dict[str, Any]) -> None:
         logger.info(f"Successfully updated alert {alert_id} with agentic context correlation analysis")
         
     except Exception as e:
-        logger.error(f"Error processing alert {alert_id}: {str(e)}")
+        logger.error(f"處理警報 {alert_id} 時發生錯誤: {str(e)}")
         raise
 
 async def triage_new_alerts():
@@ -592,8 +604,8 @@ async def triage_new_alerts():
         alerts = await query_new_alerts(limit=10)
         
         if not alerts:
-            print("--- No new alerts found. ---")
-            logger.info("No new alerts found.")
+            print("--- 未找到新警報 ---")
+            logger.info("未找到新警報")
             return
             
         logger.info(f"Found {len(alerts)} new alerts to process with agentic context correlation")
@@ -604,8 +616,8 @@ async def triage_new_alerts():
                 await process_single_alert(alert)
                 print(f"--- Successfully processed alert {alert['_id']} ---")
             except Exception as e:
-                print(f"--- Error processing alert {alert['_id']}: {str(e)} ---")
-                logger.error(f"Failed to process alert {alert['_id']}: {str(e)}")
+                print(f"--- 處理警報 {alert['_id']} 時發生錯誤: {str(e)} ---")
+                logger.error(f"處理警報 {alert['_id']} 失敗: {str(e)}")
                 continue
             
     except Exception as e:
@@ -613,7 +625,7 @@ async def triage_new_alerts():
         logger.error(f"An error occurred during agentic triage: {e}", exc_info=True)
         traceback.print_exc()
 
-# === FastAPI Application and Scheduler ===
+# === FastAPI 應用程式與排程器 ===
 
 app = FastAPI(title="Wazuh AI Triage Agent - Stage 3 Agentic Context Correlation")
 
@@ -628,6 +640,7 @@ async def startup_event():
 
 @app.get("/")
 def read_root():
+    """根端點 - 返回服務狀態資訊"""
     return {
         "status": "AI Triage Agent with Agentic Context Correlation is running", 
         "scheduler_status": str(scheduler.get_jobs()),
@@ -640,11 +653,87 @@ def read_root():
         ]
     }
 
+@app.get("/health")
+async def health_check():
+    """
+    詳細健康檢查端點
+    
+    提供完整的系統狀態資訊，包括：
+    - OpenSearch 連線狀態
+    - 嵌入服務可用性
+    - 向量化統計資料
+    - 系統配置資訊
+    
+    Returns:
+        Dict: 詳細的健康檢查報告
+    """
+    health_status = {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": "3.0", # Updated version
+        "stage": "Stage 3 - Agentic Context Correlation" # Updated stage
+    }
+    
+    try:
+        # 檢查 OpenSearch 連線狀態
+        cluster_health = await client.cluster.health()
+        health_status["opensearch"] = {
+            "status": "connected",
+            "cluster_name": cluster_health.get("cluster_name", "unknown"),
+            "cluster_status": cluster_health.get("status", "unknown"),
+            "number_of_nodes": cluster_health.get("number_of_nodes", 0)
+        }
+        
+        # 檢查嵌入服務狀態
+        embedding_test = await embedding_service.test_connection()
+        health_status["embedding_service"] = {
+            "status": "working" if embedding_test else "failed",
+            "model": embedding_service.model_name,
+            "dimension": embedding_service.get_vector_dimension()
+        }
+        
+        # 檢查向量化警報統計
+        vectorized_count_response = await client.count(
+            index="wazuh-alerts-*",
+            body={"query": {"exists": {"field": "alert_vector"}}}
+        )
+        
+        total_alerts_response = await client.count(index="wazuh-alerts-*")
+        
+        health_status["processing_stats"] = {
+            "vectorized_alerts": vectorized_count_response.get("count", 0),
+            "total_alerts": total_alerts_response.get("count", 0),
+            "vectorization_rate": round(
+                (vectorized_count_response.get("count", 0) / max(total_alerts_response.get("count", 1), 1)) * 100, 2
+            )
+        }
+        
+        # LLM 配置資訊
+        health_status["llm_config"] = {
+            "provider": LLM_PROVIDER,
+            "model_configured": True
+        }
+        
+        # 排程器狀態
+        jobs = scheduler.get_jobs()
+        health_status["scheduler"] = {
+            "status": "running" if jobs else "no_jobs",
+            "active_jobs": len(jobs),
+            "next_run": str(jobs[0].next_run_time) if jobs else None
+        }
+        
+    except Exception as e:
+        health_status["status"] = "unhealthy"
+        health_status["error"] = str(e)
+        logger.error(f"健康檢查失敗: {str(e)}")
+    
+    return health_status
+
 @app.on_event("shutdown")
 def shutdown_event():
-    """Application shutdown event handler"""
+    """應用程式關閉事件處理器"""
     scheduler.shutdown()
-    logger.info("Scheduler shut down.")
+    logger.info("排程器已關閉")
 
 if __name__ == "__main__":
     import uvicorn

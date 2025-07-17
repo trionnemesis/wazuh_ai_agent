@@ -1,48 +1,72 @@
 {
+  "_comment_template_info": "AgenticRAG Wazuh 警報向量索引範本",
+  "_comment_description": "此範本定義了支援向量搜尋的 Wazuh 警報索引映射配置",
+  "_comment_version": "2.0 - 針對生產環境優化",
+  
   "name": "wazuh-alerts-vector-template",
   "index_patterns": ["wazuh-alerts-*"],
   "priority": 1,
+  
   "template": {
     "settings": {
+      "_comment_shards": "索引分片配置，單節點部署使用 1 個分片",
       "number_of_shards": 1,
       "number_of_replicas": 1,
+      
       "index": {
+        "_comment_knn": "啟用 k-NN 搜尋功能以支援向量操作",
         "knn": true,
+        "_comment_ef_search": "搜尋時的候選數量，平衡效能與準確性",
         "knn.algo_param.ef_search": 512
       }
     },
+    
     "mappings": {
       "properties": {
+        "_comment_alert_vector": "768 維密集向量欄位，使用 HNSW 演算法優化搜尋效能",
         "alert_vector": {
           "type": "dense_vector",
+          "_comment_dims": "Gemini text-embedding-004 模型的標準向量維度",
           "dims": 768,
           "index": true,
+          "_comment_similarity": "餘弦相似度適合語意搜尋場景",
           "similarity": "cosine",
           "index_options": {
+            "_comment_hnsw": "分層可導航小世界演算法，提供次線性搜尋時間",
             "type": "hnsw",
+            "_comment_m": "每個節點的連線數量，影響建構時間與搜尋準確性",
             "m": 16,
+            "_comment_ef_construction": "建構時的候選數量，較高值提升搜尋品質",
             "ef_construction": 512
           }
         },
+        
+        "_comment_ai_analysis": "AI 分析結果的結構化儲存欄位",
         "ai_analysis": {
           "type": "object",
           "properties": {
+            "_comment_triage_report": "LLM 生成的分流報告，使用標準分析器",
             "triage_report": {
               "type": "text",
               "analyzer": "standard"
             },
+            "_comment_provider": "LLM 提供商識別，用於追蹤分析來源",
             "provider": {
               "type": "keyword"
             },
+            "_comment_timestamp": "分析時間戳記，用於排序和時間範圍查詢",
             "timestamp": {
               "type": "date"
             },
+            "_comment_risk_level": "風險等級分類，支援聚合查詢",
             "risk_level": {
               "type": "keyword"
             },
+            "_comment_vector_dimension": "記錄實際使用的向量維度",
             "vector_dimension": {
               "type": "integer"
             },
+            "_comment_processing_time": "處理時間統計，用於效能監控",
             "processing_time_ms": {
               "type": "integer"
             }

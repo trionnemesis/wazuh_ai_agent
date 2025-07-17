@@ -1,19 +1,39 @@
+# AgenticRAG AI 代理服務 Docker Compose 覆寫配置
+# 此檔案擴展基本的 Wazuh Docker Compose 配置，新增 AI 代理服務
+
 services:
+  # AI 代理服務定義
+  # 提供檢索增強生成 (RAG) 功能的智慧警報分析服務
   ai-agent:
+    # 建構配置：從本地原始碼建構容器映像檔
     build:
-      context: ../single-node/ai-agent-project
-      dockerfile: Dockerfile
+      context: ../single-node/ai-agent-project  # 建構上下文路徑
+      dockerfile: Dockerfile                   # Dockerfile 檔案名稱
+    
+    # 容器名稱：便於識別和管理
     container_name: ai-agent
+    
+    # 重啟策略：除非手動停止，否則總是重啟
+    # 確保服務在系統重啟後自動恢復
     restart: unless-stopped
+    
+    # 環境變數檔案：包含 API 金鑰和配置參數
+    # 包含 OpenSearch 連線、LLM 提供商、嵌入服務等設定
     env_file:
       - .env
+    
+    # 網路配置：使用預設網路與其他 Wazuh 服務通訊
     networks:
       - default
+    
+    # 服務依賴：確保 OpenSearch 索引器服務先啟動
+    # AI 代理需要 OpenSearch 來儲存和檢索向量資料
     depends_on:
       - wazuh.indexer
 
-# 關鍵部分：請確保 name 與您查到的結果一致
+# 網路配置
+# 確保 AI 代理可以與現有的 Wazuh 服務叢集通訊
 networks:
   default:
-    external: true
-    name: single-node_default # <-- 確保您檔案中的值是這個
+    external: true                    # 使用外部現有網路
+    name: single-node_default        # 網路名稱必須與實際創建的網路一致
