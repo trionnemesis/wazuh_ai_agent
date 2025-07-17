@@ -402,23 +402,3 @@ curl -k -u admin:SecretPassword "https://localhost:9200/_cat/indices/wazuh-alert
 
 ---
 
-## 🙏 致謝
-
-感謝以下專案和社群的支持：
-- [Wazuh 開源社群](https://wazuh.com/)
-- [LangChain 開發團隊](https://python.langchain.com/)
-- [OpenSearch 專案](https://opensearch.org/)
-- 所有貢獻者和使用者
-
----
-
-> 🚀 **專案維護**：本專案由資深 AI 與 Wazuh 工程師維護
-> 
-> 💬 **技術支援**：如有任何問題或建議，請透過 [GitHub Issues](https://github.com/your-username/wazuh_ai_agent/issues) 與我們聯繫
-> 
-> ⭐ **如果這個專案對您有幫助，請給我們一個 Star！**
-
----
-
-*最後更新：2024-01-15*
-
