@@ -2,6 +2,7 @@ import os
 import logging
 import traceback
 import asyncio
+from typing import List, Dict, Any, Optional
 from fastapi import FastAPI
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -25,7 +26,6 @@ OPENSEARCH_PASSWORD = os.getenv("OPENSEARCH_PASSWORD", "SecretPassword")
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic").lower() # 預設為 anthropic
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-
 
 # --- OpenSearch 客戶端 ---
 client = AsyncOpenSearch(
@@ -91,96 +91,268 @@ chain = prompt_template | llm | output_parser
 # --- 新增 Embedding 服務 ---
 from embedding_service import GeminiEmbeddingService
 
-# --- 新增 Embedding 服務 ---
+# --- 初始化 Embedding 服務 ---
 embedding_service = GeminiEmbeddingService()
 
-# 在 triage_new_alerts 函式中整合語意搜尋
-async def triage_new_alerts():
-    print("--- TRIAGE JOB EXECUTING NOW ---")
-    logging.info(f"Analyzing alerts with {LLM_PROVIDER} model and Gemini Embedding...")
-    try:
-        response = await client.search(
-            index="wazuh-alerts-*", 
-            body={"query": {"bool": {"must_not": [{"exists": {"field": "ai_analysis"}}]}}}, 
-            size=10
-        )
-        alerts = response['hits']['hits']
-        
-        if not alerts:
-            print("--- No new alerts found. ---")
-            logging.info("No new alerts found.")
-            return
-            
-        for alert in alerts:
-            alert_id = alert['_id']
-            alert_index = alert['_index']
-            alert_source = alert['_source']
-            rule = alert_source.get('rule', {})
-            agent = alert_source.get('agent', {})
-            
-            alert_summary = f"Rule: {rule.get('description', 'N/A')} (Level: {rule.get('level', 'N/A')}) on Host: {agent.get('name', 'N/A')}"
-            print(f"--- Found alert to process: {alert_id} ---")
-            logging.info(f"Found new alert to process: {alert_id} - {alert_summary}")
+# === 模組化函式實現 ===
 
-            # 使用 Gemini Embedding 進行語意搜尋
-            try:
-                alert_embedding = await embedding_service.embed_query(alert_summary)
-                
-                # 在 OpenSearch 中進行向量搜尋找相關歷史警報
-                vector_search_body = {
-                    "query": {
-                        "knn": {
-                            "alert_embedding": {
-                                "vector": alert_embedding,
-                                "k": 5
-                            }
+async def ensure_index_template():
+    """確保 OpenSearch 索引範本包含向量欄位"""
+    template_name = "wazuh-alerts-vector-template"
+    template_body = {
+        "index_patterns": ["wazuh-alerts-*"],
+        "priority": 1,
+        "template": {
+            "mappings": {
+                "properties": {
+                    "alert_vector": {
+                        "type": "dense_vector",
+                        "dims": 768,  # Gemini text-embedding-004 預設維度
+                        "index": True,
+                        "similarity": "cosine"
+                    },
+                    "ai_analysis": {
+                        "type": "object",
+                        "properties": {
+                            "triage_report": {"type": "text"},
+                            "provider": {"type": "keyword"},
+                            "timestamp": {"type": "date"},
+                            "risk_level": {"type": "keyword"},
+                            "vector_dimension": {"type": "integer"}
                         }
                     }
                 }
-                
-                similar_alerts = await client.search(
-                    index="wazuh-alerts-*", 
-                    body=vector_search_body,
-                    size=5
-                )
-                
-                # 構建更豐富的上下文
-                context = "相關歷史警報:\n"
-                for similar_alert in similar_alerts['hits']['hits']:
-                    similar_rule = similar_alert['_source'].get('rule', {})
-                    context += f"- {similar_rule.get('description', 'N/A')} (Level: {similar_rule.get('level', 'N/A')})\n"
-                
-            except Exception as e:
-                logging.warning(f"向量搜尋失敗，使用預設上下文: {str(e)}")
-                context = "No additional context retrieved for this example."
-            
-            analysis_result = await chain.ainvoke({
-                "alert_summary": alert_summary, 
-                "context": context
-            })
-            
-            print(f"--- AI Analysis received: {analysis_result[:100]}... ---")
-            logging.info(f"AI Analysis for {alert_id}: {analysis_result}")
-            
-            # 儲存警報向量以供未來搜尋
-            update_body = {
-                "doc": {
-                    "ai_analysis": {
-                        "triage_report": analysis_result, 
-                        "provider": LLM_PROVIDER, 
-                        "timestamp": alert_source.get('timestamp')
-                    },
-                    "alert_embedding": alert_embedding  # 儲存向量
-                }
             }
-            
-            await client.update(index=alert_index, id=alert_id, body=update_body)
-            print(f"--- Successfully updated alert {alert_id} ---")
-            logging.info(f"Successfully updated alert {alert_id} with AI analysis.")
-            
+        }
+    }
+    
+    try:
+        # 檢查範本是否已存在
+        existing_template = await client.indices.get_index_template(name=template_name)
+        logging.info(f"索引範本 {template_name} 已存在，跳過建立")
+    except Exception:
+        # 範本不存在，建立新範本
+        try:
+            await client.indices.put_index_template(name=template_name, body=template_body)
+            logging.info(f"成功建立索引範本: {template_name}")
+        except Exception as e:
+            logging.error(f"建立索引範本失敗: {str(e)}")
+            raise
+
+async def query_new_alerts(limit: int = 10) -> List[Dict[str, Any]]:
+    """查詢尚未分析的新警報"""
+    try:
+        response = await client.search(
+            index="wazuh-alerts-*", 
+            body={
+                "query": {
+                    "bool": {
+                        "must_not": [{"exists": {"field": "ai_analysis"}}]
+                    }
+                },
+                "sort": [{"timestamp": {"order": "desc"}}]
+            }, 
+            size=limit
+        )
+        alerts = response['hits']['hits']
+        logging.info(f"找到 {len(alerts)} 個新警報待處理")
+        return alerts
     except Exception as e:
-        print(f"!!!!!! A CRITICAL ERROR OCCURRED IN TRIAGE JOB !!!!!!")
-        logging.error(f"An error occurred during triage: {e}", exc_info=True)
+        logging.error(f"查詢新警報失敗: {str(e)}")
+        raise
+
+async def vectorize_alert(alert_data: Dict[str, Any]) -> List[float]:
+    """將警報內容向量化"""
+    try:
+        alert_source = alert_data['_source']
+        
+        # 使用專門的警報內容向量化方法
+        alert_vector = await embedding_service.embed_alert_content(alert_source)
+        
+        logging.debug(f"警報 {alert_data['_id']} 向量化完成，維度: {len(alert_vector)}")
+        return alert_vector
+        
+    except Exception as e:
+        logging.error(f"警報向量化失敗: {str(e)}")
+        raise
+
+async def find_similar_alerts(alert_vector: List[float], k: int = 5) -> List[Dict[str, Any]]:
+    """使用向量搜尋找相似的歷史警報"""
+    try:
+        vector_search_body = {
+            "query": {
+                "bool": {
+                    "must": [
+                        {
+                            "knn": {
+                                "alert_vector": {
+                                    "vector": alert_vector,
+                                    "k": k
+                                }
+                            }
+                        },
+                        {
+                            "exists": {"field": "ai_analysis"}
+                        }
+                    ]
+                }
+            },
+            "_source": ["rule", "agent", "ai_analysis", "timestamp"]
+        }
+        
+        similar_alerts_response = await client.search(
+            index="wazuh-alerts-*", 
+            body=vector_search_body,
+            size=k
+        )
+        
+        similar_alerts = similar_alerts_response['hits']['hits']
+        logging.debug(f"找到 {len(similar_alerts)} 個相似的歷史警報")
+        return similar_alerts
+        
+    except Exception as e:
+        logging.warning(f"向量搜尋失敗: {str(e)}")
+        return []
+
+async def build_context(similar_alerts: List[Dict[str, Any]]) -> str:
+    """根據相似警報構建分析上下文"""
+    if not similar_alerts:
+        return "No similar historical alerts found for reference."
+    
+    context_parts = ["相關歷史警報分析:"]
+    
+    for i, similar_alert in enumerate(similar_alerts, 1):
+        source = similar_alert['_source']
+        rule = source.get('rule', {})
+        ai_analysis = source.get('ai_analysis', {})
+        
+        context_parts.append(f"""
+{i}. Rule: {rule.get('description', 'N/A')} (Level: {rule.get('level', 'N/A')})
+   Previous Analysis: {ai_analysis.get('triage_report', 'N/A')[:200]}...
+        """.strip())
+    
+    return "\n".join(context_parts)
+
+async def analyze_alert(alert_summary: str, context: str) -> str:
+    """使用 LLM 分析警報"""
+    try:
+        analysis_result = await chain.ainvoke({
+            "alert_summary": alert_summary, 
+            "context": context
+        })
+        
+        logging.debug(f"LLM 分析完成，結果長度: {len(analysis_result)}")
+        return analysis_result
+        
+    except Exception as e:
+        logging.error(f"LLM 分析失敗: {str(e)}")
+        raise
+
+async def update_alert_with_analysis(
+    alert_index: str, 
+    alert_id: str, 
+    analysis: str, 
+    alert_vector: List[float],
+    timestamp: str
+) -> None:
+    """更新警報，加入 AI 分析結果和向量"""
+    try:
+        # 獲取向量維度
+        vector_dimension = len(alert_vector) if alert_vector else 0
+        
+        update_body = {
+            "doc": {
+                "ai_analysis": {
+                    "triage_report": analysis,
+                    "provider": LLM_PROVIDER,
+                    "timestamp": timestamp,
+                    "vector_dimension": vector_dimension
+                },
+                "alert_vector": alert_vector
+            }
+        }
+        
+        await client.update(index=alert_index, id=alert_id, body=update_body)
+        logging.info(f"成功更新警報 {alert_id}，包含 AI 分析和向量")
+        
+    except Exception as e:
+        logging.error(f"更新警報失敗: {str(e)}")
+        raise
+
+async def process_single_alert(alert: Dict[str, Any]) -> None:
+    """處理單個警報的完整流程"""
+    alert_id = alert['_id']
+    alert_index = alert['_index']
+    alert_source = alert['_source']
+    
+    try:
+        # 1. 構建警報摘要
+        rule = alert_source.get('rule', {})
+        agent = alert_source.get('agent', {})
+        alert_summary = f"Rule: {rule.get('description', 'N/A')} (Level: {rule.get('level', 'N/A')}) on Host: {agent.get('name', 'N/A')}"
+        
+        logging.info(f"開始處理警報: {alert_id} - {alert_summary}")
+        
+        # 2. 向量化警報
+        alert_vector = await vectorize_alert(alert)
+        
+        # 3. 搜尋相似的歷史警報
+        similar_alerts = await find_similar_alerts(alert_vector)
+        
+        # 4. 構建分析上下文
+        context = await build_context(similar_alerts)
+        
+        # 5. LLM 分析
+        analysis_result = await analyze_alert(alert_summary, context)
+        
+        # 6. 更新警報
+        await update_alert_with_analysis(
+            alert_index, 
+            alert_id, 
+            analysis_result, 
+            alert_vector,
+            alert_source.get('timestamp')
+        )
+        
+        logging.info(f"警報 {alert_id} 處理完成")
+        
+    except Exception as e:
+        logging.error(f"處理警報 {alert_id} 時發生錯誤: {str(e)}")
+        raise
+
+async def triage_new_alerts():
+    """主要的警報分流任務 - 重構後的模組化版本"""
+    print("--- TRIAGE JOB EXECUTING NOW ---")
+    logging.info(f"開始使用 {LLM_PROVIDER} 模型和 Gemini Embedding 分析警報...")
+    
+    try:
+        # 1. 確保索引範本存在
+        await ensure_index_template()
+        
+        # 2. 查詢新警報
+        alerts = await query_new_alerts(limit=10)
+        
+        if not alerts:
+            print("--- 未找到新警報 ---")
+            logging.info("未找到新警報")
+            return
+        
+        # 3. 處理每個警報
+        for alert in alerts:
+            try:
+                await process_single_alert(alert)
+                print(f"--- 成功處理警報 {alert['_id']} ---")
+            except Exception as e:
+                print(f"--- 處理警報 {alert['_id']} 時發生錯誤: {str(e)} ---")
+                # 記錄錯誤但繼續處理其他警報
+                continue
+        
+        print(f"--- 批次處理完成，共處理 {len(alerts)} 個警報 ---")
+        logging.info(f"批次處理完成，共處理 {len(alerts)} 個警報")
+        
+    except Exception as e:
+        print(f"!!!!!! 分流任務發生嚴重錯誤 !!!!!!")
+        logging.error(f"分流任務發生錯誤: {e}", exc_info=True)
         traceback.print_exc()
 
 # --- FastAPI 應用與排程 (維持不變) ---
@@ -190,6 +362,12 @@ scheduler = AsyncIOScheduler()
 @app.on_event("startup")
 async def startup_event():
     logging.info("AI Agent starting up...")
+    # 啟動時先確保索引範本存在
+    try:
+        await ensure_index_template()
+    except Exception as e:
+        logging.error(f"啟動時建立索引範本失敗: {str(e)}")
+    
     scheduler.add_job(triage_new_alerts, 'interval', seconds=60, id='triage_job', misfire_grace_time=30)
     scheduler.start()
     logging.info("Scheduler started. Triage job scheduled.")
@@ -197,6 +375,29 @@ async def startup_event():
 @app.get("/")
 def read_root():
     return {"status": "AI Triage Agent is running", "scheduler_status": str(scheduler.get_jobs())}
+
+@app.get("/health")
+async def health_check():
+    """健康檢查端點"""
+    try:
+        # 檢查 OpenSearch 連線
+        await client.cluster.health()
+        
+        # 檢查 embedding 服務
+        test_vector = await embedding_service.embed_query("test")
+        
+        return {
+            "status": "healthy",
+            "opensearch": "connected",
+            "embedding_service": "working",
+            "vector_dimension": len(test_vector),
+            "llm_provider": LLM_PROVIDER
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e)
+        }
 
 @app.on_event("shutdown")
 def shutdown_event():
