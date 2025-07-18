@@ -108,8 +108,59 @@ def get_llm():
 # 初始化 LangChain 組件
 llm = get_llm()
 
-# Stage 3: Enhanced prompt template for multi-source context correlation
-prompt_template = ChatPromptTemplate.from_template(
+# Stage 4: GraphRAG prompt template for graph-native security analysis
+graphrag_prompt_template = ChatPromptTemplate.from_template(
+    """You are a senior cyber security analyst with expertise in graph-based threat hunting and advanced persistent threat (APT) analysis. Analyze the new Wazuh alert below using the comprehensive graph-native intelligence gathered from the security knowledge graph.
+
+**🔗 攻擊路徑分析 (Attack Path Analysis):**
+{attack_path_analysis}
+
+**🔄 橫向移動檢測 (Lateral Movement Detection):**
+{lateral_movement_analysis}
+
+**⏰ 時間序列關聯 (Temporal Correlation):**
+{temporal_correlation}
+
+**🌍 IP 信譽分析 (IP Reputation Analysis):**
+{ip_reputation_analysis}
+
+**👤 使用者行為分析 (User Behavior Analysis):**
+{user_behavior_analysis}
+
+**⚙️ 程序執行鏈分析 (Process Chain Analysis):**
+{process_chain_analysis}
+
+**📁 檔案交互分析 (File Interaction Analysis):**
+{file_interaction_analysis}
+
+**🌐 網路拓撲分析 (Network Topology Analysis):**
+{network_topology_analysis}
+
+**⚠️ 威脅全景分析 (Threat Landscape Analysis):**
+{threat_landscape_analysis}
+
+**📊 傳統檢索補充 (Traditional Retrieval Supplement):**
+{traditional_supplement}
+
+**🚨 當前分析的新警報：**
+{alert_summary}
+
+**您的圖形化威脅分析任務：**
+1. **事件摘要與分類：** 簡要總結新事件，並根據圖形上下文進行威脅分類
+2. **攻擊鏈重建：** 基於圖形關聯資料重建完整的攻擊時間線和路徑
+3. **橫向移動評估：** 評估攻擊者的橫向移動能力和已滲透的系統範圍
+4. **威脅行為者畫像：** 基於攻擊模式、IP信譽、時間模式分析威脅行為者特徵
+5. **風險等級評估：** 綜合所有圖形智能，評估風險等級（Critical, High, Medium, Low, Informational）
+6. **影響範圍分析：** 確定受影響的系統、使用者、檔案和網路資源
+7. **緩解建議：** 提供基於圖形分析的精確緩解和應急響應建議
+8. **持續威脅指標：** 識別需要持續監控的威脅指標（IOCs/IOAs）
+
+**您的 GraphRAG 威脅分析報告：**
+"""
+)
+
+# Legacy prompt template for fallback scenarios
+traditional_prompt_template = ChatPromptTemplate.from_template(
     """You are a senior security analyst with expertise in correlating security events with system performance data. Analyze the new Wazuh alert below using the provided multi-source contextual information.
 
 **Historical Similar Alerts:**
@@ -141,8 +192,22 @@ prompt_template = ChatPromptTemplate.from_template(
 """
 )
 
-output_parser = StrOutputParser()
-chain = prompt_template | llm | output_parser
+def get_analysis_chain(context_data: Dict[str, Any]):
+    """
+    根據上下文資料類型選擇適當的分析鏈
+    """
+    # 檢測是否為圖形檢索結果
+    graph_indicators = ['attack_paths', 'lateral_movement', 'temporal_sequences']
+    has_graph_data = any(context_data.get(indicator) for indicator in graph_indicators)
+    
+    if has_graph_data:
+        logger.info("🔗 Using GraphRAG analysis chain")
+        return graphrag_prompt_template | llm | StrOutputParser()
+    else:
+        logger.info("📊 Using traditional analysis chain")
+        return traditional_prompt_template | llm | StrOutputParser()
+
+# Remove legacy static chain - now using dynamic chain selection
 
 # 初始化嵌入服務
 embedding_service = GeminiEmbeddingService()
@@ -770,25 +835,26 @@ async def process_single_alert(alert: Dict[str, Any]) -> None:
         alert_vector = await embedding_service.embed_alert_content(alert_source)
         logger.info(f"   ✅ Alert vectorized (dimension: {len(alert_vector)})")
         
-        # Step 3: Decide - Determine contextual queries needed
-        logger.info(f"🧠 STEP 3: AGENTIC DECISION - Determining contextual needs for alert {alert_id}")
-        contextual_queries = determine_contextual_queries(alert)
+        # Step 3: Decide - Determine graph queries for GraphRAG
+        logger.info(f"🔗 STEP 3: GRAPH-NATIVE DECISION - Determining Cypher queries for alert {alert_id}")
+        graph_queries = determine_graph_queries(alert)
         
-        # Step 4: Retrieve - Execute all contextual queries
-        logger.info(f"📡 STEP 4: CONTEXTUAL RETRIEVAL - Executing {len(contextual_queries)} queries for alert {alert_id}")
-        context_data = await execute_retrieval(contextual_queries, alert_vector)
+        # Step 4: Execute Graph-Native Retrieval
+        logger.info(f"📊 STEP 4: GRAPH-NATIVE RETRIEVAL - Executing {len(graph_queries)} Cypher queries for alert {alert_id}")
+        context_data = await execute_hybrid_retrieval(alert)
         
-        # Step 5: Format - Prepare multi-source context for LLM
-        logger.info(f"📋 STEP 5: CONTEXT FORMATTING - Preparing multi-source context for alert {alert_id}")
-        formatted_context = format_multi_source_context(context_data)
+        # Step 5: Format - Prepare graph-native context for LLM
+        logger.info(f"📋 STEP 5: GRAPH CONTEXT FORMATTING - Preparing graph-native context for alert {alert_id}")
+        formatted_context = format_hybrid_context(context_data)
         
         # Log context summary for verification
         total_context_items = sum(len(ctx.split('\n')) for ctx in formatted_context.values() if ctx and "No " not in ctx)
         logger.info(f"   📊 Context summary: {total_context_items} total contextual items prepared")
         
-        # Step 6: Analyze - Send comprehensive context to LLM
-        logger.info(f"🤖 STEP 6: LLM ANALYSIS - Generating comprehensive AI analysis for alert {alert_id}")
-        analysis_result = await chain.ainvoke({
+        # Step 6: Analyze - Send comprehensive context to LLM using appropriate chain
+        logger.info(f"🤖 STEP 6: GRAPHRAG ANALYSIS - Generating graph-native AI analysis for alert {alert_id}")
+        analysis_chain = get_analysis_chain(context_data)
+        analysis_result = await analysis_chain.ainvoke({
             "alert_summary": alert_summary,
             **formatted_context
         })
@@ -803,10 +869,28 @@ async def process_single_alert(alert: Dict[str, Any]) -> None:
         logger.info(f"   ✅ AI Analysis generated (Risk: {risk_level}): {analysis_result[:150]}...")
         
         # Step 7: Update - Store results in OpenSearch
-        logger.info(f"💾 STEP 7: STORING RESULTS - Updating alert {alert_id} with agentic analysis")
+        logger.info(f"💾 STEP 7: STORING RESULTS - Updating alert {alert_id} with GraphRAG analysis")
         
-        # Enhanced metadata for Stage 3
+        # Enhanced metadata for Stage 4 GraphRAG
         context_metadata = {
+            # Graph-native metrics
+            "attack_paths_count": len(context_data.get('attack_paths', [])),
+            "lateral_movement_count": len(context_data.get('lateral_movement', [])),
+            "temporal_sequences_count": len(context_data.get('temporal_sequences', [])),
+            "ip_reputation_count": len(context_data.get('ip_reputation', [])),
+            "user_behavior_count": len(context_data.get('user_behavior', [])),
+            "process_chains_count": len(context_data.get('process_chains', [])),
+            "file_interactions_count": len(context_data.get('file_interactions', [])),
+            "network_topology_count": len(context_data.get('network_topology', [])),
+            "threat_landscape_count": len(context_data.get('threat_landscape', [])),
+            "correlation_graph_count": len(context_data.get('correlation_graph', [])),
+            
+            # Traditional supplement metrics (when used)
+            "traditional_similar_alerts_count": len(context_data.get('traditional_similar_alerts', [])),
+            "traditional_metrics_count": len(context_data.get('traditional_metrics', [])),
+            "traditional_logs_count": len(context_data.get('traditional_logs', [])),
+            
+            # Legacy compatibility
             "similar_alerts_count": len(context_data.get('similar_alerts', [])),
             "cpu_metrics_count": len(context_data.get('cpu_metrics', [])),
             "memory_metrics_count": len(context_data.get('memory_metrics', [])),
@@ -825,9 +909,10 @@ async def process_single_alert(alert: Dict[str, Any]) -> None:
                     "triage_report": analysis_result,
                     "provider": LLM_PROVIDER,
                     "timestamp": alert_source.get('timestamp'),
-                    "context_sources": len(contextual_queries),
+                    "context_sources": len(graph_queries),
                     "extracted_risk_level": risk_level,
-                    "stage": "Stage 3 - Agentic Context Correlation",
+                    "stage": "Stage 4 - GraphRAG Analysis",
+                    "analysis_method": "Graph-Native Retrieval" if any(context_data.get(k) for k in ['attack_paths', 'lateral_movement']) else "Hybrid Retrieval",
                     **context_metadata
                 },
                 "alert_vector": alert_vector
@@ -836,8 +921,8 @@ async def process_single_alert(alert: Dict[str, Any]) -> None:
         
         await client.update(index=alert_index, id=alert_id, body=update_body)
         
-        logger.info(f"🎉 AGENTIC PROCESSING COMPLETE: Alert {alert_id} successfully updated")
-        logger.info(f"   📈 Context correlation metadata stored for future analysis")
+        logger.info(f"🎉 GRAPHRAG PROCESSING COMPLETE: Alert {alert_id} successfully updated")
+        logger.info(f"   📈 Graph-native correlation metadata stored for future analysis")
         
         # Step 8: Graph Persistence - Extract entities and build relationships (NEW)
         logger.info(f"🔗 STEP 8: GRAPH PERSISTENCE - Building knowledge graph for alert {alert_id}")
@@ -1636,3 +1721,649 @@ def shutdown_event():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+# ==================== Graph-Native 檢索器 (Stage 4 Step 3) ====================
+
+async def execute_graph_retrieval(cypher_queries: List[Dict[str, Any]], alert: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Graph-Native 檢索器：執行 Cypher 查詢來檢索相關的圖形子網
+    這是 GraphRAG 的核心檢索引擎，取代傳統的向量與關鍵字搜尋
+    
+    Args:
+        cypher_queries: 從 Decision Engine 生成的 Cypher 查詢任務列表
+        alert: 當前警報資料
+        
+    Returns:
+        Dictionary 包含檢索到的圖形子網和結構化上下文
+    """
+    logger.info(f"🔗 GRAPH-NATIVE RETRIEVAL: Processing {len(cypher_queries)} Cypher queries")
+    
+    context_data = {
+        'attack_paths': [],           # 攻擊路徑子圖
+        'lateral_movement': [],       # 橫向移動模式
+        'temporal_sequences': [],     # 時間序列關聯
+        'ip_reputation': [],          # IP 信譽圖
+        'user_behavior': [],          # 使用者行為圖
+        'process_chains': [],         # 程序執行鏈
+        'file_interactions': [],      # 檔案交互圖
+        'network_topology': [],       # 網路拓撲
+        'threat_landscape': [],       # 威脅全景
+        'correlation_graph': []       # 相關性圖
+    }
+    
+    if not neo4j_driver:
+        logger.warning("Neo4j driver not available - falling back to traditional retrieval")
+        # 降級到傳統檢索
+        return await _fallback_to_traditional_retrieval(alert)
+    
+    # 排序查詢以優化執行順序
+    sorted_queries = sorted(cypher_queries, key=lambda x: {
+        'critical': 0, 'high': 1, 'medium': 2, 'low': 3
+    }.get(x.get('priority', 'medium'), 2))
+    
+    alert_id = alert.get('_id')
+    
+    async with neo4j_driver.session() as session:
+        for i, query_spec in enumerate(sorted_queries, 1):
+            query_type = query_spec['type']
+            description = query_spec['description']
+            priority = query_spec.get('priority', 'medium')
+            cypher_query = query_spec['cypher_query']
+            parameters = query_spec.get('parameters', {})
+            
+            # 注入當前警報 ID 到參數中
+            parameters['alert_id'] = alert_id
+            
+            try:
+                logger.info(f"   [{i}/{len(sorted_queries)}] 🔍 {priority.upper()}: {description}")
+                
+                # 執行 Cypher 查詢
+                result = await session.run(cypher_query, parameters)
+                records = await result.data()
+                
+                # 根據查詢類型分類結果
+                await _categorize_graph_results(query_type, records, context_data)
+                
+                logger.info(f"      ✅ Graph query returned {len(records)} subgraph components")
+                
+            except Exception as e:
+                logger.error(f"      ❌ Cypher query failed: {str(e)}")
+                # 記錄失敗的查詢以便後續分析
+                logger.error(f"      Query: {cypher_query[:200]}...")
+                continue
+    
+    # 生成檢索摘要
+    total_components = sum(len(results) for results in context_data.values())
+    logger.info(f"📊 GRAPH RETRIEVAL SUMMARY: {total_components} total graph components")
+    for category, results in context_data.items():
+        if results:
+            logger.info(f"   {category}: {len(results)} components")
+    
+    return context_data
+
+async def _categorize_graph_results(query_type: str, records: List[Dict], context_data: Dict[str, Any]):
+    """
+    根據查詢類型將圖形結果分類到適當的上下文類別中
+    
+    Args:
+        query_type: 查詢類型（攻擊路徑、橫向移動等）
+        records: Cypher 查詢返回的記錄
+        context_data: 要更新的上下文資料字典
+    """
+    if query_type == 'attack_path_analysis':
+        context_data['attack_paths'].extend(records)
+    elif query_type == 'lateral_movement_detection':
+        context_data['lateral_movement'].extend(records)
+    elif query_type == 'temporal_correlation':
+        context_data['temporal_sequences'].extend(records)
+    elif query_type == 'ip_reputation_analysis':
+        context_data['ip_reputation'].extend(records)
+    elif query_type == 'user_behavior_analysis':
+        context_data['user_behavior'].extend(records)
+    elif query_type == 'process_chain_analysis':
+        context_data['process_chains'].extend(records)
+    elif query_type == 'file_interaction_analysis':
+        context_data['file_interactions'].extend(records)
+    elif query_type == 'network_topology_analysis':
+        context_data['network_topology'].extend(records)
+    elif query_type == 'threat_landscape_analysis':
+        context_data['threat_landscape'].extend(records)
+    else:
+        # 預設分類
+        context_data['correlation_graph'].extend(records)
+
+async def _fallback_to_traditional_retrieval(alert: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    當 Neo4j 不可用時，降級到傳統的向量和關鍵字檢索
+    
+    Args:
+        alert: 當前警報資料
+        
+    Returns:
+        傳統檢索的結果
+    """
+    logger.info("🔄 Falling back to traditional vector + keyword retrieval")
+    
+    # 生成傳統檢索查詢
+    traditional_queries = determine_contextual_queries(alert)
+    
+    # 向量化警報（如果需要）
+    alert_vector = []
+    embedding_service = GeminiEmbeddingService()
+    try:
+        alert_text = _extract_alert_text_for_embedding(alert)
+        alert_vector = await embedding_service.embed_text(alert_text)
+    except Exception as e:
+        logger.warning(f"Alert vectorization failed: {str(e)}")
+    
+    # 執行傳統檢索
+    return await execute_retrieval(traditional_queries, alert_vector)
+
+def _extract_alert_text_for_embedding(alert: Dict[str, Any]) -> str:
+    """
+    從警報中提取文本用於向量化
+    """
+    alert_source = alert.get('_source', {})
+    rule = alert_source.get('rule', {})
+    
+    text_parts = [
+        rule.get('description', ''),
+        ' '.join(rule.get('groups', [])),
+        str(alert_source.get('data', {}))
+    ]
+    
+    return ' '.join(filter(None, text_parts))
+
+# ==================== Graph-Native 決策引擎 ====================
+
+def determine_graph_queries(alert: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Graph-Native 決策引擎：根據警報內容決定要執行的 Cypher 查詢
+    取代原有的 determine_contextual_queries，專注於圖形查詢策略
+    
+    Args:
+        alert: 新的警報文檔
+        
+    Returns:
+        Cypher 查詢規格列表
+    """
+    queries = []
+    alert_source = alert.get('_source', {})
+    rule = alert_source.get('rule', {})
+    agent = alert_source.get('agent', {})
+    data = alert_source.get('data', {})
+    timestamp = alert_source.get('timestamp')
+    
+    rule_description = rule.get('description', '').lower()
+    rule_groups = rule.get('groups', [])
+    rule_level = rule.get('level', 0)
+    agent_id = agent.get('id', '')
+    
+    logger.info(f"🔗 GRAPH-NATIVE DECISION ENGINE: Analyzing alert for graph queries")
+    logger.info(f"   Alert: {rule_description}")
+    logger.info(f"   Level: {rule_level}, Agent: {agent_id}")
+    logger.info(f"   Groups: {', '.join(rule_groups)}")
+    
+    # 1. SSH 暴力破解場景 - 攻擊來源全貌分析
+    if 'ssh' in rule_description and ('brute' in rule_description or 'failed' in rule_description):
+        logger.info("🔑 DECISION: SSH brute force detected - analyzing attacker profile")
+        
+        queries.append({
+            'type': 'attack_path_analysis',
+            'description': 'SSH attacker complete activity profile',
+            'priority': 'critical',
+            'cypher_query': '''
+                MATCH (alert:Alert {id: $alert_id})-[:HAS_SOURCE_IP]->(attacker:IPAddress)
+                CALL {
+                    WITH attacker
+                    MATCH (related_alert:Alert)-[:HAS_SOURCE_IP]->(attacker)
+                    WHERE related_alert.timestamp > datetime() - duration({hours: 1})
+                    MATCH (related_alert)-[r]->(entity)
+                    WHERE type(r) <> 'MATCHED_RULE'
+                    RETURN related_alert, r, entity
+                }
+                RETURN *
+            ''',
+            'parameters': {}
+        })
+        
+        # 橫向移動檢測
+        queries.append({
+            'type': 'lateral_movement_detection',
+            'description': 'Lateral movement patterns from attacker IP',
+            'priority': 'high',
+            'cypher_query': '''
+                MATCH (alert:Alert {id: $alert_id})-[:HAS_SOURCE_IP]->(attacker:IPAddress)
+                MATCH (attacker)<-[:HAS_SOURCE_IP]-(other_alerts:Alert)-[:TRIGGERED_ON]->(hosts:Host)
+                WITH attacker, collect(DISTINCT hosts) as target_hosts
+                WHERE size(target_hosts) > 1
+                MATCH path = (attacker)-[*1..3]-(hosts:Host)
+                RETURN path, target_hosts, attacker
+            ''',
+            'parameters': {}
+        })
+    
+    # 2. 惡意軟體/程序分析場景
+    malware_keywords = ['malware', 'trojan', 'virus', 'suspicious', 'backdoor', 'rootkit']
+    if any(keyword in rule_description for keyword in malware_keywords):
+        logger.info("🦠 DECISION: Malware detected - analyzing process execution chains")
+        
+        queries.append({
+            'type': 'process_chain_analysis',
+            'description': 'Malicious process execution chains',
+            'priority': 'critical',
+            'cypher_query': '''
+                MATCH (alert:Alert {id: $alert_id})-[:INVOLVES_PROCESS]->(process:Process)
+                MATCH path = (process)-[:SPAWNED_BY*0..5]->(parent:Process)
+                MATCH (parent)<-[:INVOLVES_PROCESS]-(related_alerts:Alert)
+                WHERE related_alerts.timestamp > datetime() - duration({hours: 2})
+                RETURN path, collect(related_alerts) as timeline
+            ''',
+            'parameters': {}
+        })
+        
+        # 檔案系統影響分析
+        queries.append({
+            'type': 'file_interaction_analysis',
+            'description': 'File system impact analysis',
+            'priority': 'high',
+            'cypher_query': '''
+                MATCH (alert:Alert {id: $alert_id})-[:INVOLVES_PROCESS]->(process:Process)
+                MATCH (process)-[:ACCESSED_FILE|MODIFIED_FILE|CREATED_FILE]->(files:File)
+                MATCH (files)<-[r]-(other_processes:Process)<-[:INVOLVES_PROCESS]-(other_alerts:Alert)
+                WHERE other_alerts.timestamp > alert.timestamp - duration({minutes: 30})
+                RETURN files, collect(other_processes) as interacting_processes, 
+                       collect(other_alerts) as related_alerts
+            ''',
+            'parameters': {}
+        })
+    
+    # 3. 網路攻擊場景 - Web 攻擊分析
+    web_keywords = ['web attack', 'sql injection', 'xss', 'command injection', 'http']
+    if any(keyword in rule_description for keyword in web_keywords) or 'web' in rule_groups:
+        logger.info("🌐 DECISION: Web attack detected - analyzing network attack patterns")
+        
+        queries.append({
+            'type': 'network_topology_analysis',
+            'description': 'Web attack network topology',
+            'priority': 'high',
+            'cypher_query': '''
+                MATCH (alert:Alert {id: $alert_id})-[:HAS_SOURCE_IP]->(attacker:IPAddress)
+                MATCH (alert)-[:TRIGGERED_ON]->(target:Host)
+                MATCH (attacker)-[:CONNECTED_TO*1..3]-(related_ips:IPAddress)
+                MATCH (related_ips)<-[:HAS_SOURCE_IP]-(attack_alerts:Alert)
+                WHERE attack_alerts.timestamp > datetime() - duration({hours: 6})
+                RETURN attacker, target, related_ips, collect(attack_alerts) as attack_sequence
+            ''',
+            'parameters': {}
+        })
+    
+    # 4. 使用者行為異常分析
+    auth_keywords = ['authentication', 'login', 'failed', 'privilege', 'escalation']
+    if any(keyword in rule_description for keyword in auth_keywords) or 'authentication' in rule_groups:
+        logger.info("👤 DECISION: Authentication anomaly - analyzing user behavior patterns")
+        
+        queries.append({
+            'type': 'user_behavior_analysis',
+            'description': 'User behavior anomaly analysis',
+            'priority': 'medium',
+            'cypher_query': '''
+                MATCH (alert:Alert {id: $alert_id})-[:INVOLVES_USER]->(user:User)
+                MATCH (user)<-[:INVOLVES_USER]-(user_alerts:Alert)
+                WHERE user_alerts.timestamp > datetime() - duration({days: 7})
+                WITH user, collect(user_alerts) as user_history
+                MATCH (user)<-[:INVOLVES_USER]-(recent_alerts:Alert)
+                WHERE recent_alerts.timestamp > datetime() - duration({hours: 2})
+                RETURN user, user_history, collect(recent_alerts) as recent_activity
+            ''',
+            'parameters': {}
+        })
+    
+    # 5. 時間序列關聯分析 (總是執行)
+    queries.append({
+        'type': 'temporal_correlation',
+        'description': 'Temporal sequence analysis',
+        'priority': 'medium',
+        'cypher_query': '''
+            MATCH (alert:Alert {id: $alert_id})-[:TRIGGERED_ON]->(host:Host)
+            MATCH (host)<-[:TRIGGERED_ON]-(related_alerts:Alert)
+            WHERE related_alerts.timestamp > alert.timestamp - duration({minutes: 30})
+              AND related_alerts.timestamp < alert.timestamp + duration({minutes: 30})
+              AND related_alerts.id <> alert.id
+            WITH alert, related_alerts
+            ORDER BY related_alerts.timestamp
+            RETURN alert, collect(related_alerts) as temporal_sequence
+        ''',
+        'parameters': {}
+    })
+    
+    # 6. IP 信譽與地理位置分析 (針對外部 IP)
+    if _has_external_ip(alert_source):
+        logger.info("🌍 DECISION: External IP detected - analyzing IP reputation")
+        
+        queries.append({
+            'type': 'ip_reputation_analysis',
+            'description': 'IP reputation and geolocation analysis',
+            'priority': 'medium',
+            'cypher_query': '''
+                MATCH (alert:Alert {id: $alert_id})-[:HAS_SOURCE_IP]->(ip:IPAddress)
+                WHERE ip.is_private = false
+                MATCH (ip)<-[:HAS_SOURCE_IP]-(historical_alerts:Alert)
+                WHERE historical_alerts.timestamp > datetime() - duration({days: 30})
+                WITH ip, collect(historical_alerts) as ip_history
+                MATCH (ip)-[:GEOLOCATED_IN]->(geo:GeoLocation)
+                RETURN ip, ip_history, geo
+            ''',
+            'parameters': {}
+        })
+    
+    # 7. 威脅全景分析 (高級別警報)
+    if rule_level >= 8:
+        logger.info("⚠️ DECISION: High-severity alert - comprehensive threat landscape analysis")
+        
+        queries.append({
+            'type': 'threat_landscape_analysis',
+            'description': 'Comprehensive threat landscape',
+            'priority': 'high',
+            'cypher_query': '''
+                MATCH (alert:Alert {id: $alert_id})
+                MATCH (alert)-[r1]->(entity1)
+                MATCH (entity1)-[r2]->(entity2)
+                MATCH (entity2)<-[r3]-(other_alerts:Alert)
+                WHERE other_alerts.timestamp > datetime() - duration({hours: 24})
+                  AND other_alerts.rule_level >= 6
+                RETURN alert, entity1, entity2, other_alerts, r1, r2, r3
+                LIMIT 50
+            ''',
+            'parameters': {}
+        })
+    
+    logger.info(f"✅ Generated {len(queries)} graph queries for alert analysis")
+    return queries
+
+def _has_external_ip(alert_source: Dict[str, Any]) -> bool:
+    """
+    檢查警報是否包含外部 IP 地址
+    """
+    data = alert_source.get('data', {})
+    
+    # 檢查常見的 IP 欄位
+    ip_fields = ['srcip', 'dstip', 'src_ip', 'dst_ip', 'remote_ip']
+    
+    for field in ip_fields:
+        ip = data.get(field)
+        if ip and not _is_private_ip(ip):
+            return True
+    
+    return False
+
+def _is_private_ip(ip_address: str) -> bool:
+    """
+    檢查 IP 地址是否為私有地址
+    """
+    try:
+        import ipaddress
+        ip = ipaddress.ip_address(ip_address)
+        return ip.is_private
+    except:
+        return False
+
+# ==================== 混合檢索整合 ====================
+
+async def execute_hybrid_retrieval(alert: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    混合檢索系統：結合圖形查詢和傳統檢索方法
+    為 GraphRAG 提供最佳的上下文檢索策略
+    
+    Args:
+        alert: 當前警報資料
+        
+    Returns:
+        結合的檢索結果
+    """
+    logger.info("🔗🔍 HYBRID RETRIEVAL: Combining graph and traditional methods")
+    
+    # 1. 執行圖形查詢
+    graph_queries = determine_graph_queries(alert)
+    graph_context = await execute_graph_retrieval(graph_queries, alert)
+    
+    # 2. 如果圖形查詢結果不足，補充傳統檢索
+    total_graph_results = sum(len(results) for results in graph_context.values())
+    
+    if total_graph_results < 10:  # 設定閾值
+        logger.info("📊 Graph results insufficient - supplementing with traditional retrieval")
+        
+        # 生成補充查詢
+        traditional_queries = determine_contextual_queries(alert)
+        
+        # 向量化警報
+        embedding_service = GeminiEmbeddingService()
+        try:
+            alert_text = _extract_alert_text_for_embedding(alert)
+            alert_vector = await embedding_service.embed_text(alert_text)
+            traditional_context = await execute_retrieval(traditional_queries, alert_vector)
+            
+            # 合併結果
+            return _merge_retrieval_contexts(graph_context, traditional_context)
+        except Exception as e:
+            logger.warning(f"Traditional retrieval failed: {str(e)}")
+            return graph_context
+    
+    return graph_context
+
+def _merge_retrieval_contexts(graph_context: Dict[str, Any], traditional_context: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    合併圖形檢索和傳統檢索的結果
+    """
+    merged_context = graph_context.copy()
+    
+    # 添加傳統檢索的結果作為補充上下文
+    merged_context['traditional_similar_alerts'] = traditional_context.get('similar_alerts', [])
+    merged_context['traditional_metrics'] = traditional_context.get('cpu_metrics', []) + \
+                                          traditional_context.get('memory_metrics', [])
+    merged_context['traditional_logs'] = traditional_context.get('network_logs', []) + \
+                                       traditional_context.get('ssh_logs', [])
+    
+    return merged_context
+
+def format_graph_context(context_data: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Graph-Native 上下文格式化：將圖形檢索結果格式化為 LLM 可理解的結構化文本
+    
+    Args:
+        context_data: 從 execute_graph_retrieval 獲得的圖形上下文資料
+        
+    Returns:
+        格式化的上下文字典，準備提供給 LLM 分析
+    """
+    formatted_context = {}
+    
+    # 1. 攻擊路徑分析
+    attack_paths = context_data.get('attack_paths', [])
+    if attack_paths:
+        path_parts = []
+        for i, path_data in enumerate(attack_paths[:5], 1):
+            # 解析圖形路徑資料
+            attacker = path_data.get('attacker', {})
+            related_alerts = path_data.get('related_alert', [])
+            entities = path_data.get('entity', [])
+            
+            path_part = f"""
+{i}. **攻擊來源:** {attacker.get('address', 'Unknown IP')}
+   **相關警報數量:** {len(related_alerts) if isinstance(related_alerts, list) else 1}
+   **影響實體:** {len(entities) if isinstance(entities, list) else 1} 個系統組件
+   **攻擊時間範圍:** 過去1小時內的持續活動"""
+            path_parts.append(path_part)
+        formatted_context['attack_path_analysis'] = "\n".join(path_parts)
+    else:
+        formatted_context['attack_path_analysis'] = "未發現明確的攻擊路徑模式。"
+    
+    # 2. 橫向移動檢測
+    lateral_movement = context_data.get('lateral_movement', [])
+    if lateral_movement:
+        movement_parts = []
+        for i, movement_data in enumerate(lateral_movement[:3], 1):
+            attacker = movement_data.get('attacker', {})
+            target_hosts = movement_data.get('target_hosts', [])
+            
+            movement_part = f"""
+{i}. **橫向移動來源:** {attacker.get('address', 'Unknown')}
+   **目標主機數量:** {len(target_hosts)} 台主機
+   **移動模式:** 多主機滲透檢測到"""
+            movement_parts.append(movement_part)
+        formatted_context['lateral_movement_analysis'] = "\n".join(movement_parts)
+    else:
+        formatted_context['lateral_movement_analysis'] = "未檢測到橫向移動活動。"
+    
+    # 3. 時間序列關聯
+    temporal_sequences = context_data.get('temporal_sequences', [])
+    if temporal_sequences:
+        temporal_parts = []
+        for seq_data in temporal_sequences[:3]:
+            sequence = seq_data.get('temporal_sequence', [])
+            if sequence:
+                temporal_part = f"**時間序列相關警報:** {len(sequence)} 個相關事件在±30分鐘時間窗口內"
+                temporal_parts.append(temporal_part)
+        formatted_context['temporal_correlation'] = "\n".join(temporal_parts)
+    else:
+        formatted_context['temporal_correlation'] = "未發現時間序列相關事件。"
+    
+    # 4. IP 信譽分析
+    ip_reputation = context_data.get('ip_reputation', [])
+    if ip_reputation:
+        ip_parts = []
+        for ip_data in ip_reputation[:3]:
+            ip = ip_data.get('ip', {})
+            ip_history = ip_data.get('ip_history', [])
+            geo = ip_data.get('geo', {})
+            
+            ip_part = f"""
+**IP 地址:** {ip.get('address', 'Unknown')}
+**歷史活動:** 過去30天內 {len(ip_history)} 次警報記錄
+**地理位置:** {geo.get('country', 'Unknown')} - {geo.get('city', 'Unknown')}
+**私有地址:** {'否' if not ip.get('is_private', True) else '是'}"""
+            ip_parts.append(ip_part)
+        formatted_context['ip_reputation_analysis'] = "\n".join(ip_parts)
+    else:
+        formatted_context['ip_reputation_analysis'] = "無外部IP信譽資料可供分析。"
+    
+    # 5. 使用者行為分析
+    user_behavior = context_data.get('user_behavior', [])
+    if user_behavior:
+        user_parts = []
+        for user_data in user_behavior[:3]:
+            user = user_data.get('user', {})
+            user_history = user_data.get('user_history', [])
+            recent_activity = user_data.get('recent_activity', [])
+            
+            user_part = f"""
+**使用者:** {user.get('username', 'Unknown')}
+**歷史行為:** 過去7天內 {len(user_history)} 次活動記錄
+**近期異常:** 過去2小時內 {len(recent_activity)} 次活動"""
+            user_parts.append(user_part)
+        formatted_context['user_behavior_analysis'] = "\n".join(user_parts)
+    else:
+        formatted_context['user_behavior_analysis'] = "未發現相關使用者行為異常。"
+    
+    # 6. 程序執行鏈分析
+    process_chains = context_data.get('process_chains', [])
+    if process_chains:
+        process_parts = []
+        for process_data in process_chains[:3]:
+            timeline = process_data.get('timeline', [])
+            if timeline:
+                process_part = f"**程序執行鏈:** 檢測到 {len(timeline)} 個相關程序執行事件"
+                process_parts.append(process_part)
+        formatted_context['process_chain_analysis'] = "\n".join(process_parts)
+    else:
+        formatted_context['process_chain_analysis'] = "未發現可疑的程序執行鏈。"
+    
+    # 7. 檔案交互分析
+    file_interactions = context_data.get('file_interactions', [])
+    if file_interactions:
+        file_parts = []
+        for file_data in file_interactions[:3]:
+            files = file_data.get('files', {})
+            interacting_processes = file_data.get('interacting_processes', [])
+            
+            file_part = f"""
+**檔案路徑:** {files.get('file_path', 'Unknown')}
+**交互程序數量:** {len(interacting_processes)}"""
+            file_parts.append(file_part)
+        formatted_context['file_interaction_analysis'] = "\n".join(file_parts)
+    else:
+        formatted_context['file_interaction_analysis'] = "未發現異常的檔案系統交互。"
+    
+    # 8. 網路拓撲分析
+    network_topology = context_data.get('network_topology', [])
+    if network_topology:
+        network_parts = []
+        for net_data in network_topology[:3]:
+            attacker = net_data.get('attacker', {})
+            target = net_data.get('target', {})
+            attack_sequence = net_data.get('attack_sequence', [])
+            
+            network_part = f"""
+**攻擊來源:** {attacker.get('address', 'Unknown')}
+**目標主機:** {target.get('agent_name', 'Unknown')}
+**攻擊序列:** 過去6小時內 {len(attack_sequence)} 次相關攻擊"""
+            network_parts.append(network_part)
+        formatted_context['network_topology_analysis'] = "\n".join(network_parts)
+    else:
+        formatted_context['network_topology_analysis'] = "未發現複雜的網路攻擊拓撲。"
+    
+    # 9. 威脅全景分析
+    threat_landscape = context_data.get('threat_landscape', [])
+    if threat_landscape:
+        threat_parts = []
+        threat_count = len(threat_landscape)
+        if threat_count > 0:
+            threat_part = f"**綜合威脅評估:** 檢測到 {threat_count} 個高級別威脅關聯事件（過去24小時）"
+            threat_parts.append(threat_part)
+        formatted_context['threat_landscape_analysis'] = "\n".join(threat_parts)
+    else:
+        formatted_context['threat_landscape_analysis'] = "整體威脅環境相對穩定。"
+    
+    # 10. 傳統檢索補充（混合模式）
+    traditional_alerts = context_data.get('traditional_similar_alerts', [])
+    traditional_metrics = context_data.get('traditional_metrics', [])
+    traditional_logs = context_data.get('traditional_logs', [])
+    
+    if traditional_alerts or traditional_metrics or traditional_logs:
+        supplement_parts = []
+        if traditional_alerts:
+            supplement_parts.append(f"**相似警報補充:** {len(traditional_alerts)} 個向量相似警報")
+        if traditional_metrics:
+            supplement_parts.append(f"**系統指標補充:** {len(traditional_metrics)} 個系統性能記錄")
+        if traditional_logs:
+            supplement_parts.append(f"**日誌補充:** {len(traditional_logs)} 個網路/SSH日誌")
+        formatted_context['traditional_supplement'] = "\n".join(supplement_parts)
+    else:
+        formatted_context['traditional_supplement'] = "無需傳統檢索補充。"
+    
+    return formatted_context
+
+# ==================== 混合格式化函數 ====================
+
+def format_hybrid_context(context_data: Dict[str, Any]) -> Dict[str, str]:
+    """
+    混合上下文格式化：自動檢測並格式化圖形或傳統檢索結果
+    
+    Args:
+        context_data: 檢索結果資料
+        
+    Returns:
+        格式化的上下文字典
+    """
+    # 檢測是否為圖形檢索結果
+    graph_indicators = ['attack_paths', 'lateral_movement', 'temporal_sequences', 
+                       'ip_reputation', 'user_behavior', 'process_chains']
+    
+    has_graph_data = any(context_data.get(indicator) for indicator in graph_indicators)
+    
+    if has_graph_data:
+        logger.info("🔗 Formatting graph-native context for LLM analysis")
+        return format_graph_context(context_data)
+    else:
+        logger.info("📊 Formatting traditional context for LLM analysis")
+        return format_multi_source_context(context_data)
