@@ -17,6 +17,7 @@ langchain-google-genai>=1.0.0  # 確保使用最新版本以獲得最佳效能
 
 # === 資料庫與搜尋引擎 ===
 opensearch-py[async]     # OpenSearch Python 客戶端，[async] 功能包含 aiohttp 支援
+neo4j                   # Neo4j 圖形資料庫 Python 驅動程式，支援 GraphRAG 功能
 
 # === 機器學習與嵌入 ===
 sentence-transformers    # 用於文字嵌入和語意相似度計算的工具庫
@@ -25,3 +26,7 @@ numpy                    # 數值計算基礎庫，向量操作必需
 
 # === 配置管理 ===
 python-dotenv           # 環境變數管理工具，從 .env 檔案載入配置
+
+# === 工具庫 ===
+python-dateutil         # 強大的日期解析庫，用於時間戳處理
+ipaddress               # IP 位址處理工具（Python 3.3+ 內建，但明確列出以確保相容性）

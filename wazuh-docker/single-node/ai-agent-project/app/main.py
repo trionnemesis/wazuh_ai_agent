@@ -2,10 +2,13 @@ import os
 import logging
 import traceback
 import asyncio
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from datetime import datetime, timedelta
 from fastapi import FastAPI
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import uuid
+import json
+import re
 
 # LangChain 相關套件引入
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -15,6 +18,16 @@ from langchain_core.output_parsers import StrOutputParser
 
 # OpenSearch 客戶端
 from opensearchpy import AsyncOpenSearch, AsyncHttpConnection
+
+# Neo4j 圖形資料庫客戶端
+try:
+    from neo4j import AsyncGraphDatabase, AsyncDriver
+    NEO4J_AVAILABLE = True
+except ImportError:
+    logger.warning("Neo4j driver not available. Graph persistence will be disabled.")
+    NEO4J_AVAILABLE = False
+    AsyncGraphDatabase = None
+    AsyncDriver = None
 
 # 引入自定義的嵌入服務模組
 from embedding_service import GeminiEmbeddingService
@@ -27,6 +40,11 @@ logger = logging.getLogger(__name__)
 OPENSEARCH_URL = os.getenv("OPENSEARCH_URL", "https://wazuh.indexer:9200")
 OPENSEARCH_USER = os.getenv("OPENSEARCH_USER", "admin")
 OPENSEARCH_PASSWORD = os.getenv("OPENSEARCH_PASSWORD", "SecretPassword")
+
+# Neo4j 圖形資料庫配置
+NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "wazuh-graph-2024")
 
 # 大型語言模型配置
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic").lower()
@@ -42,6 +60,21 @@ client = AsyncOpenSearch(
     ssl_show_warn=False,
     connection_class=AsyncHttpConnection
 )
+
+# 初始化 Neo4j 圖形資料庫客戶端
+neo4j_driver = None
+if NEO4J_AVAILABLE:
+    try:
+        neo4j_driver = AsyncGraphDatabase.driver(
+            NEO4J_URI,
+            auth=(NEO4J_USER, NEO4J_PASSWORD)
+        )
+        logger.info(f"Neo4j driver initialized: {NEO4J_URI}")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Neo4j driver: {str(e)}")
+        neo4j_driver = None
+else:
+    logger.warning("Neo4j driver not available - graph persistence disabled")
 
 def get_llm():
     """
@@ -719,6 +752,7 @@ async def process_single_alert(alert: Dict[str, Any]) -> None:
     5. Format: Update context formatting to handle multi-source context
     6. Analyze: Send comprehensive context to LLM
     7. Update: Store results
+    8. Graph Persistence: Extract entities and build relationships in graph database (NEW)
     """
     alert_id = alert['_id']
     alert_index = alert['_index']
@@ -804,6 +838,50 @@ async def process_single_alert(alert: Dict[str, Any]) -> None:
         
         logger.info(f"🎉 AGENTIC PROCESSING COMPLETE: Alert {alert_id} successfully updated")
         logger.info(f"   📈 Context correlation metadata stored for future analysis")
+        
+        # Step 8: Graph Persistence - Extract entities and build relationships (NEW)
+        logger.info(f"🔗 STEP 8: GRAPH PERSISTENCE - Building knowledge graph for alert {alert_id}")
+        
+        try:
+            # Extract graph entities from alert and context
+            graph_entities = await extract_graph_entities(alert, context_data, analysis_result)
+            logger.info(f"   🔍 Extracted {len(graph_entities)} entities for graph database")
+            
+            # Build relationships between entities
+            graph_relationships = await build_graph_relationships(graph_entities, alert, context_data)
+            logger.info(f"   🔗 Built {len(graph_relationships)} relationships for graph database")
+            
+            # Persist to graph database (Neo4j)
+            graph_persistence_result = await persist_to_graph_database(graph_entities, graph_relationships, alert_id)
+            
+            if graph_persistence_result['success']:
+                logger.info(f"   ✅ Graph persistence successful: {graph_persistence_result['nodes_created']} nodes, {graph_persistence_result['relationships_created']} relationships")
+                
+                # Update alert with graph metadata
+                graph_metadata = {
+                    "graph_entities_count": len(graph_entities),
+                    "graph_relationships_count": len(graph_relationships),
+                    "graph_persistence_timestamp": graph_persistence_result['timestamp'],
+                    "graph_node_ids": graph_persistence_result.get('node_ids', [])
+                }
+                
+                # Add graph metadata to the alert
+                graph_update_body = {
+                    "doc": {
+                        "ai_analysis.graph_metadata": graph_metadata
+                    }
+                }
+                
+                await client.update(index=alert_index, id=alert_id, body=graph_update_body)
+                logger.info(f"   📊 Graph metadata added to alert {alert_id}")
+                
+            else:
+                logger.warning(f"   ⚠️ Graph persistence failed: {graph_persistence_result.get('error', 'Unknown error')}")
+                
+        except Exception as graph_error:
+            logger.error(f"   ❌ Graph persistence error for alert {alert_id}: {str(graph_error)}")
+            # Graph persistence failure should not break the main pipeline
+            logger.info(f"   🔄 Main processing pipeline continues despite graph persistence failure")
         
     except Exception as e:
         logger.error(f"❌ PROCESSING FAILED for alert {alert_id}: {str(e)}")
@@ -980,10 +1058,579 @@ async def health_check():
     
     return health_status
 
+# ==================== 圖形化持久層函數 (GraphRAG Stage 4 準備) ====================
+
+async def extract_graph_entities(alert: Dict[str, Any], context_data: Dict[str, Any], analysis_result: str) -> List[Dict[str, Any]]:
+    """
+    從警報、上下文資料和分析結果中提取圖形實體
+    
+    Args:
+        alert: 原始警報資料
+        context_data: 上下文關聯資料
+        analysis_result: LLM 分析結果
+    
+    Returns:
+        提取的圖形實體列表
+    """
+    entities = []
+    alert_source = alert.get('_source', {})
+    
+    # 1. 警報實體 (Alert Entity)
+    alert_entity = {
+        'type': 'Alert',
+        'id': alert['_id'],
+        'properties': {
+            'alert_id': alert['_id'],
+            'timestamp': alert_source.get('timestamp'),
+            'rule_id': alert_source.get('rule', {}).get('id'),
+            'rule_description': alert_source.get('rule', {}).get('description'),
+            'rule_level': alert_source.get('rule', {}).get('level'),
+            'rule_groups': alert_source.get('rule', {}).get('groups', []),
+            'risk_level': _extract_risk_level_from_analysis(analysis_result),
+            'triage_score': _calculate_triage_score(alert_source, analysis_result)
+        }
+    }
+    entities.append(alert_entity)
+    
+    # 2. 主機實體 (Host Entity)
+    agent = alert_source.get('agent', {})
+    if agent.get('id') or agent.get('name'):
+        host_entity = {
+            'type': 'Host',
+            'id': f"host_{agent.get('id', agent.get('name', 'unknown'))}",
+            'properties': {
+                'agent_id': agent.get('id'),
+                'agent_name': agent.get('name'),
+                'agent_ip': agent.get('ip'),
+                'operating_system': _extract_os_info(alert_source)
+            }
+        }
+        entities.append(host_entity)
+    
+    # 3. IP 位址實體 (IP Address Entities)
+    ip_addresses = _extract_ip_addresses(alert_source)
+    for ip_info in ip_addresses:
+        ip_entity = {
+            'type': 'IPAddress',
+            'id': f"ip_{ip_info['address']}",
+            'properties': {
+                'address': ip_info['address'],
+                'type': ip_info['type'],  # source, destination, internal
+                'geolocation': ip_info.get('geo'),
+                'is_private': _is_private_ip(ip_info['address'])
+            }
+        }
+        entities.append(ip_entity)
+    
+    # 4. 使用者實體 (User Entities)
+    users = _extract_user_info(alert_source)
+    for user_info in users:
+        user_entity = {
+            'type': 'User',
+            'id': f"user_{user_info['name']}",
+            'properties': {
+                'username': user_info['name'],
+                'user_type': user_info.get('type', 'unknown'),
+                'authentication_method': user_info.get('auth_method')
+            }
+        }
+        entities.append(user_entity)
+    
+    # 5. 程序實體 (Process Entities)
+    processes = _extract_process_info(alert_source, context_data)
+    for process_info in processes:
+        process_entity = {
+            'type': 'Process',
+            'id': f"process_{process_info.get('pid', 'unknown')}_{process_info.get('name', 'unknown')}",
+            'properties': {
+                'process_name': process_info.get('name'),
+                'process_id': process_info.get('pid'),
+                'command_line': process_info.get('cmdline'),
+                'parent_process': process_info.get('ppid'),
+                'hash': process_info.get('hash')
+            }
+        }
+        entities.append(process_entity)
+    
+    # 6. 檔案實體 (File Entities)
+    files = _extract_file_info(alert_source)
+    for file_info in files:
+        file_entity = {
+            'type': 'File',
+            'id': f"file_{hash(file_info['path'])}",
+            'properties': {
+                'file_path': file_info['path'],
+                'file_name': file_info.get('name'),
+                'file_size': file_info.get('size'),
+                'file_hash': file_info.get('hash'),
+                'file_permissions': file_info.get('permissions')
+            }
+        }
+        entities.append(file_entity)
+    
+    # 7. 威脅實體 (從分析結果提取)
+    threat_indicators = _extract_threat_indicators(analysis_result)
+    for threat in threat_indicators:
+        threat_entity = {
+            'type': 'ThreatIndicator',
+            'id': f"threat_{uuid.uuid4().hex[:8]}",
+            'properties': {
+                'indicator_type': threat['type'],
+                'indicator_value': threat['value'],
+                'confidence': threat.get('confidence', 0.5),
+                'mitre_technique': threat.get('mitre_technique')
+            }
+        }
+        entities.append(threat_entity)
+    
+    logger.info(f"Extracted {len(entities)} entities: {dict(zip(*zip(*[(e['type'], 1) for e in entities])))}")
+    return entities
+
+async def build_graph_relationships(entities: List[Dict[str, Any]], alert: Dict[str, Any], context_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    根據實體和上下文資料建立圖形關係
+    
+    Args:
+        entities: 提取的實體列表
+        alert: 原始警報資料
+        context_data: 上下文關聯資料
+    
+    Returns:
+        實體間的關係列表
+    """
+    relationships = []
+    entity_by_id = {entity['id']: entity for entity in entities}
+    entity_by_type = {}
+    
+    # 按類型組織實體
+    for entity in entities:
+        entity_type = entity['type']
+        if entity_type not in entity_by_type:
+            entity_by_type[entity_type] = []
+        entity_by_type[entity_type].append(entity)
+    
+    # 1. 警報觸發關係 (Alert -> Host)
+    alert_entities = entity_by_type.get('Alert', [])
+    host_entities = entity_by_type.get('Host', [])
+    
+    for alert_entity in alert_entities:
+        for host_entity in host_entities:
+            relationship = {
+                'type': 'TRIGGERED_ON',
+                'source_id': alert_entity['id'],
+                'target_id': host_entity['id'],
+                'properties': {
+                    'timestamp': alert.get('_source', {}).get('timestamp'),
+                    'severity': alert.get('_source', {}).get('rule', {}).get('level')
+                }
+            }
+            relationships.append(relationship)
+    
+    # 2. 來源 IP 關係 (Alert -> IPAddress)
+    ip_entities = entity_by_type.get('IPAddress', [])
+    for alert_entity in alert_entities:
+        for ip_entity in ip_entities:
+            if ip_entity['properties'].get('type') == 'source':
+                relationship = {
+                    'type': 'HAS_SOURCE_IP',
+                    'source_id': alert_entity['id'],
+                    'target_id': ip_entity['id'],
+                    'properties': {
+                        'timestamp': alert.get('_source', {}).get('timestamp')
+                    }
+                }
+                relationships.append(relationship)
+    
+    # 3. 使用者參與關係 (Alert -> User)
+    user_entities = entity_by_type.get('User', [])
+    for alert_entity in alert_entities:
+        for user_entity in user_entities:
+            relationship = {
+                'type': 'INVOLVES_USER',
+                'source_id': alert_entity['id'],
+                'target_id': user_entity['id'],
+                'properties': {
+                    'timestamp': alert.get('_source', {}).get('timestamp'),
+                    'action_type': _determine_user_action_type(alert)
+                }
+            }
+            relationships.append(relationship)
+    
+    # 4. 程序執行關係 (Alert -> Process)
+    process_entities = entity_by_type.get('Process', [])
+    for alert_entity in alert_entities:
+        for process_entity in process_entities:
+            relationship = {
+                'type': 'INVOLVES_PROCESS',
+                'source_id': alert_entity['id'],
+                'target_id': process_entity['id'],
+                'properties': {
+                    'timestamp': alert.get('_source', {}).get('timestamp')
+                }
+            }
+            relationships.append(relationship)
+    
+    # 5. 檔案存取關係 (Alert -> File)
+    file_entities = entity_by_type.get('File', [])
+    for alert_entity in alert_entities:
+        for file_entity in file_entities:
+            relationship = {
+                'type': 'ACCESSES_FILE',
+                'source_id': alert_entity['id'],
+                'target_id': file_entity['id'],
+                'properties': {
+                    'timestamp': alert.get('_source', {}).get('timestamp'),
+                    'access_type': _determine_file_access_type(alert)
+                }
+            }
+            relationships.append(relationship)
+    
+    # 6. 類似警報關係 (基於上下文資料)
+    similar_alerts = context_data.get('similar_alerts', [])
+    for similar_alert in similar_alerts[:5]:  # 限制關係數量
+        similar_alert_id = similar_alert.get('_id')
+        if similar_alert_id:
+            for alert_entity in alert_entities:
+                relationship = {
+                    'type': 'SIMILAR_TO',
+                    'source_id': alert_entity['id'],
+                    'target_id': f"alert_{similar_alert_id}",  # 假設該警報已在圖中
+                    'properties': {
+                        'similarity_score': similar_alert.get('_score', 0.0),
+                        'correlation_type': 'vector_similarity'
+                    }
+                }
+                relationships.append(relationship)
+    
+    # 7. 時間序列關係 (Temporal Relationships)
+    # 根據時間戳建立 PRECEDES 關係
+    if len(alert_entities) > 1:
+        sorted_alerts = sorted(alert_entities, key=lambda x: x['properties'].get('timestamp', ''))
+        for i in range(len(sorted_alerts) - 1):
+            relationship = {
+                'type': 'PRECEDES',
+                'source_id': sorted_alerts[i]['id'],
+                'target_id': sorted_alerts[i + 1]['id'],
+                'properties': {
+                    'time_difference': _calculate_time_difference(
+                        sorted_alerts[i]['properties'].get('timestamp'),
+                        sorted_alerts[i + 1]['properties'].get('timestamp')
+                    )
+                }
+            }
+            relationships.append(relationship)
+    
+    logger.info(f"Built {len(relationships)} relationships")
+    return relationships
+
+async def persist_to_graph_database(entities: List[Dict[str, Any]], relationships: List[Dict[str, Any]], alert_id: str) -> Dict[str, Any]:
+    """
+    將實體和關係持久化到 Neo4j 圖形資料庫
+    
+    Args:
+        entities: 要存儲的實體列表
+        relationships: 要存儲的關係列表
+        alert_id: 警報 ID
+    
+    Returns:
+        持久化結果，包含成功狀態和統計資訊
+    """
+    if not neo4j_driver:
+        return {
+            'success': False,
+            'error': 'Neo4j driver not available',
+            'nodes_created': 0,
+            'relationships_created': 0
+        }
+    
+    try:
+        async with neo4j_driver.session() as session:
+            # 存儲節點
+            nodes_created = 0
+            node_ids = []
+            
+            for entity in entities:
+                # 使用 MERGE 來避免重複節點
+                cypher_query = f"""
+                MERGE (n:{entity['type']} {{id: $entity_id}})
+                SET n += $properties
+                RETURN n.id as node_id
+                """
+                
+                result = await session.run(
+                    cypher_query,
+                    entity_id=entity['id'],
+                    properties=entity['properties']
+                )
+                
+                record = await result.single()
+                if record:
+                    node_ids.append(record['node_id'])
+                    nodes_created += 1
+            
+            # 存儲關係
+            relationships_created = 0
+            
+            for relationship in relationships:
+                # 使用 MERGE 來避免重複關係
+                cypher_query = f"""
+                MATCH (source {{id: $source_id}})
+                MATCH (target {{id: $target_id}})
+                MERGE (source)-[r:{relationship['type']}]->(target)
+                SET r += $properties
+                RETURN r
+                """
+                
+                result = await session.run(
+                    cypher_query,
+                    source_id=relationship['source_id'],
+                    target_id=relationship['target_id'],
+                    properties=relationship.get('properties', {})
+                )
+                
+                if await result.peek():
+                    relationships_created += 1
+            
+            # 建立索引 (如果不存在)
+            index_queries = [
+                "CREATE INDEX alert_timestamp_idx IF NOT EXISTS FOR (a:Alert) ON (a.timestamp)",
+                "CREATE INDEX host_agent_id_idx IF NOT EXISTS FOR (h:Host) ON (h.agent_id)",
+                "CREATE INDEX ip_address_idx IF NOT EXISTS FOR (i:IPAddress) ON (i.address)",
+                "CREATE INDEX user_name_idx IF NOT EXISTS FOR (u:User) ON (u.username)"
+            ]
+            
+            for index_query in index_queries:
+                await session.run(index_query)
+            
+            return {
+                'success': True,
+                'nodes_created': nodes_created,
+                'relationships_created': relationships_created,
+                'node_ids': node_ids,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+    except Exception as e:
+        logger.error(f"Graph persistence error: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'nodes_created': 0,
+            'relationships_created': 0
+        }
+
+# ==================== 輔助函數 ====================
+
+def _extract_risk_level_from_analysis(analysis_result: str) -> str:
+    """從分析結果中提取風險等級"""
+    risk_levels = ['Critical', 'High', 'Medium', 'Low', 'Informational']
+    for level in risk_levels:
+        if level.lower() in analysis_result.lower():
+            return level
+    return 'Unknown'
+
+def _calculate_triage_score(alert_source: Dict, analysis_result: str) -> float:
+    """計算警報分級分數"""
+    base_score = alert_source.get('rule', {}).get('level', 1) * 10
+    
+    # 根據分析結果調整分數
+    if 'critical' in analysis_result.lower():
+        return min(base_score * 1.5, 100)
+    elif 'high' in analysis_result.lower():
+        return min(base_score * 1.2, 100)
+    elif 'low' in analysis_result.lower():
+        return max(base_score * 0.8, 0)
+    
+    return base_score
+
+def _extract_os_info(alert_source: Dict) -> str:
+    """提取作業系統資訊"""
+    agent = alert_source.get('agent', {})
+    return agent.get('labels', {}).get('os', 'unknown')
+
+def _extract_ip_addresses(alert_source: Dict) -> List[Dict]:
+    """提取 IP 位址資訊"""
+    ips = []
+    data = alert_source.get('data', {})
+    
+    # 來源 IP
+    if data.get('srcip'):
+        ips.append({
+            'address': data['srcip'],
+            'type': 'source',
+            'geo': data.get('srcgeoip', {})
+        })
+    
+    # 目的 IP
+    if data.get('dstip'):
+        ips.append({
+            'address': data['dstip'],
+            'type': 'destination',
+            'geo': data.get('dstgeoip', {})
+        })
+    
+    # Agent IP
+    agent = alert_source.get('agent', {})
+    if agent.get('ip'):
+        ips.append({
+            'address': agent['ip'],
+            'type': 'internal'
+        })
+    
+    return ips
+
+def _is_private_ip(ip_address: str) -> bool:
+    """檢查是否為私有 IP 位址"""
+    import ipaddress
+    try:
+        ip = ipaddress.ip_address(ip_address)
+        return ip.is_private
+    except:
+        return False
+
+def _extract_user_info(alert_source: Dict) -> List[Dict]:
+    """提取使用者資訊"""
+    users = []
+    data = alert_source.get('data', {})
+    
+    # 主要使用者
+    if data.get('user'):
+        users.append({
+            'name': data['user'],
+            'type': 'primary'
+        })
+    
+    # 來源使用者
+    if data.get('srcuser'):
+        users.append({
+            'name': data['srcuser'],
+            'type': 'source'
+        })
+    
+    return users
+
+def _extract_process_info(alert_source: Dict, context_data: Dict) -> List[Dict]:
+    """提取程序資訊"""
+    processes = []
+    data = alert_source.get('data', {})
+    
+    # 來自警報的程序資訊
+    if data.get('process'):
+        processes.append({
+            'name': data['process'].get('name'),
+            'pid': data['process'].get('pid'),
+            'cmdline': data['process'].get('cmdline'),
+            'ppid': data['process'].get('ppid')
+        })
+    
+    # 來自上下文的程序資訊
+    process_data = context_data.get('process_data', [])
+    for proc in process_data[:5]:  # 限制數量
+        if isinstance(proc, dict) and proc.get('_source'):
+            proc_source = proc['_source']
+            processes.append({
+                'name': proc_source.get('data', {}).get('process', {}).get('name'),
+                'pid': proc_source.get('data', {}).get('process', {}).get('pid'),
+                'cmdline': proc_source.get('data', {}).get('process', {}).get('cmdline')
+            })
+    
+    return [p for p in processes if p.get('name')]  # 過濾空的程序
+
+def _extract_file_info(alert_source: Dict) -> List[Dict]:
+    """提取檔案資訊"""
+    files = []
+    data = alert_source.get('data', {})
+    
+    # 檔案路徑
+    if data.get('file'):
+        files.append({
+            'path': data['file'],
+            'name': data['file'].split('/')[-1] if '/' in data['file'] else data['file']
+        })
+    
+    # 額外的檔案欄位
+    if data.get('path'):
+        files.append({
+            'path': data['path'],
+            'name': data['path'].split('/')[-1] if '/' in data['path'] else data['path']
+        })
+    
+    return files
+
+def _extract_threat_indicators(analysis_result: str) -> List[Dict]:
+    """從分析結果中提取威脅指標"""
+    indicators = []
+    
+    # 簡單的正則表達式匹配
+    ip_pattern = r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
+    domain_pattern = r'\b[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*\b'
+    
+    # 提取 IP 位址
+    ips = re.findall(ip_pattern, analysis_result)
+    for ip in ips[:3]:  # 限制數量
+        indicators.append({
+            'type': 'ip_address',
+            'value': ip,
+            'confidence': 0.7
+        })
+    
+    # 提取域名（簡化版）
+    words = analysis_result.split()
+    for word in words:
+        if '.' in word and len(word) > 4 and not word.startswith('.'):
+            indicators.append({
+                'type': 'domain',
+                'value': word,
+                'confidence': 0.5
+            })
+            if len(indicators) >= 5:  # 限制數量
+                break
+    
+    return indicators
+
+def _determine_user_action_type(alert: Dict) -> str:
+    """確定使用者動作類型"""
+    rule_desc = alert.get('_source', {}).get('rule', {}).get('description', '').lower()
+    
+    if 'login' in rule_desc or 'authentication' in rule_desc:
+        return 'authentication'
+    elif 'ssh' in rule_desc:
+        return 'remote_access'
+    elif 'file' in rule_desc:
+        return 'file_access'
+    else:
+        return 'unknown'
+
+def _determine_file_access_type(alert: Dict) -> str:
+    """確定檔案存取類型"""
+    rule_desc = alert.get('_source', {}).get('rule', {}).get('description', '').lower()
+    
+    if 'write' in rule_desc or 'modify' in rule_desc:
+        return 'write'
+    elif 'read' in rule_desc:
+        return 'read'
+    elif 'delete' in rule_desc:
+        return 'delete'
+    else:
+        return 'access'
+
+def _calculate_time_difference(timestamp1: str, timestamp2: str) -> int:
+    """計算兩個時間戳之間的差異（秒）"""
+    try:
+        from dateutil import parser
+        dt1 = parser.parse(timestamp1)
+        dt2 = parser.parse(timestamp2)
+        return int(abs((dt2 - dt1).total_seconds()))
+    except:
+        return 0
+
 @app.on_event("shutdown")
 def shutdown_event():
     """應用程式關閉事件處理器"""
     scheduler.shutdown()
+    if neo4j_driver:
+        neo4j_driver.close()
+        logger.info("Neo4j 連接已關閉")
     logger.info("排程器已關閉")
 
 if __name__ == "__main__":
