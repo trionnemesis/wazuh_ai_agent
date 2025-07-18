@@ -27,6 +27,9 @@ numpy                    # 數值計算基礎庫，向量操作必需
 # === 配置管理 ===
 python-dotenv           # 環境變數管理工具，從 .env 檔案載入配置
 
+# === 監控與指標 ===
+prometheus-client       # Prometheus 指標收集客戶端，用於暴露應用程式指標
+
 # === 工具庫 ===
 python-dateutil         # 強大的日期解析庫，用於時間戳處理
 ipaddress               # IP 位址處理工具（Python 3.3+ 內建，但明確列出以確保相容性）
