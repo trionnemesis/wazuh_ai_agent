@@ -9,11 +9,7 @@
 本專案採用 Docker 容器化部署，將 Wazuh SIEM 與 AI Agent 服務隔離，確保穩定與可擴充性。
 
 ### 架構圖
-```
----
-config:
-  layout: dagre
----
+```mermaid
 flowchart TD
     subgraph Docker["Docker 容器化環境"]
         subgraph WazuhCore["Wazuh SIEM 核心 (v4.7.4)"]
