@@ -1,52 +1,94 @@
+# === Google Gemini 嵌入服務模組 ===
+#
+# 本模組實現了穩定、高效的文字向量化服務，專門針對安全警報分析場景優化。
+# 採用 Google Gemini text-embedding-004 模型，支援 768 維語義向量生成，
+# 並整合 Matryoshka Representation Learning (MRL) 技術，允許彈性調整向量維度。
+#
+# 核心特性：
+# 1. 非同步 API 調用，支援高並發處理
+# 2. 指數退避重試機制，確保服務穩定性
+# 3. 專門的安全警報內容處理邏輯
+# 4. 完整的錯誤處理與監控日誌
+#
+# 版本: 2.0 (Stage 4 Compatible)
+# 更新: 2024年12月
+
 import os
 import logging
 import asyncio
 from typing import List, Optional, Dict, Any
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
+# 獲取當前模組的日誌記錄器
 logger = logging.getLogger(__name__)
 
 class GeminiEmbeddingService:
     """
-    Google Gemini 嵌入服務類別，支援 MRL 技術與穩定向量化
+    Google Gemini 嵌入服務類別，提供企業級向量化能力
     
-    此服務提供非同步方法，使用 Google Gemini Embedding API 將文字轉換為向量，
-    內建錯誤處理與重試機制，特別針對 Wazuh 安全警報分析場景優化。
+    本類別封裝了 Google Gemini Embedding API，提供穩定的文字向量化服務。
+    特別針對 Wazuh 安全警報分析場景進行優化，支援批量處理、錯誤恢復、
+    以及 Matryoshka Representation Learning (MRL) 技術。
     
-    主要特性：
-    - 支援 Matryoshka Representation Learning (MRL) 可調向量維度
-    - 指數退避重試機制確保 API 穩定性
-    - 專門的警報內容向量化方法
-    - 完整的錯誤處理與日誌記錄
+    主要功能特性：
+    - 🔄 非同步處理：支援高並發向量化請求
+    - 🛡️ 錯誤恢復：指數退避重試機制確保 API 穩定性
+    - 📏 彈性維度：MRL 技術支援 1-768 維度調整
+    - 🎯 專門優化：針對安全警報內容的專門處理邏輯
+    - 📊 監控日誌：完整的執行狀態與效能監控
+    
+    技術規格：
+    - 模型：Google Gemini text-embedding-004
+    - 預設維度：768 維 (可調整至 1-768)
+    - 最大輸入長度：8,192 個 token
+    - 支援語言：多語言 (包括繁體中文)
     
     Attributes:
         model_name (str): 使用的 Gemini 嵌入模型名稱
-        dimension (Optional[int]): 向量維度 (1-768)，None 表示使用預設值
-        max_retries (int): 最大重試次數
-        retry_delay (float): 初始重試延遲時間（秒）
-        client (GoogleGenerativeAIEmbeddings): Google 嵌入服務客戶端
+        dimension (Optional[int]): 向量維度 (1-768)，None 表示使用預設 768 維
+        max_retries (int): API 調用失敗時的最大重試次數
+        retry_delay (float): 重試間的初始延遲時間（秒）
+        client (GoogleGenerativeAIEmbeddings): Google 嵌入服務客戶端實例
     """
     
     def __init__(self):
         """
-        初始化 Gemini 嵌入服務
+        初始化 Gemini 嵌入服務實例
         
-        從環境變數讀取配置：
-        - GOOGLE_API_KEY: Gemini API 金鑰（必要）
-        - EMBEDDING_MODEL: 模型名稱（預設: models/text-embedding-004）
-        - EMBEDDING_DIMENSION: 向量維度 1-768（預設: 768）
+        從環境變數讀取配置參數，初始化 Google Gemini 客戶端。
+        所有配置參數都有合理的預設值，確保在不同環境下的穩定運行。
+        
+        環境變數配置：
+        - GOOGLE_API_KEY: Gemini API 金鑰（必要，從 Google AI Studio 獲取）
+        - EMBEDDING_MODEL: 嵌入模型名稱（預設: models/text-embedding-004）
+        - EMBEDDING_DIMENSION: 向量維度 1-768（預設: 768，None 表示使用模型預設）
         - EMBEDDING_MAX_RETRIES: 最大重試次數（預設: 3）
         - EMBEDDING_RETRY_DELAY: 初始重試延遲秒數（預設: 1.0）
         
         Raises:
-            ValueError: 當 GOOGLE_API_KEY 未設定時
+            ValueError: 當 GOOGLE_API_KEY 環境變數未設定時
+            ConnectionError: 當無法連接到 Google Gemini API 時
+            
+        使用範例:
+            service = GeminiEmbeddingService()
+            vector = await service.embed_alert_content(alert_data)
         """
+        # 從環境變數讀取模型配置
         self.model_name = os.getenv("EMBEDDING_MODEL", "models/text-embedding-004")
         self.dimension = self._get_embedding_dimension()
         self.max_retries = int(os.getenv("EMBEDDING_MAX_RETRIES", "3"))
         self.retry_delay = float(os.getenv("EMBEDDING_RETRY_DELAY", "1.0"))
+        
+        # 初始化 Google Gemini 客戶端
         self.client = self._initialize_client()
-        logger.info(f"GeminiEmbeddingService 已初始化 - 模型: {self.model_name}, 維度: {self.dimension or 768}")
+        
+        # 記錄初始化完成狀態
+        dimension_info = self.dimension or 768
+        logger.info(f"GeminiEmbeddingService 已成功初始化")
+        logger.info(f"  🤖 模型: {self.model_name}")
+        logger.info(f"  📏 維度: {dimension_info}")
+        logger.info(f"  🔄 最大重試: {self.max_retries}")
+        logger.info(f"  ⏱️ 重試延遲: {self.retry_delay}秒")
         
     def _get_embedding_dimension(self) -> Optional[int]:
         """
