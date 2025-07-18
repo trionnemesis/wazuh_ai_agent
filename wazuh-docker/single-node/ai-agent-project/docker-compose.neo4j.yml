@@ -1,0 +1,108 @@
+# GraphRAG 架構 - Neo4j 圖形資料庫整合配置
+# 此檔案展示如何將 Neo4j 加入現有的 Wazuh AI Agent 環境
+# 
+# 使用方法:
+# docker-compose -f docker-compose.yml -f docker-compose.neo4j.yml up -d
+
+version: '3.8'
+
+services:
+  # Neo4j 圖形資料庫服務
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: wazuh-neo4j-graphrag
+    restart: unless-stopped
+    
+    # 環境變數配置
+    environment:
+      # 認證設定
+      - NEO4J_AUTH=neo4j/wazuh-graph-2024
+      
+      # 記憶體配置（根據系統資源調整）
+      - NEO4J_dbms_memory_heap_initial_size=2G
+      - NEO4J_dbms_memory_heap_max_size=4G
+      - NEO4J_dbms_memory_pagecache_size=1G
+      
+      # 安全與插件配置
+      - NEO4J_PLUGINS=["apoc", "graph-data-science"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*,gds.*
+      - NEO4J_dbms_security_procedures_allowlist=apoc.*,gds.*
+      
+      # 效能優化
+      - NEO4J_dbms_default_listen_address=0.0.0.0
+      - NEO4J_dbms_connector_bolt_listen_address=0.0.0.0:7687
+      - NEO4J_dbms_connector_http_listen_address=0.0.0.0:7474
+      
+      # 日誌配置
+      - NEO4J_dbms_logs_debug_level=INFO
+    
+    # 連接埠映射
+    ports:
+      - "7474:7474"    # HTTP Web 介面
+      - "7687:7687"    # Bolt 協議連接
+    
+    # 資料持久化
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_import:/var/lib/neo4j/import
+      - neo4j_plugins:/plugins
+      
+      # 自訂配置檔案掛載（可選）
+      # - ./config/neo4j/neo4j.conf:/var/lib/neo4j/conf/neo4j.conf
+    
+    # 健康檢查
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "wazuh-graph-2024", "CALL db.ping()"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    
+    # 網絡配置
+    networks:
+      - wazuh
+
+  # AI Agent 服務更新（新增 Neo4j 環境變數）
+  ai-agent:
+    # 新增環境變數以連接 Neo4j
+    environment:
+      # 現有環境變數...
+      
+      # Neo4j 連接配置
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=wazuh-graph-2024
+      
+      # GraphRAG 功能開關
+      - ENABLE_GRAPH_PERSISTENCE=true
+      - GRAPH_BATCH_SIZE=100
+      - GRAPH_MAX_ENTITIES_PER_ALERT=50
+    
+    # 依賴關係更新
+    depends_on:
+      neo4j:
+        condition: service_healthy
+
+# 持久化卷定義
+volumes:
+  neo4j_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${PWD}/neo4j_data
+      o: bind
+  
+  neo4j_logs:
+    driver: local
+    
+  neo4j_import:
+    driver: local
+    
+  neo4j_plugins:
+    driver: local
+
+# 網絡配置
+networks:
+  wazuh:
+    external: true
