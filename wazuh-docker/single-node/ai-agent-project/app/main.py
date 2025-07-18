@@ -461,7 +461,7 @@ def determine_contextual_queries(alert: Dict[str, Any]) -> List[Dict[str, Any]]:
 async def execute_retrieval(queries: List[Dict[str, Any]], alert_vector: List[float]) -> Dict[str, Any]:
     """
     Stage 3: Enhanced retrieval function that executes multiple types of queries
-    and aggregates results into a structured context object.
+    in parallel and aggregates results into a structured context object.
     
     Args:
         queries: List of query specifications from determine_contextual_queries
@@ -483,59 +483,96 @@ async def execute_retrieval(queries: List[Dict[str, Any]], alert_vector: List[fl
         'additional_context': []
     }
     
-    logger.info(f"🔄 EXECUTING RETRIEVAL: Processing {len(queries)} contextual queries")
+    logger.info(f"🔄 EXECUTING RETRIEVAL: Processing {len(queries)} contextual queries in parallel")
     
     # Sort queries by priority for optimal execution order
     sorted_queries = sorted(queries, key=lambda x: {'high': 0, 'medium': 1, 'low': 2}.get(x.get('priority', 'medium'), 1))
     
+    # Step 1: Collect all query tasks without awaiting them
+    tasks = []
     for i, query in enumerate(sorted_queries, 1):
         query_type = query['type']
         description = query['description']
         priority = query.get('priority', 'medium')
         parameters = query['parameters']
         
+        logger.info(f"   [{i}/{len(queries)}] 🔍 {priority.upper()}: {description}")
+        
+        if query_type == 'vector_similarity':
+            # K-NN vector search for similar alerts
+            tasks.append(execute_vector_search(alert_vector, parameters))
+        elif query_type == 'keyword_time_range':
+            # Keyword and time-based search
+            tasks.append(execute_keyword_time_search(parameters))
+        else:
+            # Handle unknown query types by adding a dummy coroutine that returns empty list
+            async def dummy_query():
+                logger.warning(f"Unknown query type: {query_type}")
+                return []
+            tasks.append(dummy_query())
+    
+    # Step 2: Execute all tasks in parallel using asyncio.gather
+    all_results = []
+    if tasks:
         try:
-            logger.info(f"   [{i}/{len(queries)}] 🔍 {priority.upper()}: {description}")
-            
-            if query_type == 'vector_similarity':
-                # K-NN vector search for similar alerts
-                results = await execute_vector_search(alert_vector, parameters)
-                context_data['similar_alerts'].extend(results)
-                logger.info(f"      ✅ Found {len(results)} similar alerts")
-                
-            elif query_type == 'keyword_time_range':
-                # Keyword and time-based search
-                results = await execute_keyword_time_search(parameters)
-                
-                # Enhanced categorization based on description
-                if 'cpu' in description.lower():
-                    context_data['cpu_metrics'].extend(results)
-                elif 'network' in description.lower():
-                    context_data['network_logs'].extend(results)
-                elif 'process' in description.lower():
-                    context_data['process_data'].extend(results)
-                elif 'ssh' in description.lower():
-                    context_data['ssh_logs'].extend(results)
-                elif 'web' in description.lower():
-                    context_data['web_metrics'].extend(results)
-                elif 'user' in description.lower():
-                    context_data['user_activity'].extend(results)
-                elif 'memory' in description.lower():
-                    context_data['memory_metrics'].extend(results)
-                elif 'file' in description.lower():
-                    context_data['filesystem_data'].extend(results)
-                else:
-                    context_data['additional_context'].extend(results)
-                
-                logger.info(f"      ✅ Found {len(results)} contextual records")
-                    
+            logger.info(f"   🚀 Executing {len(tasks)} queries in parallel...")
+            all_results = await asyncio.gather(*tasks, return_exceptions=True)
+            logger.info(f"   ✅ Parallel execution completed")
         except Exception as e:
-            logger.error(f"      ❌ Query failed: {str(e)}")
+            logger.error(f"   ❌ Parallel execution failed: {str(e)}")
+            # Fallback to empty results if gather fails completely
+            all_results = [[] for _ in tasks]
+    
+    # Step 3: Process results and categorize them based on query descriptions
+    for i, query in enumerate(sorted_queries):
+        if i >= len(all_results):
             continue
+            
+        result = all_results[i]
+        query_type = query['type']
+        description = query['description']
+        
+        # Handle exceptions in individual tasks
+        if isinstance(result, Exception):
+            logger.error(f"      ❌ Query failed: {description} with error {str(result)}")
+            continue
+        
+        # Handle non-list results
+        if not isinstance(result, list):
+            logger.warning(f"      ⚠️ Query returned non-list result: {description}")
+            continue
+        
+        # Categorize results based on query type and description
+        if query_type == 'vector_similarity':
+            context_data['similar_alerts'].extend(result)
+            logger.info(f"      ✅ Found {len(result)} similar alerts")
+        elif query_type == 'keyword_time_range':
+            # Enhanced categorization based on description keywords
+            description_lower = description.lower()
+            if 'cpu' in description_lower:
+                context_data['cpu_metrics'].extend(result)
+            elif 'network' in description_lower:
+                context_data['network_logs'].extend(result)
+            elif 'process' in description_lower:
+                context_data['process_data'].extend(result)
+            elif 'ssh' in description_lower:
+                context_data['ssh_logs'].extend(result)
+            elif 'web' in description_lower:
+                context_data['web_metrics'].extend(result)
+            elif 'user' in description_lower:
+                context_data['user_activity'].extend(result)
+            elif 'memory' in description_lower:
+                context_data['memory_metrics'].extend(result)
+            elif 'file' in description_lower:
+                context_data['filesystem_data'].extend(result)
+            else:
+                context_data['additional_context'].extend(result)
+            
+            logger.info(f"      ✅ Found {len(result)} contextual records")
     
     # Enhanced retrieval summary
     total_results = sum(len(results) for results in context_data.values())
-    logger.info(f"📊 RETRIEVAL SUMMARY: {total_results} total contextual records")
+    logger.info(f"📊 RETRIEVAL SUMMARY: {total_results} total contextual records (parallel execution)")
     for category, results in context_data.items():
         if results:
             logger.info(f"   {category}: {len(results)} records")
