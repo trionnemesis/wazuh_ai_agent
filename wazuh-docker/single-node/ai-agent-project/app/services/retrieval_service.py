@@ -314,3 +314,112 @@ async def query_new_alerts(limit: int = 10) -> List[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Failed to query new alerts: {str(e)}")
         raise
+
+async def execute_hybrid_retrieval(alert: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    混合檢索系統：結合圖形查詢和傳統檢索方法
+    為 GraphRAG 提供最佳的上下文檢索策略
+    
+    Args:
+        alert: 當前警報資料
+        
+    Returns:
+        結合的檢索結果
+    """
+    from .decision_service import determine_graph_queries, determine_contextual_queries
+    from .graph_service import execute_graph_retrieval
+    from .metrics import graph_retrieval_fallback_total
+    from ..embedding_service import GeminiEmbeddingService
+    
+    logger.info("🔗🔍 HYBRID RETRIEVAL: Combining graph and traditional methods")
+    
+    # 1. 執行圖形查詢
+    graph_queries = await determine_graph_queries(alert, {})
+    graph_context = await execute_graph_retrieval(graph_queries, alert)
+    
+    # 2. 如果圖形查詢結果不足，補充傳統檢索
+    total_graph_results = sum(len(results) for results in graph_context.values())
+    
+    if total_graph_results < 10:  # 設定閾值
+        logger.info("📊 Graph results insufficient - supplementing with traditional retrieval")
+        
+        # Prometheus 監控 - 記錄回退到傳統檢索
+        graph_retrieval_fallback_total.inc()
+        
+        # 生成補充查詢
+        traditional_queries = await determine_contextual_queries(alert)
+        
+        # 向量化警報
+        embedding_service = GeminiEmbeddingService()
+        try:
+            alert_text = _extract_alert_text_for_embedding(alert)
+            alert_vector = await embedding_service.embed_text(alert_text)
+            traditional_context = await execute_retrieval(traditional_queries, alert_vector)
+            
+            # 合併結果
+            return _merge_retrieval_contexts(graph_context, traditional_context)
+        except Exception as e:
+            logger.warning(f"Traditional retrieval failed: {str(e)}")
+            return graph_context
+    
+    return graph_context
+
+def _extract_alert_text_for_embedding(alert: Dict[str, Any]) -> str:
+    """
+    從警報中提取用於嵌入的文本
+    
+    Args:
+        alert: 警報資料
+        
+    Returns:
+        str: 用於嵌入的文本
+    """
+    parts = []
+    
+    # 規則描述
+    if alert.get('rule', {}).get('description'):
+        parts.append(f"Rule: {alert['rule']['description']}")
+    
+    # 代理名稱
+    if alert.get('agent', {}).get('name'):
+        parts.append(f"Agent: {alert['agent']['name']}")
+    
+    # 源 IP
+    if alert.get('data', {}).get('srcip'):
+        parts.append(f"Source IP: {alert['data']['srcip']}")
+    
+    # 目標 IP
+    if alert.get('data', {}).get('dstip'):
+        parts.append(f"Destination IP: {alert['data']['dstip']}")
+    
+    # 程序
+    if alert.get('data', {}).get('process'):
+        parts.append(f"Process: {alert['data']['process']}")
+    
+    # 用戶
+    if alert.get('data', {}).get('srcuser'):
+        parts.append(f"User: {alert['data']['srcuser']}")
+    
+    return " | ".join(parts)
+
+def _merge_retrieval_contexts(graph_context: Dict[str, Any], traditional_context: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    合併圖形檢索和傳統檢索的結果
+    
+    Args:
+        graph_context: 圖形檢索結果
+        traditional_context: 傳統檢索結果
+        
+    Returns:
+        Dict: 合併後的上下文
+    """
+    merged_context = graph_context.copy()
+    
+    # 添加傳統檢索的結果作為補充上下文
+    merged_context['traditional_similar_alerts'] = traditional_context.get('similar_alerts', [])
+    merged_context['traditional_metrics'] = traditional_context.get('cpu_metrics', []) + \
+                                          traditional_context.get('memory_metrics', [])
+    merged_context['traditional_logs'] = traditional_context.get('network_logs', []) + \
+                                       traditional_context.get('ssh_logs', [])
+    
+    return merged_context
