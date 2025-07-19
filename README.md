@@ -141,7 +141,7 @@ flowchart TD
 wazuh-docker/single-node/
 ├── 🤖 ai-agent-project/               # AI 代理專案根目錄
 │   ├── app/                          # 主要應用程式碼
-│   │   ├── main.py                   # GraphRAG 核心邏輯 (2,830+ 行)
+│   │   ├── main.py                   # GraphRAG 核心邏輯 (3,070+ 行)
 │   │   ├── embedding_service.py      # Gemini 嵌入服務
 │   │   ├── test_graphrag_*.py        # GraphRAG 測試套件
 │   │   └── requirements.txt          # Python 依賴 (32 個套件)
@@ -397,7 +397,6 @@ NEO4J_dbms_memory_pagecache_size=1G
 ## 📚 詳細文檔
 
 ### 核心文檔
-- 📋 [專案現況分析報告](./專案現況分析報告.md) - 深度技術分析與商業價值評估
 - 📋 [統一堆疊使用指南](./wazuh-docker/single-node/UNIFIED_STACK_README.md) - 完整部署與管理指南
 - 📋 [部署總結](./wazuh-docker/single-node/DEPLOYMENT_SUMMARY.md) - 系統架構與檔案說明
 - 📋 [監控設置指南](./wazuh-docker/single-node/ai-agent-project/MONITORING_SETUP.md) - Prometheus + Grafana 監控配置
@@ -424,6 +423,47 @@ NEO4J_dbms_memory_pagecache_size=1G
 🚀 **立即進入生產環境部署階段**
 
 專案已達到生產就緒狀態，建議組織立即開始生產環境的試點部署，透過實際運行資料進一步驗證與優化系統效能。
+
+---
+
+## 🤝 貢獻指南
+
+### 開發環境設置
+```bash
+# 克隆專案
+git clone <repository-url>
+cd wazuh-docker/single-node
+
+# 設置開發環境
+./start-unified-stack.sh
+
+# 運行測試套件
+docker-compose -f docker-compose.main.yml exec ai-agent python -m pytest app/test_*.py
+```
+
+### 代碼貢獻流程
+1. Fork 專案儲存庫
+2. 創建功能分支 (`git checkout -b feature/amazing-feature`)
+3. 提交變更 (`git commit -m 'Add amazing feature'`)
+4. 推送至分支 (`git push origin feature/amazing-feature`)
+5. 開啟 Pull Request
+
+### 問題回報
+如果您發現任何問題或有改進建議，請在 [GitHub Issues](https://github.com/your-repo/issues) 中提出。
+
+---
+
+## 📄 授權條款
+
+本專案採用 MIT 授權條款。詳細資訊請參閱 [LICENSE](LICENSE) 文件。
+
+---
+
+## 📞 聯絡資訊
+
+- **專案維護者**: GraphRAG 開發團隊
+- **技術支援**: [support@your-domain.com](mailto:support@your-domain.com)
+- **文檔**: [https://your-docs-site.com](https://your-docs-site.com)
 
 ---
 
