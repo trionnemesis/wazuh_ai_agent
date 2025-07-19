@@ -94,7 +94,12 @@ client = AsyncOpenSearch(
     use_ssl=True,
     verify_certs=False,           # 開發環境跳過 SSL 憑證驗證
     ssl_show_warn=False,          # 隱藏 SSL 警告訊息
-    connection_class=AsyncHttpConnection
+    connection_class=AsyncHttpConnection,
+    # 連接池優化配置
+    pool_maxsize=int(os.getenv("OPENSEARCH_MAX_CONNECTIONS", "20")),
+    max_retries=3,
+    retry_on_timeout=True,
+    timeout=int(os.getenv("OPENSEARCH_CONNECTION_TIMEOUT", "30"))
 )
 
 # === Neo4j 圖形資料庫驅動程式初始化 ===
@@ -2078,42 +2083,53 @@ async def execute_graph_retrieval(cypher_queries: List[Dict[str, Any]], alert: D
     alert_id = alert.get('_id')
     
     async with neo4j_driver.session() as session:
-        for i, query_spec in enumerate(sorted_queries, 1):
+        # 改為並行執行所有查詢
+        async def execute_single_query(query_spec):
+            """執行單個 Cypher 查詢"""
             query_type = query_spec['type']
             description = query_spec['description']
             priority = query_spec.get('priority', 'medium')
             cypher_query = query_spec['cypher_query']
             parameters = query_spec.get('parameters', {})
-            
-            # 注入當前警報 ID 到參數中
             parameters['alert_id'] = alert_id
             
             try:
-                logger.info(f"   [{i}/{len(sorted_queries)}] 🔍 {priority.upper()}: {description}")
-                
-                # Prometheus 監控 - 計時 Neo4j 查詢
                 neo4j_start = datetime.now()
-                
-                # 執行 Cypher 查詢
                 result = await session.run(cypher_query, parameters)
                 records = await result.data()
-                
                 neo4j_duration = (datetime.now() - neo4j_start).total_seconds()
                 api_call_duration.labels(stage='neo4j').observe(neo4j_duration)
                 
-                # 根據查詢類型分類結果
-                await _categorize_graph_results(query_type, records, context_data)
-                
-                logger.info(f"      ✅ Graph query returned {len(records)} subgraph components (耗時: {neo4j_duration:.3f}s)")
-                
+                logger.info(f"   ✅ {priority.upper()}: {description} - {len(records)} results ({neo4j_duration:.3f}s)")
+                return {
+                    'type': query_type,
+                    'records': records,
+                    'duration': neo4j_duration
+                }
             except Exception as e:
-                # Prometheus 監控 - 記錄 Neo4j 錯誤
                 api_errors_total.labels(stage='neo4j').inc()
-                
-                logger.error(f"      ❌ Cypher query failed: {str(e)}")
-                # 記錄失敗的查詢以便後續分析
-                logger.error(f"      Query: {cypher_query[:200]}...")
-                continue
+                logger.error(f"   ❌ {description} failed: {str(e)}")
+                return {
+                    'type': query_type,
+                    'records': [],
+                    'error': str(e)
+                }
+        
+        # 並行執行所有查詢
+        logger.info(f"   🚀 Executing {len(sorted_queries)} Cypher queries in parallel...")
+        query_results = await asyncio.gather(
+            *[execute_single_query(q) for q in sorted_queries],
+            return_exceptions=False
+        )
+        
+        # 處理查詢結果
+        for result in query_results:
+            if result and not result.get('error'):
+                await _categorize_graph_results(
+                    result['type'], 
+                    result['records'], 
+                    context_data
+                )
     
     # 生成檢索摘要
     total_components = sum(len(results) for results in context_data.values())

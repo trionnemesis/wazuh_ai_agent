@@ -79,6 +79,10 @@ class GeminiEmbeddingService:
         self.max_retries = int(os.getenv("EMBEDDING_MAX_RETRIES", "3"))
         self.retry_delay = float(os.getenv("EMBEDDING_RETRY_DELAY", "1.0"))
         
+        # 批次處理配置
+        self.batch_size = int(os.getenv("EMBEDDING_BATCH_SIZE", "20"))
+        self.max_concurrent_batches = int(os.getenv("EMBEDDING_MAX_CONCURRENT", "3"))
+        
         # 初始化 Google Gemini 客戶端
         self.client = self._initialize_client()
         
