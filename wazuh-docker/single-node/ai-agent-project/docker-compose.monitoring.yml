@@ -1,0 +1,105 @@
+version: '3.8'
+
+# Wazuh AI Agent 監控架構 - Prometheus + Grafana
+# 此文件擴展現有的 Docker Compose 設置，添加完整的監控解決方案
+
+services:
+  # === Prometheus 指標收集服務 ===
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: wazuh-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    networks:
+      - wazuh
+    depends_on:
+      - ai-agent
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(\`prometheus.localhost\`)"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+
+  # === Grafana 視覺化儀表板 ===
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: wazuh-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # 管理員帳號設定
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=wazuh-grafana-2024
+      
+      # 安全設定
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_SECURITY_COOKIE_SECURE=false
+      - GF_SECURITY_COOKIE_SAMESITE=lax
+      
+      # 匿名訪問 (開發環境)
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      
+      # 插件和功能
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource,grafana-piechart-panel
+      - GF_FEATURE_TOGGLES_ENABLE=publicDashboards
+      
+      # 日誌配置
+      - GF_LOG_LEVEL=info
+      - GF_LOG_MODE=console
+      
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - wazuh
+    depends_on:
+      - prometheus
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(\`grafana.localhost\`)"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
+  # === Node Exporter (可選) - 系統指標 ===
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: wazuh-node-exporter
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - wazuh
+
+# === 持久化儲存 ===
+volumes:
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+# === 網路配置 ===
+networks:
+  wazuh:
+    external: true

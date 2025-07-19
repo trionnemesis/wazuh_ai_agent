@@ -1,0 +1,22 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    version: 1
+    editable: true
+    basicAuth: false
+    withCredentials: false
+    jsonData:
+      # 查詢超時設定
+      timeInterval: '15s'
+      # HTTP 方法
+      httpMethod: 'POST'
+      # 保留指標名稱的標籤
+      keepCookies: []
+      # 自動刷新設定
+      incrementalQuery: false
+      incrementalQueryOverlapWindow: '10m'
