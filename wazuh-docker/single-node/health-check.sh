@@ -6,32 +6,23 @@
 
 set -e
 
-# 顏色定義
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# 載入共用函數庫
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common-functions.sh"
 
 # 健康狀態計數器
 total_services=0
 healthy_services=0
 unhealthy_services=0
 
-# 日誌函數
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
+# 覆寫 log_success 和 log_error 以包含計數器更新
+_original_log_success=$(declare -f log_success)
 log_success() {
     echo -e "${GREEN}[✓]${NC} $1"
     ((healthy_services++))
 }
 
-log_warning() {
-    echo -e "${YELLOW}[!]${NC} $1"
-}
-
+_original_log_error=$(declare -f log_error)
 log_error() {
     echo -e "${RED}[✗]${NC} $1"
     ((unhealthy_services++))
