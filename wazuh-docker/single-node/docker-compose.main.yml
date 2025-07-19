@@ -1,0 +1,334 @@
+# Wazuh GraphRAG 整合監控系統 - 統一 Docker Compose 堆疊
+# 版本: 1.0
+# 描述: 此檔案整合了 Wazuh、AI Agent、Neo4j 圖形資料庫以及 Prometheus & Grafana 監控系統
+# 作者: AgenticRAG & GraphRAG 架構工程師
+# 更新日期: 2024-12
+
+version: '3.8'
+
+services:
+  # === Wazuh 核心服務 ===
+  wazuh.manager:
+    image: wazuh/wazuh-manager:4.7.4
+    hostname: wazuh.manager
+    restart: always
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 655360
+        hard: 655360
+    ports:
+      - "1514:1514"
+      - "1515:1515"
+      - "514:514/udp"
+      - "55000:55000"
+    environment:
+      - INDEXER_URL=https://wazuh.indexer:9200
+      - INDEXER_USERNAME=admin
+      - INDEXER_PASSWORD=SecretPassword
+      - FILEBEAT_SSL_VERIFICATION_MODE=full
+      - SSL_CERTIFICATE_AUTHORITIES=/etc/ssl/root-ca.pem
+      - SSL_CERTIFICATE=/etc/ssl/filebeat.pem
+      - SSL_KEY=/etc/ssl/filebeat.key
+      - API_USERNAME=wazuh-wui
+      - API_PASSWORD=MyS3cr37P450r.*-
+    volumes:
+      - wazuh_api_configuration:/var/ossec/api/configuration
+      - wazuh_etc:/var/ossec/etc
+      - wazuh_logs:/var/ossec/logs
+      - wazuh_queue:/var/ossec/queue
+      - wazuh_var_multigroups:/var/ossec/var/multigroups
+      - wazuh_integrations:/var/ossec/integrations
+      - wazuh_active_response:/var/ossec/active-response/bin
+      - wazuh_agentless:/var/ossec/agentless
+      - wazuh_wodles:/var/ossec/wodles
+      - filebeat_etc:/etc/filebeat
+      - filebeat_var:/var/lib/filebeat
+      - ./config/wazuh_indexer_ssl_certs/root-ca-manager.pem:/etc/ssl/root-ca.pem
+      - ./config/wazuh_indexer_ssl_certs/wazuh.manager.pem:/etc/ssl/filebeat.pem
+      - ./config/wazuh_indexer_ssl_certs/wazuh.manager-key.pem:/etc/ssl/filebeat.key
+      - ./config/wazuh_cluster/wazuh_manager.conf:/wazuh-config-mount/etc/ossec.conf
+    networks:
+      - wazuh-graphrag-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:55000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  wazuh.indexer:
+    image: wazuh/wazuh-indexer:4.7.4
+    hostname: wazuh.indexer
+    restart: always
+    ports:
+      - "9200:9200"
+    environment:
+      - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - wazuh-indexer-data:/var/lib/wazuh-indexer
+      - ./config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-indexer/certs/root-ca.pem
+      - ./config/wazuh_indexer_ssl_certs/wazuh.indexer-key.pem:/usr/share/wazuh-indexer/certs/wazuh.indexer.key
+      - ./config/wazuh_indexer_ssl_certs/wazuh.indexer.pem:/usr/share/wazuh-indexer/certs/wazuh.indexer.pem
+      - ./config/wazuh_indexer_ssl_certs/admin.pem:/usr/share/wazuh-indexer/certs/admin.pem
+      - ./config/wazuh_indexer_ssl_certs/admin-key.pem:/usr/share/wazuh-indexer/certs/admin-key.pem
+      - ./config/wazuh_indexer/wazuh.indexer.yml:/usr/share/wazuh-indexer/opensearch.yml
+      - ./config/wazuh_indexer/internal_users.yml:/usr/share/wazuh-indexer/opensearch-security/internal_users.yml
+    networks:
+      - wazuh-graphrag-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -k -u admin:SecretPassword https://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  wazuh.dashboard:
+    image: wazuh/wazuh-dashboard:4.7.4
+    hostname: wazuh.dashboard
+    restart: always
+    ports:
+      - "443:5601"
+    environment:
+      - INDEXER_USERNAME=admin
+      - INDEXER_PASSWORD=SecretPassword
+      - WAZUH_API_URL=https://wazuh.manager
+      - DASHBOARD_USERNAME=kibanaserver
+      - DASHBOARD_PASSWORD=kibanaserver
+      - API_USERNAME=wazuh-wui
+      - API_PASSWORD=MyS3cr37P450r.*-
+    volumes:
+      - ./config/wazuh_indexer_ssl_certs/wazuh.dashboard.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem
+      - ./config/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem
+      - ./config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-dashboard/certs/root-ca.pem
+      - ./config/wazuh_dashboard/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml
+      - ./config/wazuh_dashboard/wazuh.yml:/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
+      - wazuh-dashboard-config:/usr/share/wazuh-dashboard/data/wazuh/config
+      - wazuh-dashboard-custom:/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom
+    networks:
+      - wazuh-graphrag-net
+    depends_on:
+      wazuh.indexer:
+        condition: service_healthy
+      wazuh.manager:
+        condition: service_healthy
+    links:
+      - wazuh.indexer:wazuh.indexer
+      - wazuh.manager:wazuh.manager
+
+  # === Neo4j 圖形資料庫 ===
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: wazuh-neo4j-graphrag
+    restart: unless-stopped
+    environment:
+      # 認證設定
+      - NEO4J_AUTH=neo4j/wazuh-graph-2024
+      
+      # 記憶體配置（根據系統資源調整）
+      - NEO4J_dbms_memory_heap_initial_size=2G
+      - NEO4J_dbms_memory_heap_max_size=4G
+      - NEO4J_dbms_memory_pagecache_size=1G
+      
+      # 安全與插件配置
+      - NEO4J_PLUGINS=["apoc", "graph-data-science"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*,gds.*
+      - NEO4J_dbms_security_procedures_allowlist=apoc.*,gds.*
+      
+      # 效能優化
+      - NEO4J_dbms_default_listen_address=0.0.0.0
+      - NEO4J_dbms_connector_bolt_listen_address=0.0.0.0:7687
+      - NEO4J_dbms_connector_http_listen_address=0.0.0.0:7474
+      
+      # 日誌配置
+      - NEO4J_dbms_logs_debug_level=INFO
+    ports:
+      - "7474:7474"    # HTTP Web 介面
+      - "7687:7687"    # Bolt 協議連接
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_import:/var/lib/neo4j/import
+      - neo4j_plugins:/plugins
+    networks:
+      - wazuh-graphrag-net
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "wazuh-graph-2024", "CALL db.ping()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # === GraphRAG AI 代理服務 ===
+  ai-agent:
+    build:
+      context: ./ai-agent-project
+      dockerfile: Dockerfile
+    container_name: ai-agent
+    restart: unless-stopped
+    env_file:
+      - ./ai-agent-project/.env
+    environment:
+      # Neo4j 連接配置
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=wazuh-graph-2024
+      
+      # GraphRAG 功能開關
+      - ENABLE_GRAPH_PERSISTENCE=true
+      - GRAPH_BATCH_SIZE=100
+      - GRAPH_MAX_ENTITIES_PER_ALERT=50
+      
+      # 監控相關環境變數
+      - METRICS_ENABLED=true
+      - METRICS_PORT=8000
+    ports:
+      - "8000:8000"  # 對外公開指標端點
+    networks:
+      - wazuh-graphrag-net
+    depends_on:
+      wazuh.indexer:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # === Prometheus 指標收集服務 ===
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: wazuh-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./ai-agent-project/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    networks:
+      - wazuh-graphrag-net
+    depends_on:
+      ai-agent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:9090/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # === Grafana 視覺化儀表板 ===
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: wazuh-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # 管理員帳號設定
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=wazuh-grafana-2024
+      
+      # 安全設定
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_SECURITY_COOKIE_SECURE=false
+      - GF_SECURITY_COOKIE_SAMESITE=lax
+      
+      # 匿名訪問 (開發環境)
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      
+      # 插件和功能
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource,grafana-piechart-panel
+      - GF_FEATURE_TOGGLES_ENABLE=publicDashboards
+      
+      # 日誌配置
+      - GF_LOG_LEVEL=info
+      - GF_LOG_MODE=console
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./ai-agent-project/grafana/provisioning:/etc/grafana/provisioning
+      - ./ai-agent-project/grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - wazuh-graphrag-net
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # === Node Exporter (系統指標) ===
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: wazuh-node-exporter
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - wazuh-graphrag-net
+
+# === 統一網路與資料卷定義 ===
+networks:
+  wazuh-graphrag-net:
+    driver: bridge
+    name: wazuh-graphrag-network
+
+volumes:
+  # Wazuh 相關資料卷
+  wazuh_api_configuration:
+  wazuh_etc:
+  wazuh_logs:
+  wazuh_queue:
+  wazuh_var_multigroups:
+  wazuh_integrations:
+  wazuh_active_response:
+  wazuh_agentless:
+  wazuh_wodles:
+  filebeat_etc:
+  filebeat_var:
+  wazuh-indexer-data:
+  wazuh-dashboard-config:
+  wazuh-dashboard-custom:
+  
+  # Neo4j 相關資料卷
+  neo4j_data:
+  neo4j_logs:
+  neo4j_import:
+  neo4j_plugins:
+  
+  # 監控系統資料卷
+  prometheus_data:
+  grafana_data:
