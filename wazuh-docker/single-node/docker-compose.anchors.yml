@@ -1,0 +1,100 @@
+# Docker Compose YAML 錨點定義
+# 用於減少配置重複
+
+version: '3.8'
+
+# 定義可重用的配置錨點
+x-common-variables: &common-variables
+  TZ: ${TZ:-UTC}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+x-common-networks: &common-networks
+  networks:
+    - wazuh-net
+
+x-common-restart-policy: &common-restart-policy
+  restart: always
+
+x-common-logging: &common-logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 60s
+
+x-opensearch-healthcheck: &opensearch-healthcheck
+  healthcheck:
+    test: ["CMD-SHELL", "curl -s -k https://localhost:9200/_cluster/health | grep -q '\"status\":\"green\\|yellow\"'"]
+    <<: *healthcheck-defaults
+
+x-http-healthcheck: &http-healthcheck
+  test: ["CMD", "curl", "-f", "http://localhost:${PORT:-80}/health"]
+  <<: *healthcheck-defaults
+
+x-neo4j-healthcheck: &neo4j-healthcheck
+  healthcheck:
+    test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
+    <<: *healthcheck-defaults
+
+x-resource-limits-small: &resource-limits-small
+  deploy:
+    resources:
+      limits:
+        cpus: '1.0'
+        memory: 1G
+      reservations:
+        cpus: '0.5'
+        memory: 512M
+
+x-resource-limits-medium: &resource-limits-medium
+  deploy:
+    resources:
+      limits:
+        cpus: '2.0'
+        memory: 2G
+      reservations:
+        cpus: '1.0'
+        memory: 1G
+
+x-resource-limits-large: &resource-limits-large
+  deploy:
+    resources:
+      limits:
+        cpus: '4.0'
+        memory: 4G
+      reservations:
+        cpus: '2.0'
+        memory: 2G
+
+x-ulimits-defaults: &ulimits-defaults
+  ulimits:
+    memlock:
+      soft: -1
+      hard: -1
+    nofile:
+      soft: 655360
+      hard: 655360
+
+x-security-opts: &security-opts
+  security_opt:
+    - no-new-privileges:true
+    - seccomp:unconfined
+
+x-volume-opts: &volume-opts
+  driver: local
+  driver_opts:
+    type: none
+
+# 網路定義
+networks:
+  wazuh-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${NETWORK_SUBNET:-172.28.0.0/16}
