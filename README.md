@@ -26,7 +26,7 @@
 
 ## 🎯 專案概述
 
-本專案實現了業界首創的 **四階段演進式 GraphRAG (圖形檢索增強生成) 架構**，專門針對 Wazuh SIEM 系統的智能威脅分析。結合 Neo4j 圖形資料庫構建威脅實體關係網路，配合 Google Gemini Embedding 的語義向量化與 Anthropic Claude/Google Gemini 的分析能力，實現深度威脅關聯分析、攻擊路徑識別與專業安全建議生成。
+本專案實現了 **四階段演進式 GraphRAG (圖形檢索增強生成) 架構**，專門針對 Wazuh SIEM 系統的智能威脅分析。結合 Neo4j 圖形資料庫構建威脅實體關係網路，配合 Google Gemini Embedding 的語義向量化與 Anthropic Claude/Google Gemini 的分析能力，實現深度威脅關聯分析、攻擊路徑識別與專業安全建議生成。
 
 ### 🚀 當前實施狀態 - 模組化架構重構完成 (Stage 4+)
 
