@@ -328,7 +328,10 @@ async def execute_hybrid_retrieval(alert: Dict[str, Any]) -> Dict[str, Any]:
     """
     from .decision_service import determine_graph_queries, determine_contextual_queries
     from .graph_service import execute_graph_retrieval
-    from .metrics import graph_retrieval_fallback_total
+    from .metrics import (
+        graph_retrieval_fallback_total,
+        record_graph_retrieval_fallback
+    )
     from ..embedding_service import GeminiEmbeddingService
     
     logger.info("🔗🔍 HYBRID RETRIEVAL: Combining graph and traditional methods")
@@ -344,7 +347,8 @@ async def execute_hybrid_retrieval(alert: Dict[str, Any]) -> Dict[str, Any]:
         logger.info("📊 Graph results insufficient - supplementing with traditional retrieval")
         
         # Prometheus 監控 - 記錄回退到傳統檢索
-        graph_retrieval_fallback_total.inc()
+        # 使用新的輔助函數而非直接調用 .inc()
+        record_graph_retrieval_fallback()
         
         # 生成補充查詢
         traditional_queries = await determine_contextual_queries(alert)

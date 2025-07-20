@@ -112,8 +112,7 @@ pytest tests/ -v
 
 ### 3. 執行整合測試
 ```bash
-docker-compose -f docker-compose.main.yml up -d
-docker-compose -f docker-compose.main.yml logs -f ai-agent
+# 參考 docs/DEPLOYMENT.md 中的部署命令
 ```
 
 ### 4. 檢查健康狀態
@@ -150,4 +149,4 @@ A: 如果需要回退，可以從備份目錄恢復 `main.py`，並更新 Docker
 如有問題，請參考：
 - [模組化架構指南](app/REFACTORING_GUIDE.md)
 - [主要專案文件](../../../README.md)
-- [技術白皮書](../../../MERGED_DOCUMENTATION.md)
+- [系統架構設計](../../../docs/ARCHITECTURE.md)

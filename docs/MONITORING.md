@@ -200,40 +200,44 @@ cd wazuh-docker/single-node/ai-agent-project
 docker-compose -f config/docker-compose.monitoring.yml up -d
 ```
 
-### 2. 驗證服務狀態
+### 2. 手動部署步驟
+
+#### 安裝依賴
+
+確保 AI Agent 的 `requirements.txt` 包含 `prometheus-client`：
 
 ```bash
-# 檢查所有服務狀態
-docker-compose -f config/docker-compose.monitoring.yml ps
-
-# 預期輸出
-# Name                    Command               State                    Ports
-# ---------------------------------------------------------------------------------------
-# prometheus             /bin/prometheus --config.file=/etc/prometheus/prometheus.yml   Up   0.0.0.0:9090->9090/tcp
-# grafana                /run.sh                          Up             0.0.0.0:3000->3000/tcp
-# node-exporter          /bin/node_exporter              Up             0.0.0.0:9100->9100/tcp
+pip install prometheus-client
 ```
 
-### 3. 訪問服務
+#### 啟動監控服務
 
-| 服務 | URL | 預設認證 |
-|------|-----|----------|
-| **Prometheus UI** | http://localhost:9090 | - |
-| **Grafana Dashboard** | http://localhost:3000 | admin / wazuh-grafana-2024 |
-| **Node Exporter** | http://localhost:9100 | - |
+```bash
+# 啟動 Prometheus 和 Grafana
+docker-compose -f docker-compose.monitoring.yml up -d
+```
 
-### 4. Prometheus 配置
+#### 驗證服務狀態
 
-編輯 `config/prometheus.yml`：
+```bash
+# 檢查所有服務是否正常運行
+docker-compose -f docker-compose.monitoring.yml ps
+
+# 驗證各服務端點
+curl http://localhost:8000/metrics  # AI Agent 指標
+curl http://localhost:9090/-/healthy  # Prometheus
+curl http://localhost:3000/api/health  # Grafana
+```
+
+### 3. 監控配置檔案
+
+#### Prometheus 配置
 
 ```yaml
+# config/prometheus.yml
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
-
-rule_files:
-  # - "first_rules.yml"
-  # - "second_rules.yml"
 
 scrape_configs:
   - job_name: 'ai-agent'
@@ -241,99 +245,102 @@ scrape_configs:
       - targets: ['ai-agent:8000']
     scrape_interval: 10s
     metrics_path: '/metrics'
-
+    
   - job_name: 'node-exporter'
     static_configs:
       - targets: ['node-exporter:9100']
-
+      
   - job_name: 'neo4j'
     static_configs:
       - targets: ['neo4j:2004']
     scrape_interval: 30s
-
-  - job_name: 'prometheus'
-    static_configs:
-      - targets: ['localhost:9090']
 ```
+
+#### Grafana 配置
+
+```yaml
+# grafana/provisioning/datasources/prometheus.yml
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+```
+
+### 4. 預設登入資訊
+
+#### Grafana
+- **使用者名稱**: admin
+- **密碼**: wazuh-grafana-2024
 
 ---
 
 ## Grafana 儀表板
 
-### 1. 預設儀表板
+### 1. 自動配置
 
-系統預設包含以下儀表板：
-
-- **AI Agent 監控儀表板** - 核心應用指標
-- **系統資源監控** - CPU、記憶體、磁碟使用率
-- **Neo4j 效能監控** - 圖形資料庫指標
-- **Wazuh 整合概覽** - SIEM 系統狀態
-
-### 2. 關鍵視圖說明
+儀表板會在 Grafana 啟動時自動配置，包含以下關鍵視圖：
 
 #### Alert Processing Rate
 - 顯示警報處理速率和新警報發現速率
 - 用於監控系統吞吐量
-- 可識別處理瓶頸和效能問題
 
 #### Pending Alerts Queue
 - 顯示當前待處理的警報數量
 - 用於監控系統負載和積壓情況
-- 幫助預測系統容量需求
 
 #### Alert Processing Latency
 - P50/P95/P99 延遲圖表
 - 用於監控處理效能和識別效能瓶頸
-- 幫助優化系統配置
 
 #### API Call Duration by Stage
 - 各階段（embedding、LLM 分析、Neo4j）的 API 呼叫耗時
 - 用於識別最慢的處理階段
-- 幫助優化特定組件
 
 #### Token Usage Rate
 - LLM 和 Embedding 的 Token 消耗趨勢
 - 用於監控和預測 API 成本
-- 幫助優化 Token 使用效率
 
 #### Error Rate
 - 錯誤率儀表盤，按階段分類
 - 用於監控系統可靠性
-- 幫助快速識別問題
 
 #### Graph Retrieval Fallback Rate
 - 從圖形檢索降級到傳統檢索的頻率
 - 用於監控 GraphRAG 系統的健康狀況
-- 幫助調優圖形檢索參數
+
+### 2. 手動導入儀表板
+
+如果自動配置失敗，可以手動導入：
+
+1. 登入 Grafana (http://localhost:3000)
+2. 點擊左側選單的 "Dashboards"
+3. 選擇 "Browse" 
+4. 查找 "Wazuh AI Agent - GraphRAG Monitoring Dashboard"
 
 ### 3. 自定義儀表板
 
-#### 創建新儀表板
+#### 創建新的儀表板
 
-1. 登入 Grafana
-2. 點擊 "Create" → "Dashboard"
-3. 添加新的面板
-4. 配置 PromQL 查詢
-5. 設定視覺化類型
+```bash
+# 複製現有儀表板作為模板
+cp grafana/dashboards/ai-agent-monitoring.json grafana/dashboards/custom-dashboard.json
 
-#### 常用查詢範例
-
-```promql
-# 警報處理速率
-rate(alerts_processed_total[5m])
-
-# P95 處理延遲
-histogram_quantile(0.95, rate(alert_processing_duration_seconds_bucket[5m]))
-
-# 錯誤率
-rate(alert_processing_errors_total[5m]) / rate(alerts_processed_total[5m])
-
-# Token 使用趨勢
-increase(llm_input_tokens_total[1h])
-
-# 系統資源使用率
-100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+# 編輯自定義儀表板
+nano grafana/dashboards/custom-dashboard.json
 ```
+
+#### 添加新的圖表
+
+在 Grafana UI 中：
+1. 點擊 "Add panel"
+2. 選擇 "Add a new panel"
+3. 配置 PromQL 查詢
+4. 設定圖表類型和顯示選項
 
 ---
 
@@ -343,127 +350,145 @@ increase(llm_input_tokens_total[1h])
 
 #### 高錯誤率告警
 ```yaml
-groups:
-  - name: ai-agent-alerts
-    rules:
-      - alert: HighErrorRate
-        expr: rate(alert_processing_errors_total[5m]) / rate(alerts_processed_total[5m]) > 0.05
-        for: 2m
-        labels:
-          severity: warning
-        annotations:
-          summary: "AI Agent 錯誤率過高"
-          description: "錯誤率超過 5%，持續 2 分鐘"
+# 錯誤率超過 5%
+- alert: HighErrorRate
+  expr: rate(alert_processing_errors_total[5m]) / rate(alerts_processed_total[5m]) > 0.05
+  for: 2m
+  labels:
+    severity: warning
+  annotations:
+    summary: "High error rate detected"
+    description: "Error rate is {{ $value | humanizePercentage }}"
 ```
 
 #### 高延遲告警
 ```yaml
-      - alert: HighLatency
-        expr: histogram_quantile(0.95, rate(alert_processing_duration_seconds_bucket[5m])) > 10
-        for: 2m
-        labels:
-          severity: warning
-        annotations:
-          summary: "AI Agent 處理延遲過高"
-          description: "P95 處理時間超過 10 秒"
+# P95 處理時間超過 10 秒
+- alert: HighLatency
+  expr: histogram_quantile(0.95, rate(alert_processing_duration_seconds_bucket[5m])) > 10
+  for: 2m
+  labels:
+    severity: warning
+  annotations:
+    summary: "High processing latency detected"
+    description: "P95 latency is {{ $value }}s"
 ```
 
 #### 隊列積壓告警
 ```yaml
-      - alert: QueueBacklog
-        expr: pending_alerts_gauge > 50
-        for: 1m
-        labels:
-          severity: warning
-        annotations:
-          summary: "警報隊列積壓"
-          description: "待處理警報超過 50 個"
+# 待處理警報超過 50 個
+- alert: QueueBacklog
+  expr: pending_alerts_gauge > 50
+  for: 1m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Alert queue backlog detected"
+    description: "{{ $value }} alerts pending"
 ```
 
 #### 服務不可用告警
 ```yaml
-      - alert: ServiceDown
-        expr: up{job="ai-agent"} == 0
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "AI Agent 服務不可用"
-          description: "AI Agent 服務已停止運行"
+# 超過 1 分鐘沒有新指標
+- alert: ServiceDown
+  expr: up{job="ai-agent"} == 0
+  for: 1m
+  labels:
+    severity: critical
+  annotations:
+    summary: "AI Agent service is down"
+    description: "Service has been down for more than 1 minute"
 ```
 
 ### 2. 配置告警通知
 
-#### Slack 通知
-```yaml
-receivers:
-  - name: 'slack-notifications'
-    slack_configs:
-      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
-        channel: '#wazuh-alerts'
-        title: '{{ template "slack.title" . }}'
-        text: '{{ template "slack.text" . }}'
-```
-
 #### Email 通知
 ```yaml
-receivers:
-  - name: 'email-notifications'
-    email_configs:
-      - to: 'admin@company.com'
-        from: 'alertmanager@company.com'
-        smarthost: 'smtp.company.com:587'
-        auth_username: 'alertmanager@company.com'
-        auth_password: 'password'
-```
+# alertmanager.yml
+global:
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: 'alertmanager@yourcompany.com'
+  smtp_auth_username: 'your-email@gmail.com'
+  smtp_auth_password: 'your-app-password'
 
-### 3. 告警路由配置
-
-```yaml
 route:
   group_by: ['alertname']
   group_wait: 10s
   group_interval: 10s
   repeat_interval: 1h
-  receiver: 'slack-notifications'
-  routes:
-    - match:
-        severity: critical
-      receiver: 'email-notifications'
+  receiver: 'team-email'
+
+receivers:
+- name: 'team-email'
+  email_configs:
+  - to: 'team@yourcompany.com'
+```
+
+#### Slack 通知
+```yaml
+receivers:
+- name: 'team-slack'
+  slack_configs:
+  - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+    channel: '#alerts'
+    title: '{{ template "slack.title" . }}'
+    text: '{{ template "slack.text" . }}'
+```
+
+### 3. 告警測試
+
+```bash
+# 測試告警規則
+curl -X POST http://localhost:9090/api/v1/rules/reload
+
+# 檢查告警狀態
+curl http://localhost:9090/api/v1/alerts
+
+# 測試通知
+curl -X POST http://localhost:9093/api/v1/alerts \
+  -H "Content-Type: application/json" \
+  -d '[{"labels":{"alertname":"test"}}]'
 ```
 
 ---
 
 ## 效能調優
 
-### 1. 監控系統調優
+### 1. Prometheus 效能調優
 
-#### Prometheus 配置優化
+#### 儲存配置
 ```yaml
+# prometheus.yml
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
-  external_labels:
-    monitor: 'wazuh-graphrag'
 
 storage:
   tsdb:
     retention.time: 30d
     retention.size: 10GB
-
-scrape_configs:
-  - job_name: 'ai-agent'
-    scrape_interval: 10s
-    scrape_timeout: 5s
-    static_configs:
-      - targets: ['ai-agent:8000']
+    path: /prometheus
+    wal:
+      retention.period: 2h
 ```
 
-#### Grafana 配置優化
+#### 記憶體配置
+```bash
+# 調整 Prometheus 記憶體限制
+docker run -d \
+  --name prometheus \
+  -p 9090:9090 \
+  --memory=2g \
+  prom/prometheus
+```
+
+### 2. Grafana 效能調優
+
+#### 快取配置
 ```ini
+# grafana.ini
 [server]
 http_port = 3000
-root_url = http://localhost:3000/
 
 [database]
 type = sqlite3
@@ -476,67 +501,67 @@ provider_config = sessions
 [security]
 admin_user = admin
 admin_password = wazuh-grafana-2024
+
+[users]
+allow_sign_up = false
+
+[server]
+root_url = http://localhost:3000/
+
+[security]
+cookie_secure = false
 ```
 
-### 2. 應用層調優
+### 3. 指標收集優化
 
-#### AI Agent 效能調優
+#### 自定義指標
 ```python
-# 在 ai-agent-project/app/utils/config.py 中調整
+# 在 AI Agent 中添加自定義指標
+from prometheus_client import Counter, Histogram, Gauge
 
-# 批次處理大小
-BATCH_SIZE = 50
+# 自定義計數器
+custom_alert_counter = Counter('custom_alerts_total', 'Custom alert counter')
 
-# 並行處理數量
-MAX_WORKERS = 4
+# 自定義直方圖
+custom_processing_time = Histogram('custom_processing_seconds', 'Custom processing time')
 
-# 快取配置
-CACHE_TTL = 3600  # 1 小時
-
-# 重試配置
-MAX_RETRIES = 3
-RETRY_DELAY = 1  # 秒
+# 自定義儀表
+custom_queue_size = Gauge('custom_queue_size', 'Custom queue size')
 ```
 
-#### 資料庫調優
+#### 指標過濾
 ```yaml
-# Neo4j 配置優化
-neo4j:
-  environment:
-    - NEO4J_dbms_memory_heap_initial__size=2G
-    - NEO4J_dbms_memory_heap_max__size=4G
-    - NEO4J_dbms_memory_pagecache_size=1G
-    - NEO4J_dbms_connector_bolt_enabled=true
-    - NEO4J_dbms_connector_bolt_listen__address=0.0.0.0:7687
+# prometheus.yml
+scrape_configs:
+  - job_name: 'ai-agent'
+    static_configs:
+      - targets: ['ai-agent:8000']
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: '.*_total'
+        action: keep
 ```
 
-### 3. 系統層調優
+### 4. 資料保留策略
 
-#### 作業系統調優
-```bash
-# 增加檔案描述符限制
-echo '* soft nofile 65536' >> /etc/security/limits.conf
-echo '* hard nofile 65536' >> /etc/security/limits.conf
-
-# 調整 TCP 參數
-echo 'net.core.somaxconn = 65535' >> /etc/sysctl.conf
-echo 'net.ipv4.tcp_max_syn_backlog = 65535' >> /etc/sysctl.conf
-sysctl -p
-```
-
-#### Docker 調優
+#### 短期儲存
 ```yaml
-# docker-compose.main.yml 中增加資源限制
-services:
-  ai-agent:
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '1.0'
-        reservations:
-          memory: 1G
-          cpus: '0.5'
+# 保留 7 天的詳細資料
+storage:
+  tsdb:
+    retention.time: 7d
+```
+
+#### 長期儲存
+```yaml
+# 使用遠端儲存
+remote_write:
+  - url: "http://remote-storage:9201/write"
+    remote_timeout: 30s
+    write_relabel_configs:
+      - source_labels: [__name__]
+        regex: '.*'
+        action: keep
 ```
 
 ---
@@ -546,141 +571,203 @@ services:
 ### 1. 常見問題
 
 #### 指標端點無法訪問
+**症狀**: 無法從 Prometheus 抓取 AI Agent 指標
+
+**解決方案**:
 ```bash
 # 檢查 AI Agent 是否正在運行
-docker ps | grep ai-agent
+# 參考 docs/DEPLOYMENT.md 中的服務管理命令
 
-# 檢查指標端點
-curl http://localhost:8000/metrics
+# 確認 /metrics 端點返回 200 狀態
+curl -f http://localhost:8000/metrics
 
-# 檢查防火牆設定
-sudo ufw status
+# 檢查網路連接
+# 參考 docs/DEPLOYMENT.md 中的網路診斷命令
 ```
 
 #### Prometheus 無法抓取指標
+**症狀**: Prometheus 目標顯示為 "DOWN"
+
+**解決方案**:
 ```bash
 # 檢查網路連接
-docker exec prometheus ping ai-agent
+docker network ls
+docker network inspect single-node_default
 
-# 檢查服務發現
+# 驗證服務發現配置
 curl http://localhost:9090/api/v1/targets
 
-# 檢查 Prometheus 配置
-docker exec prometheus cat /etc/prometheus/prometheus.yml
+# 檢查 Prometheus 日誌
+# 參考 docs/DEPLOYMENT.md 中的日誌查看命令
 ```
 
 #### Grafana 無法連接 Prometheus
+**症狀**: Grafana 顯示 "Data source not found"
+
+**解決方案**:
 ```bash
-# 檢查 Prometheus 服務狀態
-curl http://localhost:9090/api/v1/status/targets
+# 確認 Prometheus 服務正在運行
+# 參考 docs/DEPLOYMENT.md 中的服務狀態檢查命令
 
-# 檢查 Grafana 資料源配置
-# 在 Grafana UI 中檢查 Data Sources 設定
+# 檢查數據源配置
+curl http://localhost:3000/api/datasources
 
-# 檢查網路連接
-docker exec grafana ping prometheus
+# 重新配置數據源
+curl -X POST http://localhost:3000/api/datasources \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Prometheus","type":"prometheus","url":"http://prometheus:9090","access":"proxy"}'
 ```
 
-### 2. 日誌分析
+### 2. 日誌檢查
 
-#### 關鍵日誌位置
 ```bash
-# Prometheus 日誌
-docker logs prometheus
-
-# Grafana 日誌
-docker logs grafana
-
-# AI Agent 日誌
-docker logs wazuh-ai-agent
-
-# Node Exporter 日誌
-docker logs node-exporter
+# 檢查各服務日誌
+# 參考 docs/DEPLOYMENT.md 中的日誌查看命令
 ```
 
-#### 日誌級別調整
-```python
-# AI Agent 日誌級別
-LOG_LEVEL = "DEBUG"  # 或 "INFO", "WARNING", "ERROR"
+### 3. 效能問題診斷
 
-# Prometheus 日誌級別
-# 在 prometheus.yml 中設定
-global:
-  log_level: info
-```
-
-### 3. 效能診斷
-
-#### 系統資源診斷
+#### 高記憶體使用
 ```bash
-# 檢查 CPU 使用率
+# 檢查容器記憶體使用
 docker stats
 
-# 檢查記憶體使用率
-free -h
+# 檢查 Prometheus 記憶體使用
+curl http://localhost:9090/api/v1/status/runtimeinfo
 
-# 檢查磁碟使用率
-df -h
-
-# 檢查網路連接
-netstat -tulpn
+# 檢查 Grafana 記憶體使用
+curl http://localhost:3000/api/admin/stats
 ```
 
-#### 應用效能診斷
+#### 高 CPU 使用
 ```bash
-# 檢查 AI Agent 效能指標
-curl http://localhost:8000/metrics | grep alert_processing
-
-# 檢查 Neo4j 效能
-curl -u neo4j:wazuh-graph-2024 http://localhost:7474/db/data/
+# 檢查系統 CPU 使用
+# 參考 docs/DEPLOYMENT.md 中的容器管理命令
 
 # 檢查 Prometheus 查詢效能
 curl http://localhost:9090/api/v1/query?query=up
+
+# 檢查 Grafana 查詢效能
+curl http://localhost:3000/api/admin/stats
 ```
 
-### 4. 備份與恢復
+### 4. 資料問題診斷
 
-#### 監控資料備份
+#### 指標缺失
 ```bash
-# 備份 Prometheus 資料
-docker cp prometheus:/prometheus ./backup/prometheus-data
+# 檢查指標是否存在
+curl "http://localhost:9090/api/v1/series?match[]=alert_processing_duration_seconds"
 
-# 備份 Grafana 配置
-docker cp grafana:/var/lib/grafana ./backup/grafana-data
+# 檢查指標標籤
+curl "http://localhost:9090/api/v1/label/__name__/values"
 
-# 備份告警規則
-cp config/prometheus.yml ./backup/
+# 檢查時間範圍
+curl "http://localhost:9090/api/v1/query?query=alert_processing_duration_seconds[1h]"
 ```
 
-#### 監控資料恢復
+#### 資料不一致
 ```bash
-# 恢復 Prometheus 資料
-docker cp ./backup/prometheus-data prometheus:/prometheus
+# 檢查資料時間戳
+curl "http://localhost:9090/api/v1/query?query=time()"
 
-# 恢復 Grafana 配置
-docker cp ./backup/grafana-data grafana:/var/lib/grafana
+# 檢查資料完整性
+curl "http://localhost:9090/api/v1/query?query=count(alert_processing_duration_seconds)"
 
-# 重啟服務
-docker-compose -f config/docker-compose.monitoring.yml restart
+# 檢查資料延遲
+curl "http://localhost:9090/api/v1/query?query=alert_processing_duration_seconds"
+```
+
+---
+
+## 維護和更新
+
+### 1. 定期任務
+
+#### 資料清理
+```bash
+# 清理舊的指標數據（Prometheus 預設保留 30 天）
+# 在 prometheus.yml 中調整 retention.time
+
+# 清理 Grafana 快取
+# 參考 docs/DEPLOYMENT.md 中的容器管理命令
+```
+
+#### 備份配置
+```bash
+# 備份 Prometheus 配置
+cp config/prometheus.yml ./backup/prometheus.yml.$(date +%Y%m%d)
+
+# 備份 Grafana 儀表板配置
+cp grafana/dashboards/*.json ./backup/grafana-dashboards/
+
+# 備份 Grafana 數據源配置
+cp grafana/provisioning/datasources/*.yml ./backup/grafana-datasources/
+```
+
+### 2. 版本更新
+
+#### Prometheus 更新
+```bash
+# 更新 Prometheus 版本
+# 參考 docs/DEPLOYMENT.md 中的服務更新命令
+```
+
+#### Grafana 更新
+```bash
+# 更新 Grafana 版本
+# 參考 docs/DEPLOYMENT.md 中的服務更新命令
+```
+
+### 3. 效能監控
+
+#### 定期檢查
+```bash
+# 每日效能檢查腳本
+#!/bin/bash
+echo "=== Daily Performance Check ==="
+echo "Date: $(date)"
+
+# 檢查服務狀態
+# 參考 docs/DEPLOYMENT.md 中的服務狀態檢查命令
+
+# 檢查記憶體使用
+docker stats --no-stream
+
+# 檢查磁碟使用
+df -h
+
+# 檢查網路連接
+curl -f http://localhost:8000/health
+curl -f http://localhost:9090/-/healthy
+curl -f http://localhost:3000/api/health
+```
+
+#### 效能報告
+```bash
+# 生成效能報告
+curl "http://localhost:9090/api/v1/query?query=rate(alerts_processed_total[24h])" | jq
+curl "http://localhost:9090/api/v1/query?query=histogram_quantile(0.95, rate(alert_processing_duration_seconds_bucket[24h]))" | jq
+curl "http://localhost:9090/api/v1/query?query=rate(alert_processing_errors_total[24h])" | jq
 ```
 
 ---
 
 ## 總結
 
-本監控指南涵蓋了 Wazuh GraphRAG 系統的完整監控解決方案，包括：
+本監控系統指南提供了 Wazuh GraphRAG 系統的完整監控解決方案，包括：
 
-1. **完整的監控架構**：從指標收集到視覺化的完整流程
-2. **詳細的指標說明**：涵蓋延遲、吞吐量、錯誤率等關鍵指標
-3. **實用的告警配置**：幫助快速識別和響應問題
-4. **效能調優指南**：提升系統整體效能
-5. **故障排除方法**：解決常見問題的實用技巧
+1. **完整的監控架構**: Prometheus + Grafana + Node Exporter
+2. **詳細的指標定義**: 延遲、吞吐量、錯誤率、Token 使用等
+3. **自動化部署**: Docker Compose 一鍵部署
+4. **豐富的儀表板**: 預配置的 Grafana 儀表板
+5. **智能告警**: 基於 PromQL 的告警規則
+6. **效能調優**: 系統和應用層面的優化建議
+7. **故障排除**: 常見問題的診斷和解決方案
 
-通過實施這些監控措施，您可以：
+通過實施本監控系統，您可以：
+- 即時監控系統效能和健康狀態
+- 快速識別和解決效能瓶頸
+- 預測和預防系統故障
+- 優化資源使用和成本控制
 
-- **即時掌握系統狀態**：通過儀表板快速了解系統運行狀況
-- **快速識別問題**：通過告警機制及時發現和處理問題
-- **優化系統效能**：通過效能指標持續改進系統配置
-- **提升運維效率**：通過自動化監控減少手動檢查工作
-
-建議定期檢查和更新監控配置，以確保監控系統的有效性和準確性。 
+建議定期檢查監控系統的效能，並根據實際使用情況調整配置參數。 

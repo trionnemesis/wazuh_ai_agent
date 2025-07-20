@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Wazuh GraphRAG 整合監控系統 - 統一啟動腳本
-# 版本: 1.0
+# 版本: 2.0
 # 描述: 啟動完整的 Wazuh、AI Agent、Neo4j、Prometheus 和 Grafana 監控堆疊
 
 set -e
@@ -9,6 +9,11 @@ set -e
 # 載入共用函數庫
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common-functions.sh"
+
+# 健康檢查配置
+HEALTH_CHECK_TIMEOUT=300  # 5分鐘總超時
+HEALTH_CHECK_INTERVAL=10  # 每10秒檢查一次
+MAX_RETRIES=30           # 最大重試次數
 
 # 檢查必要檔案
 check_prerequisites() {
@@ -59,76 +64,145 @@ show_status() {
     echo
 }
 
-# 等待服務就緒
+# 檢查 HTTP 服務健康狀態
+check_http_service() {
+    local service_name="$1"
+    local url="$2"
+    local timeout="${3:-10}"
+    
+    if curl -f -s --max-time $timeout "$url" > /dev/null 2>&1; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# 檢查 HTTPS 服務健康狀態（忽略憑證驗證）
+check_https_service() {
+    local service_name="$1"
+    local url="$2"
+    local timeout="${3:-10}"
+    
+    if curl -k -f -s --max-time $timeout "$url" > /dev/null 2>&1; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# 檢查 Docker 容器狀態
+check_docker_container() {
+    local container_name="$1"
+    
+    if docker ps --filter "name=$container_name" --filter "status=running" | grep -q "$container_name"; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# 等待單個服務就緒
+wait_for_service() {
+    local service_name="$1"
+    local check_command="$2"
+    local timeout_seconds="${3:-$HEALTH_CHECK_TIMEOUT}"
+    local interval_seconds="${4:-$HEALTH_CHECK_INTERVAL}"
+    
+    log_info "等待 $service_name 就緒..."
+    local start_time=$(date +%s)
+    local attempts=0
+    
+    while true; do
+        attempts=$((attempts + 1))
+        current_time=$(date +%s)
+        elapsed=$((current_time - start_time))
+        
+        # 檢查是否超時
+        if [ $elapsed -ge $timeout_seconds ]; then
+            log_error "$service_name 啟動超時 (${timeout_seconds}秒)"
+            return 1
+        fi
+        
+        # 執行健康檢查
+        if eval "$check_command" > /dev/null 2>&1; then
+            log_success "$service_name 已就緒 (${elapsed}秒)"
+            return 0
+        fi
+        
+        # 顯示進度
+        if [ $((attempts % 3)) -eq 0 ]; then
+            echo -n "."
+        fi
+        
+        sleep $interval_seconds
+    done
+}
+
+# 等待所有關鍵服務就緒
 wait_for_services() {
     log_info "等待關鍵服務啟動..."
+    echo
     
-    local max_attempts=60
-    local attempt=1
+    local failed_services=()
     
     # 等待 Wazuh Indexer
-    log_info "等待 Wazuh Indexer (OpenSearch) 就緒..."
-    while [ $attempt -le $max_attempts ]; do
-        if curl -k -s -u admin:SecretPassword "https://localhost:9200/_cluster/health" > /dev/null 2>&1; then
-            log_success "Wazuh Indexer 已就緒"
-            break
-        fi
-        echo -n "."
-        sleep 5
-        ((attempt++))
-    done
-    
-    if [ $attempt -gt $max_attempts ]; then
-        log_error "Wazuh Indexer 啟動超時"
-        return 1
+    if ! wait_for_service "Wazuh Indexer" \
+        'curl -k -s -u admin:SecretPassword "https://localhost:9200/_cluster/health"' \
+        180 10; then
+        failed_services+=("Wazuh Indexer")
     fi
     
     # 等待 Neo4j
-    log_info "等待 Neo4j 就緒..."
-    attempt=1
-    while [ $attempt -le $max_attempts ]; do
-        if curl -s "http://localhost:7474" > /dev/null 2>&1; then
-            log_success "Neo4j 已就緒"
-            break
-        fi
-        echo -n "."
-        sleep 5
-        ((attempt++))
-    done
+    if ! wait_for_service "Neo4j" \
+        'curl -s "http://localhost:7474"' \
+        120 10; then
+        failed_services+=("Neo4j")
+    fi
+    
+    # 等待 AI Agent
+    if ! wait_for_service "AI Agent" \
+        'curl -s "http://localhost:8000/health"' \
+        60 5; then
+        failed_services+=("AI Agent")
+    fi
     
     # 等待 Prometheus
-    log_info "等待 Prometheus 就緒..."
-    attempt=1
-    while [ $attempt -le $max_attempts ]; do
-        if curl -s "http://localhost:9090/-/healthy" > /dev/null 2>&1; then
-            log_success "Prometheus 已就緒"
-            break
-        fi
-        echo -n "."
-        sleep 5
-        ((attempt++))
-    done
+    if ! wait_for_service "Prometheus" \
+        'curl -s "http://localhost:9090/-/healthy"' \
+        60 5; then
+        failed_services+=("Prometheus")
+    fi
     
     # 等待 Grafana
-    log_info "等待 Grafana 就緒..."
-    attempt=1
-    while [ $attempt -le $max_attempts ]; do
-        if curl -s "http://localhost:3000/api/health" > /dev/null 2>&1; then
-            log_success "Grafana 已就緒"
-            break
-        fi
-        echo -n "."
-        sleep 5
-        ((attempt++))
-    done
+    if ! wait_for_service "Grafana" \
+        'curl -s "http://localhost:3000/api/health"' \
+        60 5; then
+        failed_services+=("Grafana")
+    fi
+    
+    # 檢查是否有服務失敗
+    if [ ${#failed_services[@]} -gt 0 ]; then
+        log_error "以下服務啟動失敗："
+        for service in "${failed_services[@]}"; do
+            echo "  - $service"
+        done
+        echo
+        log_info "故障排除建議："
+        echo "  1. 檢查服務日誌： docker-compose -f docker-compose.main.yml logs [service_name]"
+        echo "  2. 檢查系統資源： docker stats"
+        echo "  3. 重新啟動服務： docker-compose -f docker-compose.main.yml restart [service_name]"
+        echo "  4. 執行健康檢查： ./health-check.sh"
+        return 1
+    fi
     
     log_success "所有關鍵服務已就緒！"
+    return 0
 }
 
 # 主要函數
 main() {
     echo "========================================================"
-    echo "🚀 Wazuh GraphRAG 整合監控系統啟動器"
+    echo "🚀 Wazuh GraphRAG 整合監控系統啟動器 v2.0"
     echo "========================================================"
     echo
     
@@ -150,15 +224,28 @@ main() {
         log_success "Docker Compose 堆疊啟動成功！"
         
         # 等待服務就緒
-        wait_for_services
-        
-        # 顯示狀態
-        show_status
-        
-        log_success "🎉 Wazuh GraphRAG 整合監控系統已成功啟動！"
-        echo
-        log_info "使用 'docker-compose -f docker-compose.main.yml logs -f [service_name]' 查看日誌"
-        log_info "使用 'docker-compose -f docker-compose.main.yml down' 停止所有服務"
+        if wait_for_services; then
+            # 顯示狀態
+            show_status
+            
+            log_success "🎉 Wazuh GraphRAG 整合監控系統已成功啟動！"
+            echo
+            log_info "使用 'docker-compose -f docker-compose.main.yml logs -f [service_name]' 查看日誌"
+            log_info "使用 'docker-compose -f docker-compose.main.yml down' 停止所有服務"
+            log_info "使用 './health-check.sh' 檢查服務健康狀態"
+            
+            # 執行快速健康檢查
+            echo
+            log_info "執行快速健康檢查..."
+            if ./health-check.sh > /dev/null 2>&1; then
+                log_success "所有服務健康檢查通過！"
+            else
+                log_warning "部分服務可能需要更多時間初始化，請稍後執行 './health-check.sh' 進行詳細檢查"
+            fi
+        else
+            log_error "服務啟動失敗，請檢查上述錯誤訊息"
+            exit 1
+        fi
         
     else
         log_error "Docker Compose 堆疊啟動失敗！"

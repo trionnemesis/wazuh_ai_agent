@@ -83,9 +83,29 @@ api_errors_total = Counter(
     registry=REGISTRY
 )
 
+# GraphRAG 相關指標 - 改進版本
+graph_retrieval_attempts_total = Counter(
+    'graph_retrieval_attempts_total',
+    'Total number of graph retrieval attempts',
+    registry=REGISTRY
+)
+
 graph_retrieval_fallback_total = Counter(
     'graph_retrieval_fallback_total',
     'Total number of fallbacks from graph to traditional retrieval',
+    registry=REGISTRY
+)
+
+graph_retrieval_success_total = Counter(
+    'graph_retrieval_success_total',
+    'Total number of successful graph retrievals',
+    registry=REGISTRY
+)
+
+# 計算降級率的輔助指標
+graph_retrieval_fallback_rate = Gauge(
+    'graph_retrieval_fallback_rate',
+    'Current fallback rate for graph retrieval (fallbacks/attempts)',
     registry=REGISTRY
 )
 
@@ -110,6 +130,14 @@ graph_queries_executed_total = Counter(
     registry=REGISTRY
 )
 
+# 查詢效能指標
+graph_query_duration = Histogram(
+    'graph_query_duration_seconds',
+    'Time spent executing graph queries',
+    buckets=[0.01, 0.05, 0.1, 0.5, 1.0, 2.5, 5.0, 10.0],
+    registry=REGISTRY
+)
+
 # 工具函數
 def record_processing_time(duration: float):
     """記錄警報處理時間"""
@@ -130,3 +158,64 @@ def increment_processing_errors():
 def update_pending_alerts(count: int):
     """更新待處理警報數量"""
     pending_alerts_gauge.set(count)
+
+# GraphRAG 相關工具函數
+def record_graph_retrieval_attempt():
+    """記錄圖形檢索嘗試"""
+    graph_retrieval_attempts_total.inc()
+    _update_fallback_rate()
+
+def record_graph_retrieval_fallback():
+    """記錄圖形檢索降級"""
+    graph_retrieval_fallback_total.inc()
+    _update_fallback_rate()
+
+def record_graph_retrieval_success():
+    """記錄圖形檢索成功"""
+    graph_retrieval_success_total.inc()
+
+def record_graph_query_time(duration: float):
+    """記錄圖形查詢執行時間"""
+    graph_query_duration.observe(duration)
+
+def _update_fallback_rate():
+    """更新降級率指標"""
+    try:
+        attempts = graph_retrieval_attempts_total._value.get()
+        fallbacks = graph_retrieval_fallback_total._value.get()
+        
+        if attempts > 0:
+            rate = fallbacks / attempts
+            graph_retrieval_fallback_rate.set(rate)
+        else:
+            graph_retrieval_fallback_rate.set(0)
+    except Exception:
+        # 避免計算錯誤影響主流程
+        pass
+
+# 批量操作工具函數
+def get_metrics_summary() -> dict:
+    """獲取關鍵指標摘要"""
+    try:
+        attempts = graph_retrieval_attempts_total._value.get()
+        fallbacks = graph_retrieval_fallback_total._value.get()
+        successes = graph_retrieval_success_total._value.get()
+        
+        return {
+            "alerts_processed": alerts_processed_total._value.get(),
+            "processing_errors": alert_processing_errors_total._value.get(),
+            "graph_retrieval": {
+                "attempts": attempts,
+                "successes": successes,
+                "fallbacks": fallbacks,
+                "fallback_rate": (fallbacks / attempts) if attempts > 0 else 0,
+                "success_rate": (successes / attempts) if attempts > 0 else 0
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting metrics summary: {e}")
+        return {}
+
+# 導入日誌模組（如果需要）
+import logging
+logger = logging.getLogger(__name__)

@@ -1,5 +1,26 @@
 # AgenticRAG AI 代理服務 Docker Compose 覆寫配置
-# 此檔案擴展基本的 Wazuh Docker Compose 配置，新增 AI 代理服務
+# 此檔案擴展基本的 Wazuh Docker Compose 配置，新增 AI 代理服務和集中化配置管理
+
+# 環境變數定義
+x-config: &config
+  # Wazuh 配置
+  WAZUH_ADMIN_PASSWORD: ${WAZUH_ADMIN_PASSWORD:-SecretPassword}
+  WAZUH_INDEXER_PASSWORD: ${WAZUH_INDEXER_PASSWORD:-SecretPassword}
+  
+  # Neo4j 配置
+  NEO4J_PASSWORD: ${NEO4J_PASSWORD:-wazuh-graph-2024}
+  NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
+  
+  # Grafana 配置
+  GRAFANA_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-wazuh-grafana-2024}
+  
+  # AI Agent 配置
+  AI_AGENT_LOG_LEVEL: ${AI_AGENT_LOG_LEVEL:-INFO}
+  AI_AGENT_WORKERS: ${AI_AGENT_WORKERS:-1}
+  
+  # 監控配置
+  PROMETHEUS_RETENTION_DAYS: ${PROMETHEUS_RETENTION_DAYS:-30}
+  GRAFANA_SESSION_TIMEOUT: ${GRAFANA_SESSION_TIMEOUT:-24h}
 
 services:
   # AI 代理服務定義
@@ -7,8 +28,11 @@ services:
   ai-agent:
     # 建構配置：從本地原始碼建構容器映像檔
     build:
-      context: ../single-node/ai-agent-project  # 建構上下文路徑
-      dockerfile: Dockerfile                   # Dockerfile 檔案名稱
+      context: ./ai-agent-project  # 建構上下文路徑
+      dockerfile: Dockerfile       # Dockerfile 檔案名稱
+      args:
+        BUILD_ENV: ${BUILD_ENV:-production}
+        PYTHON_VERSION: ${PYTHON_VERSION:-3.11}
     
     # 容器名稱：便於識別和管理
     container_name: ai-agent
@@ -20,7 +44,14 @@ services:
     # 環境變數檔案：包含 API 金鑰和配置參數
     # 包含 OpenSearch 連線、LLM 提供商、嵌入服務等設定
     env_file:
-      - .env
+      - ai-agent-project/.env
+    
+    # 環境變數：使用集中化配置
+    environment:
+      <<: *config
+      # AI Agent 特定配置
+      LOG_LEVEL: ${AI_AGENT_LOG_LEVEL}
+      WORKERS: ${AI_AGENT_WORKERS}
     
     # 網路配置：使用預設網路與其他 Wazuh 服務通訊
     networks:
@@ -30,6 +61,94 @@ services:
     # AI 代理需要 OpenSearch 來儲存和檢索向量資料
     depends_on:
       - wazuh.indexer
+    
+    # 健康檢查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Wazuh Indexer 配置覆寫
+  wazuh.indexer:
+    environment:
+      <<: *config
+      # OpenSearch 特定配置
+      OPENSEARCH_JAVA_OPTS: ${OPENSEARCH_JAVA_OPTS:--Xms1g -Xmx1g}
+    
+    # 健康檢查
+    healthcheck:
+      test: ["CMD", "curl", "-k", "-f", "-u", "admin:${WAZUH_INDEXER_PASSWORD}", "https://localhost:9200/_cluster/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Wazuh Dashboard 配置覆寫
+  wazuh.dashboard:
+    environment:
+      <<: *config
+      # Wazuh Dashboard 特定配置
+      WAZUH_API_URL: https://wazuh.manager:55000
+      WAZUH_API_USERNAME: wazuh
+      WAZUH_API_PASSWORD: ${WAZUH_ADMIN_PASSWORD}
+    
+    # 健康檢查
+    healthcheck:
+      test: ["CMD", "curl", "-k", "-f", "https://localhost:443"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Neo4j 配置覆寫
+  wazuh-neo4j-graphrag:
+    environment:
+      <<: *config
+      # Neo4j 特定配置
+      NEO4J_dbms_memory_heap_initial__size: ${NEO4J_HEAP_SIZE:-1G}
+      NEO4J_dbms_memory_heap_max__size: ${NEO4J_HEAP_SIZE:-1G}
+      NEO4J_dbms_memory_pagecache_size: ${NEO4J_PAGECACHE_SIZE:-512m}
+    
+    # 健康檢查
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD}", "CALL db.ping()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Prometheus 配置覆寫
+  wazuh-prometheus:
+    environment:
+      <<: *config
+      # Prometheus 特定配置
+      PROMETHEUS_STORAGE_TSDB_RETENTION_TIME: ${PROMETHEUS_RETENTION_DAYS}d
+    
+    # 健康檢查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Grafana 配置覆寫
+  wazuh-grafana:
+    environment:
+      <<: *config
+      # Grafana 特定配置
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_SESSION_TIMEOUT: ${GRAFANA_SESSION_TIMEOUT}
+    
+    # 健康檢查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 # 網路配置
 # 確保 AI 代理可以與現有的 Wazuh 服務叢集通訊

@@ -26,10 +26,10 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # 複製 Python 依賴項定義檔案
-COPY requirements.txt .
+COPY requirements.txt requirements.lock.txt ./
 
-# 安裝 Python 依賴項
-RUN pip install --no-cache-dir -r requirements.txt
+# 安裝 Python 依賴項（使用鎖定版本確保可重現性）
+RUN pip install --no-cache-dir -r requirements.lock.txt
 
 # 開發環境配置
 FROM base as development

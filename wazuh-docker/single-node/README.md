@@ -31,7 +31,7 @@ $ docker-compose up -d
 
 如果您需要完整的 Wazuh + AI Agent + GraphRAG + 監控解決方案，請參考：
 
-- **詳細部署指南**: `UNIFIED_STACK_README.md`
+- **詳細部署指南**: [docs/DEPLOYMENT.md](../../docs/DEPLOYMENT.md)
 - **統一啟動**: `./start-unified-stack.sh`
 - **健康檢查**: `./health-check.sh`
 
@@ -48,4 +48,4 @@ $ docker-compose up -d
 
 ---
 
-💡 **提示**: 對於生產環境部署，強烈建議使用 `UNIFIED_STACK_README.md` 中的完整配置。
+💡 **提示**: 對於生產環境部署，強烈建議使用 [docs/DEPLOYMENT.md](../../docs/DEPLOYMENT.md) 中的完整配置。

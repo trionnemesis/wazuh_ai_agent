@@ -197,168 +197,273 @@ sudo apt install -y docker.io docker-compose git curl
 
 # 啟用 WSL2 後端
 # 在 Docker Desktop 設定中啟用 WSL2 後端
-
-# 設定記憶體限制
-# 在 Docker Desktop 設定中增加記憶體限制至 8GB+
 ```
 
-### 步驟 2: 憑證生成
+### 步驟 2: 專案設置
 
 ```bash
-# 生成 SSL 憑證
+# 克隆專案
+git clone https://github.com/your-org/wazuh_ai_agent.git
+cd wazuh_ai_agent
+
+# 進入部署目錄
+cd wazuh-docker/single-node
+
+# 設定腳本執行權限
+chmod +x start-unified-stack.sh
+chmod +x stop-unified-stack.sh
+chmod +x health-check.sh
+```
+
+### 步驟 3: SSL 憑證生成
+
+```bash
+# 生成 Wazuh Indexer SSL 憑證
 docker-compose -f generate-indexer-certs.yml run --rm generator
 
 # 驗證憑證生成
 ls -la config/wazuh_indexer_ssl_certs/
 ```
 
-### 步驟 3: 環境配置
-
-#### 基本配置
+### 步驟 4: 環境變數配置
 
 ```bash
-# 複製環境變數範本
+# 複製環境變數範例
 cp ai-agent-project/.env.example ai-agent-project/.env
 
 # 編輯環境變數
 nano ai-agent-project/.env
 ```
 
-#### 進階配置
+#### 必要的環境變數
 
-在 `ai-agent-project/app/utils/config.py` 中可調整：
+```env
+# API 金鑰配置
+GOOGLE_API_KEY=your_actual_gemini_api_key
+ANTHROPIC_API_KEY=your_actual_anthropic_api_key
 
-```python
-# 向量檢索參數
-VECTOR_SEARCH_K = 5
-VECTOR_SIMILARITY_THRESHOLD = 0.7
+# LLM 提供商選擇
+LLM_PROVIDER=anthropic  # 或 'gemini'
 
-# 圖形查詢參數
-GRAPH_TRAVERSAL_DEPTH = 3
-GRAPH_RESULT_LIMIT = 100
+# OpenSearch 連接配置
+OPENSEARCH_HOST=wazuh.indexer
+OPENSEARCH_PORT=9200
+OPENSEARCH_USERNAME=admin
+OPENSEARCH_PASSWORD=SecretPassword
 
-# LLM 參數
-LLM_TEMPERATURE = 0.1
-LLM_MAX_TOKENS = 2000
+# Neo4j 圖形資料庫配置
+NEO4J_URI=bolt://neo4j:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=wazuh-graph-2024
+
+# GraphRAG 功能配置
+ENABLE_GRAPH_PERSISTENCE=true
+GRAPH_BATCH_SIZE=100
+GRAPH_MAX_ENTITIES_PER_ALERT=50
+
+# 效能調優參數
+VECTOR_SEARCH_K=5
+GRAPH_TRAVERSAL_DEPTH=3
+LLM_TEMPERATURE=0.1
+LLM_MAX_TOKENS=2048
 ```
 
-### 步驟 4: 服務啟動
+### 步驟 5: 啟動服務
 
-#### 使用啟動腳本（推薦）
+#### 方法一：使用統一起動腳本（推薦）
 
 ```bash
-# 授予執行權限
-chmod +x start-unified-stack.sh
-
-# 啟動服務
+# 執行統一起動腳本
 ./start-unified-stack.sh
 ```
 
-#### 手動啟動
+統一起動腳本會自動執行以下步驟：
+1. 檢查系統需求
+2. 生成 SSL 憑證（如果不存在）
+3. 啟動所有 Docker 服務
+4. 等待服務健康檢查
+5. 顯示服務狀態和訪問資訊
+
+#### 方法二：手動 Docker Compose 部署
 
 ```bash
-# 啟動所有服務
+# 啟動主要服務
 docker-compose -f docker-compose.main.yml up -d
 
-# 查看服務狀態
+# 檢查服務狀態
 docker-compose -f docker-compose.main.yml ps
 
-# 查看服務日誌
+# 查看啟動日誌
 docker-compose -f docker-compose.main.yml logs -f
 ```
 
-### 步驟 5: 健康檢查
+### 步驟 6: 服務驗證
 
 ```bash
 # 執行健康檢查腳本
 ./health-check.sh
 
-# 或手動檢查各服務
-curl -k https://localhost:443
-curl http://localhost:8000/health
-curl http://localhost:7474
-curl http://localhost:9090
-curl http://localhost:3000
+# 手動驗證各服務
+curl -f http://localhost:8000/health  # AI Agent
+curl -f http://localhost:9090/-/healthy  # Prometheus
+curl -f http://localhost:3000/api/health  # Grafana
 ```
 
 ---
 
 ## 配置說明
 
-### 網路配置
+### Docker Compose 配置
 
-所有服務連接到統一網路 `wazuh-graphrag-network`，允許：
-- 服務間直接使用服務名稱通訊
-- 安全的內部網路隔離
-- 統一的服務發現機制
-
-### 資料持久化
-
-以下資料卷提供資料持久化：
+#### 主要配置文件
 
 ```yaml
-# Wazuh 相關
-- wazuh_etc:/var/ossec/etc
-- wazuh_logs:/var/ossec/logs
-- wazuh-indexer-data:/var/lib/wazuh-indexer
-
-# Neo4j 相關
-- neo4j_data:/data
-- neo4j_logs:/logs
-
-# 監控系統相關
-- prometheus_data:/prometheus
-- grafana_data:/var/lib/grafana
+# docker-compose.main.yml
+version: '3.8'
+services:
+  wazuh.manager:
+    image: wazuh.manager:4.7.4
+    ports:
+      - "1514:1514"
+      - "1515:1515"
+      - "514:514/udp"
+      - "55000:55000"
+    
+  wazuh.indexer:
+    image: wazuh.indexer:4.7.4
+    ports:
+      - "9200:9200"
+    environment:
+      - node.name=wazuh.indexer
+      - cluster.initial_master_nodes=wazuh.indexer
+      - cluster.name=wazuh-cluster
+      - network.host=0.0.0.0
+      - discovery.type=single-node
+      - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+    
+  wazuh.dashboard:
+    image: wazuh.dashboard:4.7.4
+    ports:
+      - "443:443"
+    environment:
+      - OPENSEARCH_HOSTS=https://wazuh.indexer:9200
+      - WAZUH_API_URL=https://wazuh.manager
+    
+  ai-agent:
+    build:
+      context: ./ai-agent-project
+      target: production
+    ports:
+      - "8000:8000"
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    depends_on:
+      - wazuh.indexer
+      - neo4j
+    
+  neo4j:
+    image: neo4j:5.15-community
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/wazuh-graph-2024
+      - NEO4J_dbms_memory_heap_max__size=4G
+      - NEO4J_dbms_memory_pagecache_size=1G
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_import:/var/lib/neo4j/import
+      - neo4j_plugins:/plugins
 ```
 
-### 安全配置
+### AI Agent 配置
 
-#### SSL/TLS 配置
+#### 核心配置參數
 
-```yaml
-# 自動生成的 SSL 憑證
-ssl_certificate: /etc/ssl/certs/wazuh.indexer.pem
-ssl_key: /etc/ssl/private/wazuh.indexer-key.pem
-ssl_ca: /etc/ssl/certs/root-ca.pem
+```python
+# app/core/config.py
+class Config:
+    # LLM 配置
+    LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic")
+    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+    
+    # OpenSearch 配置
+    OPENSEARCH_HOST = os.getenv("OPENSEARCH_HOST", "wazuh.indexer")
+    OPENSEARCH_PORT = int(os.getenv("OPENSEARCH_PORT", "9200"))
+    OPENSEARCH_USERNAME = os.getenv("OPENSEARCH_USERNAME", "admin")
+    OPENSEARCH_PASSWORD = os.getenv("OPENSEARCH_PASSWORD", "SecretPassword")
+    
+    # Neo4j 配置
+    NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
+    NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
+    NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "wazuh-graph-2024")
+    
+    # GraphRAG 配置
+    ENABLE_GRAPH_PERSISTENCE = os.getenv("ENABLE_GRAPH_PERSISTENCE", "true").lower() == "true"
+    GRAPH_BATCH_SIZE = int(os.getenv("GRAPH_BATCH_SIZE", "100"))
+    GRAPH_MAX_ENTITIES_PER_ALERT = int(os.getenv("GRAPH_MAX_ENTITIES_PER_ALERT", "50"))
+    
+    # 效能配置
+    VECTOR_SEARCH_K = int(os.getenv("VECTOR_SEARCH_K", "5"))
+    GRAPH_TRAVERSAL_DEPTH = int(os.getenv("GRAPH_TRAVERSAL_DEPTH", "3"))
+    LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.1"))
+    LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
 ```
 
-#### 認證配置
+### 監控配置
+
+#### Prometheus 配置
 
 ```yaml
-# Wazuh API
-api_username: wazuh-wui
-api_password: MyS3cr37P450r.*-
+# config/prometheus.yml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
 
-# OpenSearch
-indexer_username: admin
-indexer_password: SecretPassword
+scrape_configs:
+  - job_name: 'ai-agent'
+    static_configs:
+      - targets: ['ai-agent:8000']
+    scrape_interval: 10s
+    
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+      
+  - job_name: 'neo4j'
+    static_configs:
+      - targets: ['neo4j:2004']
+```
 
-# Neo4j
-neo4j_username: neo4j
-neo4j_password: wazuh-graph-2024
+#### Grafana 配置
+
+```yaml
+# grafana/provisioning/datasources/prometheus.yml
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
 ```
 
 ---
 
 ## 驗證部署
 
-### 1. 服務狀態檢查
+### 1. 服務健康檢查
 
 ```bash
-# 檢查所有容器狀態
-docker-compose -f docker-compose.main.yml ps
+# 執行完整健康檢查
+./health-check.sh
 
-# 預期輸出
-# Name                    Command               State                    Ports
-# ---------------------------------------------------------------------------------------
-# wazuh-ai-agent         python -m uvicorn app ...   Up             0.0.0.0:8000->8000/tcp
-# wazuh-dashboard        /bin/bash /entrypoint.sh    Up             0.0.0.0:443->5601/tcp
-# wazuh-indexer          /bin/bash /entrypoint.sh    Up             0.0.0.0:9200->9200/tcp
-# wazuh-manager          /bin/bash /entrypoint.sh    Up             0.0.0.0:1514->1514/tcp
-# neo4j                  tini -g -- /startup/docker-entrypoint.sh neo4j   Up   0.0.0.0:7474->7474/tcp
-# prometheus             /bin/prometheus --config.file=/etc/prometheus/prometheus.yml   Up   0.0.0.0:9090->9090/tcp
-# grafana                /run.sh                          Up             0.0.0.0:3000->3000/tcp
-# node-exporter          /bin/node_exporter              Up             0.0.0.0:9100->9100/tcp
+# 檢查各服務狀態
+docker-compose -f docker-compose.main.yml ps
 ```
 
 ### 2. 功能驗證
@@ -366,10 +471,12 @@ docker-compose -f docker-compose.main.yml ps
 #### Wazuh Dashboard 驗證
 
 ```bash
-# 檢查 Wazuh Dashboard 可訪問性
-curl -k -u admin:SecretPassword https://localhost:443/api/agents
+# 訪問 Wazuh Dashboard
+curl -k https://localhost:443
 
-# 預期輸出：JSON 格式的代理列表
+# 使用預設認證登入
+# 用戶名: admin
+# 密碼: SecretPassword
 ```
 
 #### AI Agent 驗證
@@ -378,119 +485,269 @@ curl -k -u admin:SecretPassword https://localhost:443/api/agents
 # 檢查 AI Agent 健康狀態
 curl http://localhost:8000/health
 
-# 預期輸出
-# {"status": "healthy", "timestamp": "2024-12-XX..."}
-
 # 檢查指標端點
 curl http://localhost:8000/metrics
 
-# 預期輸出：Prometheus 格式的指標
+# 測試 API 端點
+curl -X POST http://localhost:8000/api/v1/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"test": "alert"}'
 ```
 
 #### Neo4j 驗證
 
 ```bash
-# 檢查 Neo4j 連接
-curl -u neo4j:wazuh-graph-2024 http://localhost:7474/db/data/
+# 訪問 Neo4j Browser
+curl http://localhost:7474
 
-# 預期輸出：Neo4j REST API 回應
+# 使用預設認證登入
+# 用戶名: neo4j
+# 密碼: wazuh-graph-2024
 ```
 
 #### 監控系統驗證
 
 ```bash
-# 檢查 Prometheus 狀態
-curl http://localhost:9090/api/v1/status/targets
+# 檢查 Prometheus
+curl http://localhost:9090/-/healthy
 
-# 檢查 Grafana 狀態
+# 檢查 Grafana
 curl http://localhost:3000/api/health
 
-# 預期輸出
-# {"database":"ok","version":"10.2.2"}
+# 訪問 Grafana Dashboard
+# 用戶名: admin
+# 密碼: wazuh-grafana-2024
 ```
 
 ### 3. 效能測試
 
 ```bash
-# 執行效能測試
-cd ai-agent-project
-python performance_test.py
+# 進入 AI Agent 容器
+docker-compose -f docker-compose.main.yml exec ai-agent bash
 
-# 預期輸出：效能指標報告
+# 執行效能測試
+python /app/performance_test.py
+
+# 執行功能測試
+python /app/test_stage3_functionality.py
 ```
 
 ---
 
 ## 故障排除
 
-### 常見問題
+### 常見問題與解決方案
 
-#### 1. 容器啟動失敗
+#### 1. 服務啟動失敗
 
+**症狀**: Docker 容器無法啟動或立即退出
+
+**解決方案**:
 ```bash
-# 檢查容器日誌
-docker-compose -f docker-compose.main.yml logs <service-name>
+# 檢查系統資源
+free -h && df -h
 
-# 常見解決方案
-# - 檢查記憶體是否足夠
-# - 確認端口是否被佔用
-# - 驗證環境變數配置
-```
+# 檢查 Docker 狀態
+docker system df
+docker system prune -f
 
-#### 2. 網路連接問題
+# 重新生成憑證
+docker-compose -f generate-indexer-certs.yml run --rm generator
 
-```bash
-# 檢查網路配置
-docker network ls
-docker network inspect wazuh-graphrag-network
-
-# 測試服務間連接
-docker exec wazuh-ai-agent ping wazuh.indexer
-docker exec wazuh-ai-agent ping neo4j
-```
-
-#### 3. 認證錯誤
-
-```bash
-# 重置認證
-docker-compose -f docker-compose.main.yml down
-docker volume rm wazuh-docker_single-node_wazuh-indexer-data
+# 清理並重新啟動
+docker-compose -f docker-compose.main.yml down -v
 docker-compose -f docker-compose.main.yml up -d
 ```
 
-#### 4. 效能問題
+#### 2. Neo4j 連接問題
 
+**症狀**: AI Agent 無法連接到 Neo4j
+
+**解決方案**:
 ```bash
-# 檢查系統資源
-docker stats
+# 檢查 Neo4j 日誌
+docker-compose -f docker-compose.main.yml logs neo4j
 
-# 調整記憶體配置
-# 在 docker-compose.main.yml 中增加記憶體限制
+# 重置 Neo4j 資料庫
+docker-compose -f docker-compose.main.yml down
+docker volume rm single-node_neo4j_data
+docker-compose -f docker-compose.main.yml up -d
+
+# 檢查 Neo4j 連接
+docker-compose -f docker-compose.main.yml exec ai-agent python -c "
+import os
+from neo4j import GraphDatabase
+uri = os.getenv('NEO4J_URI', 'bolt://neo4j:7687')
+driver = GraphDatabase.driver(uri, auth=(os.getenv('NEO4J_USER', 'neo4j'), os.getenv('NEO4J_PASSWORD', 'wazuh-graph-2024')))
+driver.verify_connectivity()
+print('Neo4j connection successful')
+"
+```
+
+#### 3. AI Agent 分析失敗
+
+**症狀**: 警報分析失敗或返回錯誤
+
+**解決方案**:
+```bash
+# 檢查 API 金鑰配置
+cat ai-agent-project/.env | grep API_KEY
+
+# 測試 API 連接
+docker-compose -f docker-compose.main.yml exec ai-agent python /app/verify_vectorization.py
+
+# 查看詳細錯誤日誌
+docker-compose -f docker-compose.main.yml logs ai-agent
+
+# 檢查環境變數
+docker-compose -f docker-compose.main.yml exec ai-agent env | grep -E "(API_KEY|OPENSEARCH|NEO4J)"
+```
+
+#### 4. OpenSearch 連接問題
+
+**症狀**: 無法連接到 OpenSearch
+
+**解決方案**:
+```bash
+# 檢查 OpenSearch 狀態
+docker-compose -f docker-compose.main.yml logs wazuh.indexer
+
+# 測試 OpenSearch 連接
+curl -u admin:SecretPassword -k https://localhost:9200/_cluster/health
+
+# 檢查索引模板
+curl -u admin:SecretPassword -k https://localhost:9200/_template/wazuh-alerts-vector-template
+```
+
+#### 5. 記憶體不足問題
+
+**症狀**: 服務頻繁重啟或效能下降
+
+**解決方案**:
+```bash
+# 調整 Neo4j 記憶體配置
+# 編輯 docker-compose.main.yml
+environment:
+  - NEO4J_dbms_memory_heap_max__size=2G  # 減少到 2GB
+  - NEO4J_dbms_memory_pagecache_size=512M  # 減少到 512MB
+
+# 調整 OpenSearch 記憶體
+environment:
+  - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m  # 減少到 512MB
+
+# 重新啟動服務
+docker-compose -f docker-compose.main.yml down
+docker-compose -f docker-compose.main.yml up -d
+```
+
+#### 6. SSL 憑證問題
+
+**症狀**: HTTPS 連接失敗
+
+**解決方案**:
+```bash
+# 重新生成 SSL 憑證
+docker-compose -f generate-indexer-certs.yml down -v
+docker-compose -f generate-indexer-certs.yml run --rm generator
+
+# 檢查憑證檔案
+ls -la config/wazuh_indexer_ssl_certs/
+
+# 重新啟動服務
+docker-compose -f docker-compose.main.yml down
+docker-compose -f docker-compose.main.yml up -d
 ```
 
 ### 日誌分析
 
-#### 關鍵日誌位置
+#### 查看服務日誌
 
 ```bash
-# Wazuh Manager 日誌
-docker logs wazuh-manager
+# 查看所有服務日誌
+docker-compose -f docker-compose.main.yml logs
 
-# AI Agent 日誌
-docker logs wazuh-ai-agent
+# 查看特定服務日誌
+docker-compose -f docker-compose.main.yml logs ai-agent
+docker-compose -f docker-compose.main.yml logs wazuh.indexer
+docker-compose -f docker-compose.main.yml logs neo4j
 
-# Neo4j 日誌
-docker logs neo4j
-
-# Prometheus 日誌
-docker logs prometheus
+# 即時監控日誌
+docker-compose -f docker-compose.main.yml logs -f ai-agent
 ```
 
-#### 日誌級別調整
+#### 常見錯誤訊息
 
-```python
-# 在 ai-agent-project/app/utils/config.py 中調整
-LOG_LEVEL = "DEBUG"  # 或 "INFO", "WARNING", "ERROR"
+1. **Connection refused**: 服務未啟動或端口被佔用
+2. **Authentication failed**: API 金鑰或認證資訊錯誤
+3. **Out of memory**: 系統記憶體不足
+4. **SSL certificate error**: SSL 憑證配置問題
+5. **Index not found**: OpenSearch 索引未正確創建
+
+### 效能調優
+
+#### 記憶體優化
+
+```bash
+# 調整 Neo4j 記憶體配置
+environment:
+  - NEO4J_dbms_memory_heap_max__size=4G
+  - NEO4J_dbms_memory_pagecache_size=1G
+
+# 調整 OpenSearch 記憶體
+environment:
+  - OPENSEARCH_JAVA_OPTS=-Xms2g -Xmx2g
+```
+
+#### 效能監控
+
+```bash
+# 監控系統資源使用
+docker stats
+
+# 檢查容器資源限制
+docker-compose -f docker-compose.main.yml exec ai-agent top
+
+# 監控 AI Agent 效能指標
+curl http://localhost:8000/metrics | grep -E "(alert_processing|api_call)"
+```
+
+---
+
+## 進階配置
+
+### 生產環境部署
+
+#### 高可用性配置
+
+```yaml
+# 多實例部署
+services:
+  ai-agent:
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+```
+
+#### 安全性配置
+
+```yaml
+# 網路隔離
+networks:
+  wazuh_network:
+    driver: bridge
+    internal: true
+
+# 資源限制
+services:
+  ai-agent:
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
 ```
 
 ### 備份與恢復
@@ -499,36 +756,32 @@ LOG_LEVEL = "DEBUG"  # 或 "INFO", "WARNING", "ERROR"
 
 ```bash
 # 備份 Neo4j 資料
-docker exec neo4j neo4j-admin dump --database=neo4j --to=/backups/
+docker-compose -f docker-compose.main.yml exec neo4j neo4j-admin dump --database=neo4j --to=/backups/
 
-# 備份 Wazuh 配置
-docker cp wazuh-manager:/var/ossec/etc ./backup/wazuh-config
-
-# 備份監控資料
-docker cp prometheus:/prometheus ./backup/prometheus-data
+# 備份 OpenSearch 資料
+curl -u admin:SecretPassword -X POST "https://localhost:9200/_snapshot/backup_repo/snapshot_$(date +%Y%m%d_%H%M%S)?wait_for_completion=true"
 ```
 
 #### 資料恢復
 
 ```bash
 # 恢復 Neo4j 資料
-docker exec neo4j neo4j-admin load --database=neo4j --from=/backups/
+docker-compose -f docker-compose.main.yml exec neo4j neo4j-admin load --from=/backups/neo4j.dump --database=neo4j --force
 
-# 恢復 Wazuh 配置
-docker cp ./backup/wazuh-config wazuh-manager:/var/ossec/etc
+# 恢復 OpenSearch 資料
+curl -u admin:SecretPassword -X POST "https://localhost:9200/_snapshot/backup_repo/snapshot_name/_restore"
 ```
 
 ---
 
 ## 總結
 
-本部署指南涵蓋了 Wazuh GraphRAG 整合監控系統的完整部署流程。通過遵循這些步驟，您可以成功部署一個功能完整的智能安全運營平台。
+本部署指南提供了 Wazuh GraphRAG 系統的完整部署流程，從環境準備到服務驗證，涵蓋了所有必要的步驟和配置。通過遵循本指南，您可以成功部署一個功能完整的智能安全運營系統。
 
-部署完成後，建議：
+對於生產環境部署，建議：
+1. 根據實際需求調整硬體配置
+2. 實施適當的安全措施
+3. 建立監控和備份策略
+4. 定期更新和維護系統
 
-1. **定期備份**：建立自動化備份機制
-2. **監控維護**：定期檢查系統效能和日誌
-3. **安全更新**：保持系統和依賴套件的最新版本
-4. **效能調優**：根據實際使用情況調整配置參數
-
-如需進一步協助，請參考專案的其他文件或提交 Issue。 
+如有任何問題，請參考故障排除章節或聯繫技術支援團隊。 

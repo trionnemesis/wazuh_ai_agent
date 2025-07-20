@@ -12,7 +12,7 @@
 2. [核心技術組件](#核心技術組件)
 3. [GraphRAG 四階段演進](#graphrag-四階段演進)
 4. [模組化架構實施](#模組化架構實施)
-5. [效能與監控](#效能與監控)
+5. [效能與擴展性](#效能與擴展性)
 6. [未來發展規劃](#未來發展規劃)
 
 ---
@@ -62,12 +62,6 @@ flowchart TD
         LLM[Language Model APIs]
     end
     
-    subgraph "監控與管理"
-        PROM[Prometheus<br/>指標收集]
-        GRAF[Grafana<br/>監控視覺化]
-        NE[Node Exporter<br/>系統指標]
-    end
-    
     %% 資料流連接
     WM --> FA
     FA --> ES
@@ -83,11 +77,6 @@ flowchart TD
     ES --> OS
     RS --> OS
     RS --> NEO
-    
-    %% 監控連接
-    FA --> PROM
-    PROM --> GRAF
-    NE --> PROM
 ```
 
 ### 技術棧詳解
@@ -100,8 +89,6 @@ flowchart TD
 | **語言模型** | Claude 3 Haiku / Gemini 1.5 Flash | 可配置多提供商 | ~800ms/分析 |
 | **GraphRAG框架** | 模組化圖形檢索器 + 增強提示詞 | 四階段演進式架構 | k=5相似+圖形路徑 |
 | **API服務** | FastAPI + APScheduler | 異步處理, 60秒輪詢 | 10警報/批次 |
-| **容器編排** | Docker Compose | 多節點部署, SSL加密 | 完整隔離環境 |
-| **監控系統** | Prometheus + Grafana | 指標收集與視覺化 | 即時效能監控 |
 
 ---
 
@@ -149,6 +136,28 @@ app/
 └── utils/                  # 工具模組
 ```
 
+#### 服務層接口設計
+```python
+class BaseService:
+    def __init__(self, config: Config):
+        self.config = config
+        self.logger = get_logger(self.__class__.__name__)
+
+class EmbeddingService(BaseService):
+    def embed_text(self, text: str) -> List[float]:
+        """向量化文字內容"""
+        pass
+
+class GraphService(BaseService):
+    def extract_entities(self, alert: Dict) -> List[Dict]:
+        """提取安全實體"""
+        pass
+    
+    def build_relationships(self, entities: List[Dict]) -> List[Dict]:
+        """建立實體關係"""
+        pass
+```
+
 ---
 
 ## GraphRAG 四階段演進
@@ -160,12 +169,47 @@ app/
 - **索引構建**: 在 OpenSearch 中建立 HNSW 向量索引，支援毫秒級相似度檢索
 - **MRL 支援**: Matryoshka Representation Learning，支援 1-768 維度調整
 
+**技術實現**:
+```python
+class EmbeddingService:
+    def embed_text(self, text: str) -> List[float]:
+        """將文字轉換為 768 維語義向量"""
+        return self.client.embed_content(
+            model="models/text-embedding-004",
+            content=text,
+            task_type="retrieval_document"
+        )
+```
+
 ### Stage 2: 核心RAG實現 ✅
 
 **核心能力**: 歷史檢索與語境增強
 - **歷史檢索**: 通過 k-NN 算法檢索語義相似的歷史警報 (k=5)
 - **語境增強**: 將歷史分析結果作為語境輸入至 LLM
 - **智能過濾**: 僅檢索已經過 AI 分析的高品質警報
+
+**檢索策略**:
+```python
+def find_similar_alerts(vector: List[float], k: int = 5) -> List[Dict]:
+    """k-NN 向量相似度搜尋"""
+    query = {
+        "size": k,
+        "query": {
+            "bool": {
+                "must": [{"exists": {"field": "ai_analysis"}}],
+                "filter": [{"range": {"@timestamp": {"gte": "now-30d"}}}]
+            }
+        },
+        "knn": {
+            "alert_embedding": {
+                "vector": vector,
+                "k": k,
+                "num_candidates": 50
+            }
+        }
+    }
+    return opensearch_client.search(index="wazuh-alerts-*", body=query)
+```
 
 ### Stage 3: AgenticRAG 代理分析 ✅
 
@@ -174,6 +218,28 @@ app/
 - **代理決策**: 基於警報特徵智能選擇檢索策略
 - **上下文聚合**: 將多源資料整合為統一分析語境
 
+**決策引擎**:
+```python
+def determine_contextual_queries(alert: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """基於警報特徵決定檢索策略"""
+    queries = []
+    
+    # 基於警報類型的策略選擇
+    if alert.get("rule", {}).get("level") >= 12:
+        queries.extend([
+            {"type": "attack_path", "depth": 3},
+            {"type": "threat_actor", "timeframe": "30d"},
+            {"type": "similar_incidents", "k": 10}
+        ])
+    else:
+        queries.extend([
+            {"type": "similar_alerts", "k": 5},
+            {"type": "related_entities", "depth": 2}
+        ])
+    
+    return queries
+```
+
 ### Stage 4: GraphRAG 圖形威脅分析 ✅
 
 **核心能力**: 圖形關係分析與攻擊路徑識別
@@ -181,6 +247,22 @@ app/
 - **關係建構**: 建立實體間的威脅關聯網路
 - **路徑分析**: 識別攻擊路徑和威脅傳播模式
 - **圖形檢索**: 基於圖形結構的智能檢索
+
+**Cypher 路徑記號創新**:
+```python
+def generate_cypher_path_notation(attack_path: List[Dict]) -> str:
+    """生成 Cypher 路徑記號"""
+    path_notation = []
+    
+    for i, step in enumerate(attack_path):
+        if i == 0:
+            path_notation.append(f"({step['source_type']}:{step['source']})")
+        
+        path_notation.append(f"-[{step['relationship']}: {step['details']}]->")
+        path_notation.append(f"({step['target_type']}:{step['target']})")
+    
+    return " ".join(path_notation)
+```
 
 ---
 
@@ -201,70 +283,76 @@ class EmbeddingService(BaseService):
         pass
 
 class GraphService(BaseService):
-    def create_entities(self, alert: Dict) -> List[Dict]:
-        """創建圖形實體"""
+    def extract_entities(self, alert: Dict) -> List[Dict]:
+        """提取安全實體"""
         pass
     
     def build_relationships(self, entities: List[Dict]) -> List[Dict]:
         """建立實體關係"""
         pass
+    
+    def query_attack_paths(self, source_entity: str, depth: int = 3) -> List[Dict]:
+        """查詢攻擊路徑"""
+        pass
 
 class RetrievalService(BaseService):
-    def vector_search(self, vector: List[float], k: int = 5) -> List[Dict]:
-        """向量相似度搜尋"""
+    def vector_search(self, query_vector: List[float], k: int = 5) -> List[Dict]:
+        """向量相似度搜索"""
         pass
     
-    def graph_search(self, entities: List[Dict]) -> List[Dict]:
-        """圖形關係搜尋"""
+    def graph_search(self, entity: str, relationship_type: str = None) -> List[Dict]:
+        """圖形關係搜索"""
+        pass
+    
+    def hybrid_search(self, alert: Dict) -> Dict:
+        """混合檢索策略"""
+        pass
+
+class AnalysisService(BaseService):
+    def analyze_alert(self, alert: Dict, context: Dict) -> Dict:
+        """分析警報並生成威脅情報"""
+        pass
+    
+    def generate_attack_graph(self, alert: Dict) -> Dict:
+        """生成攻擊圖譜"""
         pass
 ```
 
-### 核心層實現
+### API 層設計
 
 ```python
-class GraphEntityExtractor:
-    """實體提取器 - 從警報中提取安全實體"""
-    
-    def extract_entities(self, alert: Dict) -> List[Dict]:
-        # 提取 IP 地址
-        ips = self.extract_ips(alert)
-        
-        # 提取域名
-        domains = self.extract_domains(alert)
-        
-        # 提取用戶帳號
-        users = self.extract_users(alert)
-        
-        return self.normalize_entities(ips + domains + users)
+from fastapi import APIRouter, HTTPException
+from app.services.factory import ServiceFactory
 
-class GraphRelationshipBuilder:
-    """關係建構器 - 建立實體間的威脅關聯"""
-    
-    def build_relationships(self, entities: List[Dict], alert: Dict) -> List[Dict]:
-        relationships = []
-        
-        # 建立攻擊者與目標的關係
-        for attacker in self.get_attackers(entities):
-            for target in self.get_targets(entities):
-                relationships.append({
-                    'source': attacker['id'],
-                    'target': target['id'],
-                    'type': 'ATTACKS',
-                    'properties': {
-                        'timestamp': alert['@timestamp'],
-                        'alert_id': alert['_id'],
-                        'confidence': self.calculate_confidence(alert)
-                    }
-                })
-        
-        return relationships
+router = APIRouter()
+service_factory = ServiceFactory()
+
+@router.post("/analyze")
+async def analyze_alert(alert: Dict):
+    """分析單個警報"""
+    try:
+        analysis_service = service_factory.get_analysis_service()
+        result = await analysis_service.analyze_alert(alert)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/attack-graphs/{alert_id}")
+async def get_attack_graph(alert_id: str):
+    """獲取攻擊圖譜"""
+    try:
+        graph_service = service_factory.get_graph_service()
+        graph = await graph_service.get_attack_graph(alert_id)
+        return graph
+    except Exception as e:
+        raise HTTPException(status_code=404, detail="Attack graph not found")
 ```
 
 ---
 
-## 效能與監控
+## 效能與擴展性
 
-### 關鍵效能指標
+### 效能基準
 
 | **指標項目** | **當前數值** | **性能基準** |
 |------------|------------|------------|
@@ -274,29 +362,35 @@ class GraphRelationshipBuilder:
 | **攻擊路徑識別率** | 91%+ | 行業頂尖水準 |
 | **主程式碼行數** | 3,070+ 行 (模組化) | 企業級規模 |
 
-### 監控架構
+### 擴展性設計
 
-```mermaid
-flowchart LR
-    AI[AI Agent] --> MET[Prometheus Metrics]
-    MET --> PRO[Prometheus]
-    PRO --> GRA[Grafana]
-    GRA --> DASH[Dashboard]
+#### 水平擴展
+- **服務分離**: 各服務可獨立部署和擴展
+- **負載均衡**: 支援多實例部署
+- **資料庫分片**: Neo4j 和 OpenSearch 支援叢集部署
+
+#### 垂直擴展
+- **記憶體優化**: 動態記憶體分配
+- **CPU 優化**: 平行處理和異步操作
+- **I/O 優化**: 連接池和快取機制
+
+### 效能調優策略
+
+```python
+# 平行處理配置
+class ParallelProcessor:
+    def __init__(self, max_workers: int = 4):
+        self.executor = ThreadPoolExecutor(max_workers=max_workers)
+    
+    async def process_batch(self, alerts: List[Dict]) -> List[Dict]:
+        """平行處理警報批次"""
+        loop = asyncio.get_event_loop()
+        tasks = [
+            loop.run_in_executor(self.executor, self.process_single_alert, alert)
+            for alert in alerts
+        ]
+        return await asyncio.gather(*tasks)
 ```
-
-### 關鍵監控指標
-
-1. **延遲指標**
-   - `alert_processing_duration_seconds`: 處理單個警報的總耗時
-   - `api_call_duration_seconds`: 各階段 API 呼叫的耗時
-
-2. **吞吐量指標**
-   - `alerts_processed_total`: 已成功處理的警報總數
-   - `new_alerts_found_total`: 每次輪詢發現的新警報數
-
-3. **錯誤率指標**
-   - `alert_processing_errors_total`: 處理失敗的警報總數
-   - `graph_retrieval_fallback_total`: 從圖形檢索降級到傳統檢索的次數
 
 ---
 
@@ -305,43 +399,33 @@ flowchart LR
 ### Stage 5: 資安獵人 Agent (規劃中)
 
 **核心能力**: 主動威脅狩獵
-- **Agent 間通訊協議設計**
-- **威脅狩獵引擎開發**
-- **外部威脅情資整合**
-- **智能告警系統實施**
+- **威脅狩獵引擎**: 基於 MITRE ATT&CK 框架的主動狩獵
+- **外部威脅情資**: 整合多源威脅情報
+- **智能告警系統**: 基於機器學習的異常檢測
 
 ### Stage 6: 執行者 Agent (Q2 2025)
 
 **核心能力**: 閉環自動化防禦
-- **安全授權框架設計**
-- **行動模組工具箱開發**
-- **稽核與回饋機制**
-- **系統整合與測試**
+- **安全授權框架**: 基於風險的自動化決策
+- **行動模組工具箱**: 可配置的自動化響應
+- **稽核與回饋機制**: 完整的行動追蹤和學習
 
 ### 技術演進路線
 
 ```mermaid
-gantt
-    title Wazuh GraphRAG 技術演進路線
-    dateFormat  YYYY-MM-DD
-    section 已完成
-    Stage 1: 基礎向量化    :done, stage1, 2024-01-01, 2024-03-01
-    Stage 2: 核心 RAG      :done, stage2, 2024-03-01, 2024-06-01
-    Stage 3: AgenticRAG    :done, stage3, 2024-06-01, 2024-09-01
-    Stage 4: GraphRAG      :done, stage4, 2024-09-01, 2024-12-01
-    
-    section 進行中
-    模組化重構            :active, refactor, 2024-11-01, 2024-12-31
-    
-    section 規劃中
-    Stage 5: 獵人 Agent    :stage5, 2025-01-01, 2025-06-01
-    Stage 6: 執行者 Agent  :stage6, 2025-06-01, 2025-12-01
+timeline
+    title GraphRAG 技術演進路線
+    2024 Q1 : Stage 1-2: 基礎 RAG
+    2024 Q2 : Stage 3: AgenticRAG
+    2024 Q3-Q4 : Stage 4: GraphRAG
+    2025 Q1 : Stage 5: 資安獵人
+    2025 Q2 : Stage 6: 執行者 Agent
 ```
 
 ---
 
 ## 總結
 
-Wazuh GraphRAG 系統通過四階段演進式架構，實現了從基礎向量化到圖形威脅分析的完整技術棧。系統採用模組化設計，具備良好的可擴展性和可維護性，為企業級安全運營提供了強大的智能分析能力。
+Wazuh GraphRAG 系統通過四階段演進式架構，實現了從基礎向量化到圖形威脅分析的完整技術棧。模組化設計確保了系統的可維護性和擴展性，而 Cypher 路徑記號等創新技術則大幅提升了威脅分析的深度和準確性。
 
-未來將繼續發展 Agent to Agent 協作生態系，實現 24/7 全自動威脅監控、分析、狩獵與防禦，大幅提升 SOC 團隊的威脅應對能力。 
+系統已達到生產就緒狀態，能夠為企業級 SOC 團隊提供強大的威脅分析與自動化防禦能力。 

@@ -91,7 +91,7 @@ AI Agent (暴露指標) -> Prometheus (抓取並儲存指標) -> Grafana (查詢
   - 詳細的狀態報告
 
 #### 📚 文檔
-- **`MONITORING_SETUP.md`**: 完整的部署和使用指南
+- **[docs/MONITORING.md](../../../../docs/MONITORING.md)**: 完整的部署和使用指南
 - **`PROMETHEUS_GRAFANA_INTEGRATION.md`**: 本報告
 
 ## 🎯 關鍵特性

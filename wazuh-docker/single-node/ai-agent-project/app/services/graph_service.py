@@ -161,10 +161,17 @@ async def execute_graph_retrieval(cypher_queries: List[Dict[str, Any]], alert: D
         Dictionary 包含檢索到的圖形子網和結構化上下文
     """
     from ..services.neo4j_service import get_neo4j_driver
-    from ..services.metrics import api_call_duration, api_errors_total
+    from ..services.metrics import (
+        api_call_duration, api_errors_total,
+        record_graph_retrieval_attempt, record_graph_retrieval_fallback,
+        record_graph_retrieval_success, record_graph_query_time
+    )
     import asyncio
     
     logger.info(f"🔗 GRAPH-NATIVE RETRIEVAL: Processing {len(cypher_queries)} Cypher queries")
+    
+    # 記錄圖形檢索嘗試
+    record_graph_retrieval_attempt()
     
     context_data = {
         'attack_paths': [],           # 攻擊路徑子圖
@@ -182,6 +189,8 @@ async def execute_graph_retrieval(cypher_queries: List[Dict[str, Any]], alert: D
     neo4j_driver = get_neo4j_driver()
     if not neo4j_driver:
         logger.warning("Neo4j driver not available - falling back to traditional retrieval")
+        # 記錄降級
+        record_graph_retrieval_fallback()
         # 降級到傳統檢索
         return await _fallback_to_traditional_retrieval(alert)
     
@@ -207,7 +216,10 @@ async def execute_graph_retrieval(cypher_queries: List[Dict[str, Any]], alert: D
                 result = await session.run(cypher_template, parameters)
                 records = await result.data()
                 neo4j_duration = (datetime.now() - neo4j_start).total_seconds()
+                
+                # 記錄單個查詢的執行時間
                 api_call_duration.labels(stage='neo4j').observe(neo4j_duration)
+                record_graph_query_time(neo4j_duration)
                 
                 logger.info(f"   ✅ {query_name}: {purpose} - {len(records)} results ({neo4j_duration:.3f}s)")
                 return {
@@ -232,13 +244,19 @@ async def execute_graph_retrieval(cypher_queries: List[Dict[str, Any]], alert: D
         )
         
         # 處理查詢結果
+        successful_queries = 0
         for result in query_results:
             if result and not result.get('error'):
+                successful_queries += 1
                 await _categorize_graph_results(
                     result['name'], 
                     result['records'], 
                     context_data
                 )
+        
+        # 如果有成功的查詢，記錄成功
+        if successful_queries > 0:
+            record_graph_retrieval_success()
     
     # 生成檢索摘要
     total_components = sum(len(results) for results in context_data.values())

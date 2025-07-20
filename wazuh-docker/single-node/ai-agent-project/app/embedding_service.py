@@ -18,6 +18,7 @@ import logging
 import asyncio
 from typing import List, Optional, Dict, Any
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from .utils.text_chunking import SmartTextChunker, get_optimal_text, smart_chunk_text
 
 # 獲取當前模組的日誌記錄器
 logger = logging.getLogger(__name__)
@@ -82,6 +83,10 @@ class GeminiEmbeddingService:
         # 批次處理配置
         self.batch_size = int(os.getenv("EMBEDDING_BATCH_SIZE", "20"))
         self.max_concurrent_batches = int(os.getenv("EMBEDDING_MAX_CONCURRENT", "3"))
+        
+        # 文本分塊配置
+        self.max_text_length = int(os.getenv("EMBEDDING_MAX_TEXT_LENGTH", "8000"))
+        self.chunker = SmartTextChunker(max_chunk_size=self.max_text_length)
         
         # 初始化 Google Gemini 客戶端
         self.client = self._initialize_client()
@@ -235,8 +240,8 @@ class GeminiEmbeddingService:
             if not text or not text.strip():
                 cleaned_texts.append("empty content")
             else:
-                # 限制文字長度以避免 API 限制
-                cleaned_text = text.strip()[:8000]  # Gemini API 通常有文字長度限制
+                # 使用智能文本分塊替代硬截斷
+                cleaned_text = get_optimal_text(text.strip(), self.max_text_length)
                 cleaned_texts.append(cleaned_text)
         
         try:
@@ -273,7 +278,7 @@ class GeminiEmbeddingService:
             text = "empty query"
         
         # 清理和預處理文字
-        cleaned_text = text.strip()[:8000]  # 限制文字長度
+        cleaned_text = get_optimal_text(text.strip(), self.max_text_length)
         
         try:
             vector = await self._retry_embedding_operation(
