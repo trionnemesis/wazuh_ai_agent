@@ -44,6 +44,9 @@
 
 ## 📚 文件導航
 
+### 📖 文件分類目錄
+- **[完整文件目錄](docs/DOCUMENT_CATALOG.md)** - 所有文件的詳細分類與使用指引
+
 ### 🎯 主要技術文件
 
 | 文件 | 說明 | 適合對象 |
@@ -51,6 +54,11 @@
 | **[系統架構設計](docs/ARCHITECTURE.md)** | 完整技術架構與核心組件 | 架構師、技術主管 |
 | **[部署指南](docs/DEPLOYMENT.md)** | 詳細部署與配置說明 | DevOps、系統管理員 |
 | **[監控系統指南](docs/MONITORING.md)** | 監控配置與運維指南 | 運維工程師 |
+
+### 📊 專案報告與總結
+- **[專案報告總覽](docs/PROJECT_REPORTS.md)** - 所有開發報告的快速索引
+- **[模組化重構總結](docs/REFACTORING_SUMMARY.md)** - 系統重構的詳細成果
+- **[測試策略文件](docs/TESTING_STRATEGY.md)** - 完整測試框架與實踐
 
 ### 🗂️ 模組級文件
 
@@ -129,9 +137,16 @@ NEO4J_PASSWORD=wazuh-graph-2024
 wazuh_ai_agent/
 ├── 📄 README.md                           # 專案總覽與快速開始
 ├── 📁 docs/                               # 主要技術文檔
+│   ├── 📄 DOCUMENT_CATALOG.md             # 📚 完整文件分類目錄
 │   ├── 📄 ARCHITECTURE.md                 # 系統架構設計
 │   ├── 📄 DEPLOYMENT.md                   # 部署指南
-│   └── 📄 MONITORING.md                   # 監控系統指南
+│   ├── 📄 MONITORING.md                   # 監控系統指南
+│   ├── 📄 PROJECT_REPORTS.md              # 專案報告索引
+│   ├── 📄 REFACTORING_SUMMARY.md          # 模組化重構總結
+│   ├── 📄 TESTING_STRATEGY.md             # 測試策略文件
+│   ├── 📄 TESTING_OPTIMIZATION_REPORT.md  # 測試優化報告
+│   ├── 📄 CLEANUP_COMPLETION_REPORT.md    # 清理完成報告
+│   └── 📄 AUTOMATION_OPTIMIZATION_REPORT.md # 自動化優化報告
 ├── 📁 legacy/                             # 舊版本檔案
 └── 📁 wazuh-docker/                       # Wazuh Docker 部署核心
     ├── 📁 single-node/                    # 單節點部署 (主要)
@@ -140,6 +155,21 @@ wazuh_ai_agent/
     │   └── 📁 ai-agent-project/           # AI Agent 核心專案
     └── 📁 multi-node/                     # 多節點部署
 ```
+
+---
+
+## 📖 快速文件查詢
+
+不確定要查看哪份文件？請參考以下指引：
+
+| 我想要... | 查看文件 |
+|-----------|----------|
+| 了解系統架構 | [系統架構設計](docs/ARCHITECTURE.md) |
+| 部署系統 | [部署指南](docs/DEPLOYMENT.md) |
+| 設置監控 | [監控系統指南](docs/MONITORING.md) |
+| 查看所有文件 | [完整文件目錄](docs/DOCUMENT_CATALOG.md) |
+| 了解專案進展 | [專案報告總覽](docs/PROJECT_REPORTS.md) |
+| 了解測試策略 | [測試策略文件](docs/TESTING_STRATEGY.md) |
 
 ---
 
@@ -163,8 +193,9 @@ wazuh_ai_agent/
 
 如有問題或建議，請：
 1. 查看 [部署指南](docs/DEPLOYMENT.md) 的故障排除章節
-2. 開啟 [GitHub Issue](https://github.com/your-org/wazuh_ai_agent/issues)
-3. 聯繫專案維護團隊
+2. 查閱 [完整文件目錄](docs/DOCUMENT_CATALOG.md) 尋找相關文件
+3. 開啟 [GitHub Issue](https://github.com/your-org/wazuh_ai_agent/issues)
+4. 聯繫專案維護團隊
 
 
 

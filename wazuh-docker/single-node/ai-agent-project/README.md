@@ -1,5 +1,7 @@
 # AI Agent 專案 - Wazuh GraphRAG 智能分析模組
 
+> 📚 **查看完整專案文件**: [文件目錄](../../../docs/DOCUMENT_CATALOG.md) | [系統架構](../../../docs/ARCHITECTURE.md) | [部署指南](../../../docs/DEPLOYMENT.md)
+
 ## 📋 模組概述
 
 AI Agent 是 Wazuh GraphRAG 系統的核心智能分析模組，實現了四階段演進式的圖形檢索增強生成架構。本模組負責：
