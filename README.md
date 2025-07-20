@@ -8,6 +8,22 @@
 [![GraphRAG Status](https://img.shields.io/badge/GraphRAG-Stage_4_完成-success.svg)](https://github.com)
 [![Refactored](https://img.shields.io/badge/Architecture-Modular_Services-success.svg)](https://github.com)
 
+## 📚 文件導航
+
+| 文件 | 說明 | 適合對象 |
+|------|------|----------|
+| **[本文件 (README.md)](README.md)** | 專案總覽、快速開始、部署指南 | 所有使用者 |
+| **[技術白皮書 (MERGED_DOCUMENTATION.md)](MERGED_DOCUMENTATION.md)** | 完整架構設計、核心流程、技術決策 | 架構師、技術主管 |
+| **[統一堆疊指南](wazuh-docker/single-node/UNIFIED_STACK_README.md)** | 詳細部署與配置說明 | DevOps、系統管理員 |
+| **[部署摘要](wazuh-docker/single-node/DEPLOYMENT_SUMMARY.md)** | 快速部署檢查清單 | 部署工程師 |
+| **[模組化架構指南](wazuh-docker/single-node/ai-agent-project/app/REFACTORING_GUIDE.md)** | 模組化重構詳解 | 開發人員 |
+
+### 🗂️ 模組級文件
+
+- **[AI Agent 模組](wazuh-docker/single-node/ai-agent-project/README.md)** - AI 代理服務詳細說明
+- **[監控設置](wazuh-docker/single-node/ai-agent-project/docs/MONITORING_SETUP.md)** - Prometheus/Grafana 配置
+- **[效能優化](wazuh-docker/single-node/ai-agent-project/docs/PERFORMANCE_OPTIMIZATION_GUIDE.md)** - 系統調優指南
+
 ## 🎯 專案概述
 
 本專案實現了業界首創的 **四階段演進式 GraphRAG (圖形檢索增強生成) 架構**，專門針對 Wazuh SIEM 系統的智能威脅分析。結合 Neo4j 圖形資料庫構建威脅實體關係網路，配合 Google Gemini Embedding 的語義向量化與 Anthropic Claude/Google Gemini 的分析能力，實現深度威脅關聯分析、攻擊路徑識別與專業安全建議生成。
@@ -582,6 +598,7 @@ docker-compose -f docker-compose.main.yml exec ai-agent python /app/migrate_to_m
 - **[統一堆疊使用指南](wazuh-docker/single-node/UNIFIED_STACK_README.md)**: 詳細的部署與使用說明
 - **[部署總結](wazuh-docker/single-node/DEPLOYMENT_SUMMARY.md)**: 快速部署指引
 - **[重構總結](wazuh-docker/single-node/REFACTORING_SUMMARY.md)**: 模組化重構說明
+- **[遷移指南](wazuh-docker/single-node/ai-agent-project/MIGRATION_GUIDE.md)**: 從 main.py 遷移到模組化架構的指南
 
 ### 技術文件
 - **[實作總結](wazuh-docker/single-node/ai-agent-project/app/IMPLEMENTATION_SUMMARY.md)**: AgenticRAG 技術實作詳解
@@ -592,6 +609,9 @@ docker-compose -f docker-compose.main.yml exec ai-agent python /app/migrate_to_m
 ### 監控與效能
 - **[監控設置指南](wazuh-docker/single-node/ai-agent-project/docs/MONITORING_SETUP.md)**: Prometheus + Grafana 設置
 - **[效能優化指南](wazuh-docker/single-node/ai-agent-project/docs/PERFORMANCE_OPTIMIZATION_GUIDE.md)**: 系統效能調校
+
+### 模組文件
+- **[AI Agent 模組說明](wazuh-docker/single-node/ai-agent-project/README.md)**: AI 代理服務詳細說明
 
 ---
 

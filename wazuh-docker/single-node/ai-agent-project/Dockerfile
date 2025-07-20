@@ -29,4 +29,4 @@ EXPOSE 8000
 # 定義容器啟動命令
 # 使用 uvicorn ASGI 伺服器執行 FastAPI 應用程式
 # 綁定到所有網路介面以允許外部存取
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main_new:app", "--host", "0.0.0.0", "--port", "8000"]
