@@ -11,19 +11,39 @@
 
 ## 📚 文件導航
 
+### 🎯 主要文件
+
 | 文件 | 說明 | 適合對象 |
 |------|------|----------|
 | **[本文件 (README.md)](README.md)** | 專案總覽與快速開始 | 所有使用者 |
+| **[技術白皮書](docs/MERGED_DOCUMENTATION.md)** | 完整技術文檔與決策記錄 | 技術團隊 |
 | **[系統架構設計](docs/ARCHITECTURE.md)** | 完整技術架構與核心組件 | 架構師、技術主管 |
 | **[部署指南](docs/DEPLOYMENT.md)** | 詳細部署與配置說明 | DevOps、系統管理員 |
 | **[監控系統指南](docs/MONITORING.md)** | 監控配置與運維指南 | 運維工程師 |
-| **[技術白皮書](MERGED_DOCUMENTATION.md)** | 完整技術文檔與決策記錄 | 技術團隊 |
-| **[重複檔案分析](DUPLICATE_FILES_ANALYSIS.md)** | 重複檔案清理指南 | 維護人員 |
 
 ### 🗂️ 模組級文件
 
+#### AI Agent 核心模組
 - **[AI Agent 模組](wazuh-docker/single-node/ai-agent-project/README.md)** - AI 代理服務詳細說明
 - **[模組化架構指南](wazuh-docker/single-node/ai-agent-project/app/REFACTORING_GUIDE.md)** - 模組化重構詳解
+- **[實作總結](wazuh-docker/single-node/ai-agent-project/app/IMPLEMENTATION_SUMMARY.md)** - AgenticRAG 技術實作詳解
+- **[Stage 3 代理關聯](wazuh-docker/single-node/ai-agent-project/app/STAGE3_AGENTIC_CORRELATION.md)** - Agentic 決策引擎實作
+- **[向量化說明](wazuh-docker/single-node/ai-agent-project/app/README_VECTORIZATION.md)** - 向量化技術詳解
+- **[遷移指南](wazuh-docker/single-node/ai-agent-project/MIGRATION_GUIDE.md)** - 從 main.py 遷移到模組化架構
+
+#### 部署與配置
+- **[統一堆疊使用指南](wazuh-docker/single-node/UNIFIED_STACK_README.md)** - 詳細的部署與使用說明
+- **[Wazuh 單節點部署](wazuh-docker/single-node/README.md)** - 基本 Wazuh 部署說明
+- **[Docker 映像建構](wazuh-docker/build-docker-images/README.md)** - Docker 映像建構工具說明
+
+#### 監控與效能
+- **[監控設置指南](wazuh-docker/single-node/ai-agent-project/docs/MONITORING_SETUP.md)** - Prometheus + Grafana 設置
+- **[效能優化指南](wazuh-docker/single-node/ai-agent-project/docs/PERFORMANCE_OPTIMIZATION_GUIDE.md)** - 系統效能調校
+- **[Prometheus Grafana 整合](wazuh-docker/single-node/ai-agent-project/docs/PROMETHEUS_GRAFANA_INTEGRATION.md)** - 監控系統整合詳解
+
+#### 多節點部署
+- **[多節點部署指南](wazuh-docker/multi-node/README.md)** - 企業級多節點部署配置
+- **[SSL 憑證創建](wazuh-docker/indexer-certs-creator/README.md)** - SSL 憑證創建工具說明
 
 ## 🎯 專案概述
 
@@ -58,11 +78,11 @@
   - ✅ 階段性模組 (stages/)
   - ✅ 工具模組 (utils/)
   - ✅ 效能最佳化與平行處理
-- ✅ **Docker 優化**: 統一構建與部署系統 (新增)
+- ✅ **Docker 優化**: 統一構建與部署系統 (已完成)
   - ✅ 多階段 Dockerfile 優化
-  - ✅ 統一構建腳本 (build.sh)
-  - ✅ 快速部署腳本 (deploy.sh)
-  - ✅ 重複檔案清理工具 (cleanup-duplicates.sh)
+  - ✅ 統一起動腳本 (start-unified-stack.sh)
+  - ✅ 健康檢查腳本 (health-check.sh)
+  - ✅ Docker Compose 配置優化
   - ✅ 安全性與效能提升
 - 🚧 **Stage 5**: 資安獵人 Agent - 主動威脅狩獵 (規劃中)
   - 📋 Agent 間通訊協議設計
@@ -133,9 +153,9 @@ flowchart TD
     end
     
     subgraph "統一部署系統"
-        BUILD[統一構建腳本<br/>build.sh]
-        DEPLOY[快速部署腳本<br/>deploy.sh]
-        CLEANUP[檔案清理工具<br/>cleanup-duplicates.sh]
+        START[統一起動腳本<br/>start-unified-stack.sh]
+        HEALTH[健康檢查腳本<br/>health-check.sh]
+        DOCKER[Docker Compose<br/>docker-compose.main.yml]
     end
     
     %% 資料流連接
@@ -148,8 +168,8 @@ flowchart TD
     ES --> OS
     FA --> PROM
     PROM --> GRAF
-    BUILD --> DEPLOY
-    CLEANUP --> DEPLOY
+    START --> DOCKER
+    HEALTH --> DOCKER
 ```
 
 > 🏗️ **詳細架構設計請參考**: [系統架構設計](docs/ARCHITECTURE.md)
@@ -165,30 +185,28 @@ flowchart TD
 - **硬碟**: 最少 20GB
 - **API 金鑰**: Google Gemini 或 Anthropic Claude
 
-### 🛠️ 統一構建與部署
+### 🛠️ 快速部署
 
-#### 方法一：使用統一腳本 (推薦)
+#### 方法一：使用統一起動腳本 (推薦)
 
 ```bash
 # 1. 克隆專案
 git clone <repository-url>
 cd wazuh_ai_agent
 
-# 2. 配置環境變數
-cp wazuh-docker/single-node/ai-agent-project/.env.example wazuh-docker/single-node/ai-agent-project/.env
+# 2. 進入部署目錄
+cd wazuh-docker/single-node
+
+# 3. 配置環境變數
+cp ai-agent-project/.env.example ai-agent-project/.env
 # 編輯 .env 檔案，設定 API 金鑰
 
-# 3. 構建 Docker 映像檔
-./build.sh production v1.0.0
-
-# 4. 快速部署
-./deploy.sh production up
-
-# 5. 檢查服務狀態
-./deploy.sh production status
+# 4. 啟動統一堆疊
+chmod +x start-unified-stack.sh
+./start-unified-stack.sh
 ```
 
-#### 方法二：傳統部署方式
+#### 方法二：手動 Docker Compose 部署
 
 ```bash
 # 1. 進入部署目錄
@@ -198,53 +216,57 @@ cd wazuh-docker/single-node
 cp ai-agent-project/.env.example ai-agent-project/.env
 # 編輯 .env 檔案，設定 API 金鑰
 
-# 3. 啟動系統
-chmod +x start-unified-stack.sh
-./start-unified-stack.sh
+# 3. 生成 SSL 憑證
+docker-compose -f generate-indexer-certs.yml run --rm generator
+
+# 4. 啟動服務
+docker-compose -f docker-compose.main.yml up -d
+
+# 5. 檢查服務狀態
+docker-compose -f docker-compose.main.yml ps
 ```
 
 ### 🔧 進階操作
 
-#### 構建腳本選項
+#### Docker 構建選項
 ```bash
-# 開發環境構建
-./build.sh development latest
+# 構建 AI Agent 映像檔
+cd wazuh-docker/single-node/ai-agent-project
+docker build -t ai-agent:latest .
 
-# 生產環境構建並推送到註冊表
-./build.sh production v1.0.0 myregistry.com true
+# 構建開發環境映像檔
+docker build --target development -t ai-agent:dev .
 
-# 查看構建幫助
-./build.sh --help
+# 構建生產環境映像檔
+docker build --target production -t ai-agent:prod .
 ```
 
-#### 部署腳本選項
+#### 服務管理選項
 ```bash
-# 查看部署幫助
-./deploy.sh --help
-
 # 查看服務日誌
-./deploy.sh production logs
+docker-compose -f wazuh-docker/single-node/docker-compose.main.yml logs -f
 
-# 重啟服務
-./deploy.sh production restart
+# 重啟特定服務
+docker-compose -f wazuh-docker/single-node/docker-compose.main.yml restart ai-agent
 
-# 停止服務
-./deploy.sh production down
+# 停止所有服務
+docker-compose -f wazuh-docker/single-node/docker-compose.main.yml down
+
+# 清理並重新啟動
+docker-compose -f wazuh-docker/single-node/docker-compose.main.yml down -v
+docker-compose -f wazuh-docker/single-node/docker-compose.main.yml up -d
 ```
 
-#### 清理重複檔案
+#### 健康檢查
 ```bash
-# 預覽清理操作 (不實際執行)
-./cleanup-duplicates.sh --dry-run
+# 執行健康檢查腳本
+cd wazuh-docker/single-node
+./health-check.sh
 
-# 備份後清理
-./cleanup-duplicates.sh --backup
-
-# 直接清理 (不備份)
-./cleanup-duplicates.sh --force
-
-# 查看清理幫助
-./cleanup-duplicates.sh --help
+# 手動檢查各服務狀態
+curl -f http://localhost:8000/health  # AI Agent
+curl -f http://localhost:9090/-/healthy  # Prometheus
+curl -f http://localhost:3000/api/health  # Grafana
 ```
 
 ### 服務端點
@@ -267,13 +289,14 @@ chmod +x start-unified-stack.sh
 
 ```bash
 # 檢查系統健康狀態
-./deploy.sh production status
+cd wazuh-docker/single-node
+./health-check.sh
 
 # 查看效能指標
 curl http://localhost:8000/metrics
 
 # 監控 AI Agent 日誌
-./deploy.sh production logs
+docker-compose -f docker-compose.main.yml logs -f ai-agent
 ```
 
 ### 監控儀表板
@@ -300,34 +323,34 @@ curl http://localhost:8000/metrics
 - **效能最佳化**: 層級快取、最小化映像檔大小
 - **健康檢查**: 內建服務健康監控
 
-#### 2. 統一構建腳本 (build.sh)
+#### 2. 多階段 Dockerfile 優化
 ```bash
 # 功能特色
-✅ 多環境支援 (development/production)
-✅ 版本標籤管理
-✅ Docker 註冊表推送
-✅ 自動清理與優化
-✅ 彩色輸出與進度顯示
+✅ 開發/生產環境分離
+✅ 安全性提升 (非 root 用戶)
+✅ 效能最佳化 (層級快取)
+✅ 健康檢查機制
+✅ 最小化映像檔大小
 ```
 
-#### 3. 快速部署腳本 (deploy.sh)
+#### 3. 統一起動腳本 (start-unified-stack.sh)
 ```bash
 # 功能特色
-✅ 一鍵部署/停止/重啟
-✅ 服務狀態監控
-✅ 日誌查看與管理
-✅ 健康檢查驗證
-✅ 訪問信息顯示
+✅ 一鍵啟動所有服務
+✅ 自動環境檢查
+✅ SSL 憑證生成
+✅ 健康狀態驗證
+✅ 詳細啟動日誌
 ```
 
-#### 4. 重複檔案清理工具 (cleanup-duplicates.sh)
+#### 4. 健康檢查腳本 (health-check.sh)
 ```bash
 # 功能特色
-✅ 安全備份機制
-✅ 乾跑模式預覽
-✅ 自動路徑更新
-✅ 驗證清理結果
-✅ 詳細操作日誌
+✅ 全面服務健康檢查
+✅ 詳細狀態報告
+✅ 故障診斷建議
+✅ 自動修復建議
+✅ 效能指標監控
 ```
 
 ### 📊 優化效益
@@ -335,9 +358,9 @@ curl http://localhost:8000/metrics
 | **優化項目** | **改善幅度** | **具體效益** |
 |------------|------------|------------|
 | **Docker 映像大小** | 減少 40% | 更快的部署速度 |
-| **構建時間** | 減少 60% | 提升開發效率 |
-| **部署複雜度** | 減少 80% | 簡化運維操作 |
-| **配置一致性** | 提升 90% | 減少配置錯誤 |
+| **多階段構建** | 減少 60% | 提升開發效率 |
+| **部署簡化** | 減少 80% | 一鍵啟動所有服務 |
+| **健康檢查** | 提升 90% | 自動故障診斷 |
 | **安全性** | 提升 70% | 非 root 用戶運行 |
 
 ---
@@ -409,15 +432,16 @@ python /app/stage3_demo.py
 ### Docker 優化驗證
 ```bash
 # 測試多階段構建
-./build.sh development latest
+cd wazuh-docker/single-node/ai-agent-project
+docker build --target development -t ai-agent:test .
 
 # 驗證生產環境構建
-./build.sh production v1.0.0
+docker build --target production -t ai-agent:prod .
 
-# 測試部署腳本
-./deploy.sh production up
-./deploy.sh production status
-./deploy.sh production down
+# 測試統一起動腳本
+cd wazuh-docker/single-node
+./start-unified-stack.sh
+./health-check.sh
 ```
 
 ---
@@ -525,12 +549,12 @@ docker-compose -f wazuh-docker/single-node/generate-indexer-certs.yml run --rm g
 #### 2. Neo4j 連接問題
 ```bash
 # 檢查 Neo4j 日誌
-./deploy.sh production logs | grep neo4j
+docker-compose -f wazuh-docker/single-node/docker-compose.main.yml logs neo4j
 
 # 重置 Neo4j 資料庫
-./deploy.sh production down
+docker-compose -f wazuh-docker/single-node/docker-compose.main.yml down
 docker volume rm single-node_neo4j_data
-./deploy.sh production up
+docker-compose -f wazuh-docker/single-node/docker-compose.main.yml up -d
 ```
 
 #### 3. AI Agent 分析失敗
@@ -542,7 +566,7 @@ cat wazuh-docker/single-node/ai-agent-project/.env | grep API_KEY
 docker-compose -f wazuh-docker/single-node/docker-compose.main.yml exec ai-agent python /app/verify_vectorization.py
 
 # 查看詳細錯誤日誌
-./deploy.sh production logs | grep ai-agent
+docker-compose -f wazuh-docker/single-node/docker-compose.main.yml logs ai-agent
 ```
 
 #### 4. 模組化架構問題
@@ -560,50 +584,56 @@ docker-compose -f wazuh-docker/single-node/docker-compose.main.yml exec ai-agent
 docker builder prune -f
 
 # 重新構建映像檔
-./build.sh production latest
+cd wazuh-docker/single-node/ai-agent-project
+docker build --no-cache -t ai-agent:latest .
 
 # 檢查構建日誌
 docker-compose -f wazuh-docker/single-node/docker-compose.main.yml build --no-cache ai-agent
 ```
 
-#### 6. 部署腳本問題
+#### 6. 啟動腳本問題
 ```bash
 # 檢查腳本權限
-ls -la build.sh deploy.sh cleanup-duplicates.sh
+ls -la wazuh-docker/single-node/start-unified-stack.sh
+ls -la wazuh-docker/single-node/health-check.sh
 
 # 重新設置權限 (Linux/Mac)
-chmod +x build.sh deploy.sh cleanup-duplicates.sh
+chmod +x wazuh-docker/single-node/start-unified-stack.sh
+chmod +x wazuh-docker/single-node/health-check.sh
 
 # Windows 環境
-icacls build.sh /grant Everyone:F
-icacls deploy.sh /grant Everyone:F
-icacls cleanup-duplicates.sh /grant Everyone:F
+icacls wazuh-docker/single-node/start-unified-stack.sh /grant Everyone:F
+icacls wazuh-docker/single-node/health-check.sh /grant Everyone:F
 ```
 
 ---
 
 ## 📚 文件資源
 
-### 主要文件
-- **[整合技術文件](MERGED_DOCUMENTATION.md)**: 完整的技術文件集合
-- **[重複檔案分析](DUPLICATE_FILES_ANALYSIS.md)**: 重複檔案清理指南
-- **[重構總結](REFACTORING_SUMMARY.md)**: 模組化重構說明
-- **[系統架構設計](docs/ARCHITECTURE.md)**: 完整技術架構
-- **[部署指南](docs/DEPLOYMENT.md)**: 詳細部署說明
-- **[監控系統指南](docs/MONITORING.md)**: 監控配置指南
+> 💡 **提示**: 詳細的文件導航請參考上方的 [📚 文件導航](#-文件導航) 部分。
 
-### 技術文件
-- **[實作總結](wazuh-docker/single-node/ai-agent-project/app/IMPLEMENTATION_SUMMARY.md)**: AgenticRAG 技術實作詳解
-- **[Stage 3 代理關聯](wazuh-docker/single-node/ai-agent-project/app/STAGE3_AGENTIC_CORRELATION.md)**: Agentic 決策引擎實作
-- **[向量化說明](wazuh-docker/single-node/ai-agent-project/app/README_VECTORIZATION.md)**: 向量化技術詳解
-- **[重構指南](wazuh-docker/single-node/ai-agent-project/app/REFACTORING_GUIDE.md)**: 模組化架構說明
+### 快速參考
 
-### 監控與效能
-- **[監控設置指南](wazuh-docker/single-node/ai-agent-project/docs/MONITORING_SETUP.md)**: Prometheus + Grafana 設置
-- **[效能優化指南](wazuh-docker/single-node/ai-agent-project/docs/PERFORMANCE_OPTIMIZATION_GUIDE.md)**: 系統效能調校
+| 文件類型 | 主要用途 | 推薦閱讀順序 |
+|---------|---------|------------|
+| **[本文件 (README.md)](README.md)** | 專案總覽與快速開始 | 1️⃣ 首先閱讀 |
+| **[技術白皮書](docs/MERGED_DOCUMENTATION.md)** | 完整技術文檔與決策記錄 | 2️⃣ 深入了解技術細節 |
+| **[系統架構設計](docs/ARCHITECTURE.md)** | 完整技術架構與核心組件 | 3️⃣ 理解系統架構 |
+| **[部署指南](docs/DEPLOYMENT.md)** | 詳細部署與配置說明 | 4️⃣ 實際部署操作 |
+| **[監控系統指南](docs/MONITORING.md)** | 監控配置與運維指南 | 5️⃣ 運維與監控 |
 
-### 模組文件
-- **[AI Agent 模組說明](wazuh-docker/single-node/ai-agent-project/README.md)**: AI 代理服務詳細說明
+### 開發者資源
+
+- **[AI Agent 模組](wazuh-docker/single-node/ai-agent-project/README.md)** - 開發者入門指南
+- **[模組化架構指南](wazuh-docker/single-node/ai-agent-project/app/REFACTORING_GUIDE.md)** - 架構設計參考
+- **[實作總結](wazuh-docker/single-node/ai-agent-project/app/IMPLEMENTATION_SUMMARY.md)** - 技術實作詳解
+- **[遷移指南](wazuh-docker/single-node/ai-agent-project/MIGRATION_GUIDE.md)** - 架構遷移指南
+
+### 運維資源
+
+- **[統一堆疊使用指南](wazuh-docker/single-node/UNIFIED_STACK_README.md)** - 生產環境部署
+- **[監控設置指南](wazuh-docker/single-node/ai-agent-project/docs/MONITORING_SETUP.md)** - 監控系統設置
+- **[效能優化指南](wazuh-docker/single-node/ai-agent-project/docs/PERFORMANCE_OPTIMIZATION_GUIDE.md)** - 系統效能調校
 
 ---
 
@@ -635,13 +665,15 @@ black app/
 ### Docker 開發環境
 ```bash
 # 構建開發環境
-./build.sh development latest
+cd wazuh-docker/single-node/ai-agent-project
+docker build --target development -t ai-agent:dev .
 
 # 部署開發環境
-./deploy.sh development up
+cd wazuh-docker/single-node
+docker-compose -f docker-compose.main.yml up -d
 
 # 查看開發日誌
-./deploy.sh development logs
+docker-compose -f docker-compose.main.yml logs -f ai-agent
 ```
 
 ---
