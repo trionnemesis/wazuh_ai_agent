@@ -26,7 +26,16 @@
 
 ## 🎯 專案概述
 
-本專案實現了 **四階段演進式 GraphRAG (圖形檢索增強生成) 架構**，專門針對 Wazuh SIEM 系統的智能威脅分析。結合 Neo4j 圖形資料庫構建威脅實體關係網路，配合 Google Gemini Embedding 的語義向量化與 Anthropic Claude/Google Gemini 的分析能力，實現深度威脅關聯分析、攻擊路徑識別與專業安全建議生成。
+本專案實現了 **六階段演進式 Agent to Agent 協作生態系**，專門針對 Wazuh SIEM 系統的智能威脅分析與自動化防禦。
+
+從 **GraphRAG (圖形檢索增強生成) 架構** 起步，結合 Neo4j 圖形資料庫構建威脅實體關係網路，配合 Google Gemini Embedding 的語義向量化與 Anthropic Claude/Google Gemini 的分析能力，實現深度威脅關聯分析、攻擊路徑識別與專業安全建議生成。
+
+進一步發展為 **Agent to Agent 協作生態系**，包含：
+- **管理者 Agent (Stage 4)**：GraphRAG 威脅分析核心，負責攻擊圖譜生成與威脅關聯分析
+- **資安獵人 Agent (Stage 5)**：主動威脅狩獵，結合外部威脅情資進行智能告警
+- **執行者 Agent (Stage 6)**：自動化防禦執行，形成完整的偵測-分析-執行-驗證閉環
+
+這個協作生態系能夠實現 24/7 全自動威脅監控、分析、狩獵與防禦，大幅提升 SOC 團隊的威脅應對能力。
 
 ### 🚀 當前實施狀態 - 模組化架構重構完成 (Stage 4+)
 
@@ -48,22 +57,34 @@
   - ✅ 階段性模組 (stages/)
   - ✅ 工具模組 (utils/)
   - ✅ 效能最佳化與平行處理
+- 🚧 **Stage 5**: 資安獵人 Agent - 主動威脅狩獵 (規劃中)
+  - 📋 Agent 間通訊協議設計
+  - 📋 威脅狩獵引擎開發
+  - 📋 外部威脅情資整合
+  - 📋 智能告警系統實施
+- 📅 **Stage 6**: 執行者 Agent - 閉環自動化防禦 (Q2 2025)
+  - 📋 安全授權框架設計
+  - 📋 行動模組工具箱開發
+  - 📋 稽核與回饋機制
+  - 📋 系統整合與測試
 
 ### 📊 最新技術指標
 
-| **效能指標** | **當前數值** | **改善幅度** |
-|------------|------------|------------|
-| **主程式碼行數** | 3,070+ 行 | 模組化重構完成 |
-| **圖形查詢延遲** | ~5-15ms | 最佳化 20% |
-| **端到端處理時間** | ~1.2-1.8秒 | 平行處理改善 |
-| **威脅檢測準確性** | 94%+ | 穩定維持 |
-| **模組覆蓋率** | 100% | 全新架構 |
+| **效能指標** | **當前數值 (Stage 4)** | **Stage 5 目標** | **Stage 6 目標** |
+|------------|------------|------------|------------|
+| **主程式碼行數** | 3,070+ 行 (模組化) | +2,000 行 (獵人 Agent) | +1,500 行 (執行者 Agent) |
+| **圖形查詢延遲** | ~5-15ms | ~5-15ms | ~5-15ms |
+| **端到端處理時間** | ~1.2-1.8秒 | <30秒 (狩獵分析) | <60秒 (含執行) |
+| **威脅檢測準確性** | 94%+ | 96%+ (情資增強) | 98%+ (閉環驗證) |
+| **假陽性率** | ~6% | <5% | <3% |
+| **自動化覆蓋率** | 手動分析 | 85% (狩獵) | 90% (含執行) |
+| **Agent 間通訊延遲** | N/A | <100ms | <50ms |
 
 ---
 
 ## 🏗️ 系統架構
 
-### 模組化服務架構
+### Agent to Agent 協作生態系架構 (包含未來 Stage 5 & 6)
 
 ```mermaid
 flowchart TD
@@ -73,10 +94,11 @@ flowchart TD
         WD[Wazuh Dashboard<br/>可視化介面]
     end
     
-    subgraph "Stage 4: GraphRAG 智能層 (模組化)"
+    subgraph "Stage 4: 管理者 Agent (GraphRAG) - 現有系統"
         subgraph "API 層"
             FA[FastAPI Router<br/>RESTful 端點]
             HM[Health Monitor<br/>健康檢查]
+            AA[Attack Graph API<br/>/api/v1/attack-graphs]
         end
         
         subgraph "服務層"
@@ -93,17 +115,52 @@ flowchart TD
             GC[GraphContextAssembler<br/>圖形上下文組裝器]
         end
         
-        subgraph "階段模組"
-            S1[Stage1: VectorRAG]
-            S2[Stage2: BasicRAG]
-            S3[Stage3: AgenticRAG]
-            S4[Stage4: GraphRAG]
-        end
-        
         subgraph "資料庫層"
             NEO[Neo4j Graph Database<br/>v5.15 Community]
             OS[OpenSearch Vector Store<br/>HNSW 索引]
         end
+    end
+    
+    subgraph "Stage 5: 資安獵人 Agent (計劃中)"
+        subgraph "狩獵引擎"
+            GC5[圖譜消費器<br/>Graph Consumer]
+            TH[威脅狩獵引擎<br/>Threat Hunter]
+            TI[情資關聯引擎<br/>Threat Intelligence]
+            AS5[告警評分系統<br/>Alert Scorer]
+        end
+        
+        subgraph "外部整合"
+            VT[VirusTotal API]
+            MISP[MISP 威脅情資]
+        end
+    end
+    
+    subgraph "Stage 6: 執行者 Agent (計劃中)"
+        subgraph "執行控制"
+            AC[授權控制器<br/>Auth Controller]
+            AE[行動執行引擎<br/>Action Engine]
+            AM[行動模組工具箱<br/>Action Modules]
+        end
+        
+        subgraph "目標系統"
+            FW[防火牆系統]
+            AD[Active Directory]
+            VM[虛擬化平台]
+            BK[備份系統]
+        end
+    end
+    
+    subgraph "Agent 間通訊基礎設施"
+        MQ[Message Queue<br/>RabbitMQ/Kafka]
+        PS[Pub/Sub 機制]
+        SC[安全通道<br/>TLS 1.3]
+    end
+    
+    subgraph "通報與稽核系統"
+        SLACK[Slack/Teams 通報]
+        JIRA[Jira/ServiceNow 票務]
+        AL[稽核日誌]
+        BC[區塊鏈記錄]
     end
     
     subgraph "監控與管理"
@@ -112,19 +169,48 @@ flowchart TD
         NE[Node Exporter<br/>系統指標]
     end
     
+    %% 現有系統連接
     WM --> FA
     FA --> ES
     FA --> GS
     FA --> RS
     FA --> AS
-    ES --> S1
-    GS --> S4
-    RS --> S3
-    AS --> S2
-    S4 --> NEO
-    S1 --> OS
+    GS --> NEO
+    ES --> OS
+    
+    %% Agent 間通訊
+    AA --> MQ
+    MQ --> GC5
+    GC5 --> TH
+    TH --> TI
+    TI --> VT
+    TI --> MISP
+    TI --> AS5
+    AS5 --> AC
+    AC --> AE
+    AE --> AM
+    
+    %% 執行者行動
+    AM --> FW
+    AM --> AD
+    AM --> VM
+    AM --> BK
+    
+    %% 通報系統
+    AS5 --> SLACK
+    AS5 --> JIRA
+    AE --> AL
+    AE --> BC
+    
+    %% 監控整合
     FA --> PROM
+    GC5 --> PROM
+    AC --> PROM
     PROM --> GRAF
+    
+    %% 安全通道
+    MQ -.-> SC
+    AC -.-> SC
 ```
 
 ### 技術棧詳解
@@ -142,7 +228,7 @@ flowchart TD
 
 ---
 
-## 🗂️ 專案檔案結構 (最新)
+## 🗂️ 專案檔案結構 (含 Agent 生態系規劃)
 
 ```
 workspace/
@@ -157,71 +243,105 @@ workspace/
     ├── 🔐 indexer-certs-creator/     # SSL 憑證創建工具
     ├── 🌐 multi-node/                # 多節點部署配置
     └── 🎯 single-node/               # 單節點部署配置 (主要)
-        ├── 🤖 ai-agent-project/      # AI 代理專案根目錄
+        ├── 🤖 manager-agent/          # Stage 4: 管理者 Agent (現有系統)
         │   ├── app/                  # 主要應用程式碼 (模組化架構)
-        │   │   ├── main.py          # GraphRAG 核心邏輯 (3,070+ 行)
         │   │   ├── main_new.py      # 新版模組化主程式
-        │   │   ├── migrate_to_modular.py # 遷移工具
         │   │   ├── api/             # API 層模組
-        │   │   │   └── routes.py    # FastAPI 路由定義
+        │   │   │   ├── endpoints.py # FastAPI 路由定義
+        │   │   │   └── attack_graphs.py # 攻擊圖譜 API
         │   │   ├── core/            # 核心業務邏輯
-        │   │   │   ├── graph_entity_extractor.py
-        │   │   │   ├── graph_relationship_builder.py
-        │   │   │   ├── graph_query_engine.py
-        │   │   │   └── graph_context_assembler.py
+        │   │   │   ├── config.py    # 配置管理
+        │   │   │   └── scheduler.py # 任務調度器
         │   │   ├── services/        # 服務層
-        │   │   │   ├── embedding_service.py
-        │   │   │   ├── graph_service.py
-        │   │   │   ├── retrieval_service.py
-        │   │   │   └── analysis_service.py
-        │   │   ├── stages/          # 階段性模組
-        │   │   │   ├── stage1_vector_rag.py
-        │   │   │   ├── stage2_basic_rag.py
-        │   │   │   ├── stage3_agentic_rag.py
-        │   │   │   └── stage4_graph_rag.py
+        │   │   │   ├── graph_service.py     # 圖形資料庫服務
+        │   │   │   ├── retrieval_service.py # 檢索服務
+        │   │   │   ├── neo4j_service.py     # Neo4j 連接服務
+        │   │   │   ├── opensearch_service.py # OpenSearch 服務
+        │   │   │   ├── llm_service.py       # LLM 服務
+        │   │   │   └── metrics.py           # 指標收集
         │   │   ├── utils/           # 工具模組
-        │   │   │   ├── config.py
-        │   │   │   ├── logger.py
-        │   │   │   └── metrics.py
         │   │   ├── embedding_service.py  # 向量化服務
         │   │   ├── setup_index_template.py # OpenSearch 索引設置
         │   │   ├── verify_vectorization.py # 系統驗證工具
-        │   │   ├── IMPLEMENTATION_SUMMARY.md # 實作總結
-        │   │   ├── STAGE3_AGENTIC_CORRELATION.md # Stage 3 文件
-        │   │   ├── README_VECTORIZATION.md # 向量化說明
-        │   │   ├── REFACTORING_GUIDE.md # 重構指南
-        │   │   └── requirements.txt # Python 依賴 (32+ 個套件)
+        │   │   └── requirements.txt # Python 依賴 (35+ 個套件)
         │   ├── docs/                # 詳細文件目錄
-        │   │   ├── MONITORING_SETUP.md   # 監控設置指南
-        │   │   └── PERFORMANCE_OPTIMIZATION_GUIDE.md # 效能優化指南
         │   ├── tests/               # 測試套件
         │   ├── grafana/             # Grafana 儀表板配置
-        │   ├── config/              # 配置檔案
-        │   ├── performance_test.py  # 效能測試腳本
-        │   ├── stage3_demo.py       # Stage 3 演示程式
-        │   ├── test_stage3_functionality.py # 功能測試
-        │   ├── pytest.ini           # 測試配置
-        │   ├── requirements.txt     # Python 依賴清單
-        │   ├── Dockerfile           # AI Agent Docker 映像
-        │   ├── .env.example         # 環境變數範例
-        │   └── start-monitoring.sh  # 監控啟動腳本
+        │   ├── Dockerfile           # Manager Agent Docker 映像
+        │   └── .env.example         # 環境變數範例
+        ├── 🕵️ threat-hunter-agent/    # Stage 5: 資安獵人 Agent (規劃中)
+        │   ├── app/                  # 威脅狩獵應用
+        │   │   ├── main.py          # 獵人 Agent 主程式
+        │   │   ├── hunters/         # 狩獵引擎模組
+        │   │   │   ├── graph_consumer.py    # 圖譜消費器
+        │   │   │   ├── threat_hunter.py     # 威脅狩獵引擎
+        │   │   │   ├── intelligence_correlator.py # 情資關聯
+        │   │   │   └── alert_scorer.py      # 告警評分
+        │   │   ├── integrations/    # 外部整合模組
+        │   │   │   ├── virustotal.py        # VirusTotal 整合
+        │   │   │   ├── misp.py              # MISP 整合
+        │   │   │   ├── slack.py             # Slack 通報
+        │   │   │   └── jira.py              # Jira 票務
+        │   │   ├── communication/  # Agent 間通訊
+        │   │   │   ├── message_queue.py     # 訊息佇列
+        │   │   │   └── api_client.py        # API 客戶端
+        │   │   └── requirements.txt # 依賴清單
+        │   ├── docs/
+        │   │   └── AGENT_COMMUNICATION_PROTOCOL.md # 通訊協議文件
+        │   ├── tests/
+        │   └── Dockerfile           # Threat Hunter Docker 映像
+        ├── ⚡ executor-agent/        # Stage 6: 執行者 Agent (規劃中)
+        │   ├── cmd/                 # Go 主程式 (高安全性)
+        │   │   └── main.go          # 執行者 Agent 主程式
+        │   ├── internal/            # 內部模組
+        │   │   ├── auth/            # 授權控制模組
+        │   │   │   ├── controller.go        # 授權控制器
+        │   │   │   └── rbac.go              # 角色權限控制
+        │   │   ├── executor/        # 執行引擎
+        │   │   │   ├── engine.go            # 行動執行引擎
+        │   │   │   └── modules/             # 行動模組
+        │   │   │       ├── block_ip.go      # IP 封鎖模組
+        │   │   │       ├── restore_file.go  # 檔案還原模組
+        │   │   │       ├── disable_user.go  # 帳號停用模組
+        │   │   │       └── snapshot_vm.go   # VM 快照模組
+        │   │   ├── audit/           # 稽核系統
+        │   │   │   ├── logger.go            # 稽核日誌
+        │   │   │   └── blockchain.go        # 區塊鏈記錄
+        │   │   └── communication/  # 通訊模組
+        │   │       └── secure_channel.go    # 安全通道
+        │   ├── docs/
+        │   │   └── AGENT_ORCHESTRATION_GUIDE.md # 生態系統操作指南
+        │   ├── tests/
+        │   ├── go.mod               # Go 模組定義
+        │   └── Dockerfile           # Executor Agent Docker 映像
+        ├── 🔄 agent-communication/    # Agent 間通訊基礎設施
+        │   ├── message-queue/       # 訊息佇列配置
+        │   │   ├── rabbitmq/        # RabbitMQ 配置
+        │   │   └── kafka/           # Kafka 配置 (備選)
+        │   ├── schemas/             # 資料格式定義
+        │   │   ├── attack_graph.json        # 攻擊圖譜 Schema
+        │   │   ├── threat_alert.json        # 威脅告警 Schema
+        │   │   └── action_command.json      # 行動指令 Schema
+        │   └── security/            # 安全配置
+        │       ├── certificates/    # TLS 憑證
+        │       └── keys/            # 加密金鑰
         ├── 📁 config/               # Wazuh 配置檔案
         │   ├── wazuh_indexer_ssl_certs/  # SSL 憑證目錄
         │   ├── wazuh_cluster/       # 叢集配置
         │   └── wazuh_dashboard/     # 儀表板配置
         ├── 🐳 docker-compose.yml    # 原始 Wazuh 服務編排
-        ├── 🐳 docker-compose.main.yml # 統一堆疊配置
-        ├── 🐳 docker-compose.override.yml # 本地開發覆蓋配置
-        ├── 🐳 docker-compose.anchors.yml # 共用配置錨點
+        ├── 🐳 docker-compose.main.yml # 統一堆疊配置 (含 Stage 4)
+        ├── 🐳 docker-compose.stage5.yml # Stage 5 獵人 Agent 配置
+        ├── 🐳 docker-compose.stage6.yml # Stage 6 執行者 Agent 配置
+        ├── 🐳 docker-compose.ecosystem.yml # 完整生態系統配置
         ├── 📋 DEPLOYMENT_SUMMARY.md # 部署總結
         ├── 📋 UNIFIED_STACK_README.md # 統一堆疊使用指南
-        ├── 📋 REFACTORING_SUMMARY.md # 重構總結
         ├── 🚀 start-unified-stack.sh # 統一啟動腳本
+        ├── 🚀 start-ecosystem.sh    # 完整生態系統啟動腳本
         ├── 🛑 stop-unified-stack.sh  # 智慧停止腳本
         ├── 🩺 health-check.sh       # 系統健康檢查腳本
         ├── 🔧 common-functions.sh   # 共用函數庫
         ├── 📝 .env.template         # 環境變數模板
-        ├── 📖 generate-indexer-certs.yml # 憑證生成配置
         └── 📖 README.md             # 基本部署說明
 ```
 
@@ -501,25 +621,230 @@ NEO4J_dbms_memory_pagecache_size=1G
 
 ---
 
-## 🔮 未來發展規劃
+## 🔮 未來發展規劃：Agent to Agent 協作生態系
 
-### Phase 1: 進階優化 (Q1 2025)
-- **圖形嵌入增強**: 整合 Node2Vec/Graph2Vec 提升實體語義表示
-- **時序圖分析**: 支援時間窗口滑動的動態圖形分析
-- **威脅獵捕模式**: 基於圖形模式的主動威脅獵捕能力
-- **微服務架構**: 完全容器化的微服務部署
+### 🎯 Stage 5: 資安獵人 Agent - 主動威脅狩獵生態系 (Q1 2025)
 
-### Phase 2: 多模態擴展 (Q2 2025)
-- **檔案內容分析**: 整合惡意軟體靜態/動態分析
-- **網路流量圖**: 深度封包檢測與流量行為圖譜
-- **威脅情報整合**: 外部 CTI 源的自動圖形融合
-- **機器學習管道**: 自動化模型訓練與部署
+#### 目標設定
+建立專職的「資安獵人 Agent」，實現與現有「管理者 Agent」的智能協作，達成主動式威脅探索與高品質告警通報的自動化威脅狩獵能力。
 
-### Phase 3: 企業級平台 (Q3-Q4 2025)
-- **多租戶架構**: 支援大型企業的分層威脅圖譜管理
-- **即時協作**: 分析師團隊的圖形協作與知識共享平台
-- **自動化回應**: 基於圖形分析的自動化防禦編排 (SOAR)
-- **雲原生部署**: Kubernetes 與雲端整合
+#### 🏗️ 核心技術架構
+
+##### 1. Agent 間通訊協議設計
+```mermaid
+graph TD
+    subgraph "管理者 Agent (現有系統)"
+        MA[GraphRAG 分析引擎]
+        AG[攻擊圖譜生成器]
+        API[/api/v1/attack-graphs]
+    end
+    
+    subgraph "資安獵人 Agent (新增)"
+        GC[圖譜消費器]
+        TH[威脅狩獵引擎]
+        TI[情資關聯引擎]
+        AS[告警評分系統]
+    end
+    
+    subgraph "通訊基礎設施"
+        MQ[Message Queue<br/>RabbitMQ/Kafka]
+        PS[Pub/Sub 機制]
+    end
+    
+    subgraph "外部整合"
+        VT[VirusTotal API]
+        MISP[MISP 威脅情資平台]
+        SLACK[Slack/Teams 通報]
+        JIRA[Jira/ServiceNow 票務]
+    end
+    
+    MA --> AG
+    AG --> API
+    API --> MQ
+    MQ --> GC
+    GC --> TH
+    TH --> TI
+    TI --> AS
+    AS --> SLACK
+    AS --> JIRA
+    TI --> VT
+    TI --> MISP
+```
+
+##### 2. 技術實現清單
+- **Agent 間通訊標準**: RESTful API + 異步訊息佇列雙軌制
+- **資料格式**: 標準化 JSON Schema 攻擊圖譜描述語言
+- **威脅狩獵演算法**: 圖形路徑分析 + 社群偵測 + 異常叢集識別
+- **情資整合**: 自動化 IoC 比對與威脅評分
+- **智能過濾**: 規則引擎 + 機器學習混合決策系統
+
+#### 📊 預期交付成果
+| **交付項目** | **技術規格** | **預期效益** |
+|------------|------------|------------|
+| **資安獵人 Agent 服務** | Python 微服務 + Docker 容器化 | 24/7 自動威脅狩獵 |
+| **Agent 通訊協議** | REST API + RabbitMQ | 99.9% 可用性通訊 |
+| **威脅情資整合** | VirusTotal + MISP API 整合 | 威脅識別準確性提升 40%+ |
+| **智能通報系統** | Slack/Teams + Jira 整合 | 減少 80% 假陽性告警 |
+| **技術文件** | AGENT_COMMUNICATION_PROTOCOL.md | 完整部署與維護指南 |
+
+---
+
+### 🛡️ Stage 6: 執行者 Agent - 閉環自動化防禦系統 (Q2 2025)
+
+#### 目標設定
+建立專職的「執行者 Agent」，與資安獵人 Agent 和管理者 Agent 協作，形成完整的「偵測-分析-決策-執行-驗證」閉環防禦體系。
+
+#### 🏗️ 核心技術架構
+
+##### 1. 安全授權與指令控制架構
+```mermaid
+graph TD
+    subgraph "決策層"
+        HA[人工授權介面]
+        SH[資安獵人 Agent]
+        AR[自動規則引擎]
+    end
+    
+    subgraph "執行者 Agent"
+        AC[授權控制器]
+        AE[行動執行引擎]
+        AM[行動模組工具箱]
+        FR[回饋報告器]
+    end
+    
+    subgraph "行動模組 (Action Modules)"
+        BI[IP 封鎖模組]
+        RF[檔案還原模組]
+        DU[帳號停用模組]
+        VS[VM 快照模組]
+        NI[網路隔離模組]
+        LR[日誌記錄模組]
+    end
+    
+    subgraph "整合系統"
+        WZ[Wazuh SIEM]
+        FW[防火牆系統]
+        AD[Active Directory]
+        VM[虛擬化平台]
+        BK[備份系統]
+    end
+    
+    subgraph "稽核系統"
+        AL[稽核日誌]
+        BC[區塊鏈記錄]
+        MT[指標追蹤]
+    end
+    
+    HA --> AC
+    SH --> AC
+    AR --> AC
+    AC --> AE
+    AE --> AM
+    AM --> BI
+    AM --> RF
+    AM --> DU
+    AM --> VS
+    AM --> NI
+    AM --> LR
+    BI --> FW
+    RF --> BK
+    DU --> AD
+    VS --> VM
+    NI --> WZ
+    LR --> AL
+    FR --> AL
+    FR --> BC
+    FR --> MT
+```
+
+##### 2. 核心技術組件
+
+**安全授權框架**
+- **雙向加密通道**: TLS 1.3 + 憑證驗證
+- **多重授權機制**: 人工確認 + 自動規則 + 風險評估
+- **操作權限控制**: RBAC + 時間窗口限制
+
+**行動模組工具箱**
+```python
+# 行動模組接口標準
+class ActionModule:
+    def execute(self, target: str, params: dict) -> ActionResult
+    def verify(self, target: str) -> VerificationResult
+    def rollback(self, target: str, action_id: str) -> RollbackResult
+```
+
+**回饋與稽核機制**
+- **即時狀態回報**: WebSocket 即時通訊
+- **不可竄改日誌**: 區塊鏈 + 數位簽章
+- **效果驗證**: 自動化後續監控
+
+#### 📊 預期交付成果
+| **交付項目** | **技術規格** | **預期效益** |
+|------------|------------|------------|
+| **執行者 Agent 服務** | Go 微服務 + 高安全性容器 | 秒級響應威脅阻斷 |
+| **安全授權框架** | TLS 1.3 + RBAC + 時間控制 | 99.99% 授權安全性 |
+| **行動模組庫** | 標準化 API + 插件架構 | 支援 15+ 種防禦行動 |
+| **稽核系統** | 區塊鏈 + 數位簽章 | 100% 不可竄改記錄 |
+| **技術文件** | AGENT_ORCHESTRATION_GUIDE.md | 完整生態系統操作指南 |
+
+---
+
+### 🌐 Agent to Agent 協作生態系整體架構
+
+#### 完整協作流程
+```mermaid
+sequenceDiagram
+    participant User as 威脅事件
+    participant MA as 管理者 Agent
+    participant SHA as 資安獵人 Agent
+    participant EA as 執行者 Agent
+    participant Sys as 目標系統
+    
+    User->>MA: 警報觸發
+    MA->>MA: GraphRAG 分析
+    MA->>SHA: 發布攻擊圖譜
+    SHA->>SHA: 威脅狩獵分析
+    SHA->>SHA: 情資關聯檢查
+    SHA->>EA: 推薦防禦行動
+    
+    alt 人工授權模式
+        EA->>User: 請求執行授權
+        User->>EA: 授權確認
+    else 自動授權模式
+        EA->>EA: 規則引擎評估
+    end
+    
+    EA->>Sys: 執行防禦行動
+    Sys->>EA: 行動結果回報
+    EA->>MA: 狀態更新通知
+    MA->>MA: 攻擊圖譜狀態更新
+    EA->>User: 完整行動報告
+```
+
+#### 效能與擴展性指標
+| **系統指標** | **Stage 5 目標** | **Stage 6 目標** | **整體生態系目標** |
+|------------|------------|------------|------------|
+| **威脅檢測延遲** | <30 秒 | N/A | <45 秒 (端到端) |
+| **防禦響應時間** | N/A | <10 秒 | <60 秒 (端到端) |
+| **假陽性率** | <5% | N/A | <3% (整體) |
+| **自動化覆蓋率** | 85%+ | 70%+ | 90%+ (結合自動+人工) |
+| **系統可用性** | 99.9% | 99.99% | 99.95% (服務級別) |
+
+---
+
+### 🚀 Phase 後續演進 (Q3-Q4 2025)
+
+#### Phase 1: 智能優化與深度學習 (Q3 2025)
+- **自學習威脅模型**: 基於歷史數據的威脅模式自動學習
+- **預測性威脅分析**: 時序分析預測潛在攻擊路徑
+- **跨環境威脅關聯**: 多雲端、混合環境的威脅圖譜整合
+- **零信任架構整合**: 與 Zero Trust 網路安全模型深度整合
+
+#### Phase 2: 企業級生態系統 (Q4 2025)
+- **多租戶 Agent 管理**: 大型企業的分層 Agent 管理平台
+- **威脅情報共享**: 跨組織的匿名化威脅情報共享機制
+- **合規性自動化**: SOX、GDPR、ISO27001 等合規要求自動滿足
+- **雲原生部署**: Kubernetes Operator + Helm Charts 完整支援
 
 ---
 
