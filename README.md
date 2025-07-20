@@ -9,6 +9,58 @@
 [![Refactored](https://img.shields.io/badge/Architecture-Modular_Services-success.svg)](https://github.com)
 [![Docker Optimized](https://img.shields.io/badge/Docker-Optimized_&_Unified-success.svg)](https://github.com)
 
+## 🎯 專案概述
+
+本專案實現了 **六階段演進式 Agent to Agent 協作生態系**，專門針對 Wazuh SIEM 系統的智能威脅分析與自動化防禦。
+
+從 **GraphRAG (圖形檢索增強生成) 架構** 起步，結合 Neo4j 圖形資料庫構建威脅實體關係網路，配合 Google Gemini Embedding 的語義向量化與 Anthropic Claude/Google Gemini 的分析能力，實現深度威脅關聯分析、攻擊路徑識別與專業安全建議生成。
+
+進一步發展為 **Agent to Agent 協作生態系**，包含：
+- **管理者 Agent (Stage 4)**：GraphRAG 威脅分析核心，負責攻擊圖譜生成與威脅關聯分析
+- **資安獵人 Agent (Stage 5)**：主動威脅狩獵，結合外部威脅情資進行智能告警
+- **執行者 Agent (Stage 6)**：自動化防禦執行，形成完整的偵測-分析-執行-驗證閉環
+
+這個協作生態系能夠實現 24/7 全自動威脅監控、分析、狩獵與防禦，大幅提升 SOC 團隊的威脅應對能力。
+
+### 🚀 當前實施狀態 - 模組化架構重構完成 (Stage 4+)
+
+- ✅ **Stage 1**: 基礎向量化系統 (已完成)
+- ✅ **Stage 2**: 核心 RAG 檢索增強生成 (已完成)  
+- ✅ **Stage 3**: AgenticRAG 代理關聯分析 (已完成)
+- ✅ **Stage 4**: GraphRAG 圖形威脅分析 (已完成)
+  - ✅ GraphRAG 架構規劃與設計
+  - ✅ 圖形持久層實施 (Neo4j 整合)
+  - ✅ 圖形原生檢索器實施
+  - ✅ 增強提示詞模板 (Cypher 路徑記號)
+  - ✅ 端到端測試與驗證
+  - ✅ 統一監控系統整合
+  - ✅ 生產部署就緒
+- ✅ **模組化重構**: 服務層架構實施 (已完成)
+  - ✅ 核心模組分離 (core/)
+  - ✅ 服務層實現 (services/)
+  - ✅ API 層整合 (api/)
+  - ✅ 階段性模組 (stages/)
+  - ✅ 工具模組 (utils/)
+  - ✅ 效能最佳化與平行處理
+- ✅ **Docker 優化**: 統一構建與部署系統 (已完成)
+  - ✅ 多階段 Dockerfile 優化
+  - ✅ 統一起動腳本 (start-unified-stack.sh)
+  - ✅ 健康檢查腳本 (health-check.sh)
+  - ✅ Docker Compose 配置優化
+  - ✅ 安全性與效能提升
+- 🚧 **Stage 5**: 資安獵人 Agent - 主動威脅狩獵 (規劃中)
+  - 📋 Agent 間通訊協議設計
+  - 📋 威脅狩獵引擎開發
+  - 📋 外部威脅情資整合
+  - 📋 智能告警系統實施
+- 📅 **Stage 6**: 執行者 Agent - 閉環自動化防禦 (Q2 2025)
+  - 📋 安全授權框架設計
+  - 📋 行動模組工具箱開發
+  - 📋 稽核與回饋機制
+  - 📋 系統整合與測試
+
+---
+
 ## 📁 專案目錄架構
 
 ```
@@ -213,58 +265,6 @@ wazuh_ai_agent/
 #### 多節點部署
 - **[多節點部署指南](wazuh-docker/multi-node/README.md)** - 企業級多節點部署配置
 - **[SSL 憑證創建](wazuh-docker/indexer-certs-creator/README.md)** - SSL 憑證創建工具說明
-
-## 🎯 專案概述
-
-本專案實現了 **六階段演進式 Agent to Agent 協作生態系**，專門針對 Wazuh SIEM 系統的智能威脅分析與自動化防禦。
-
-從 **GraphRAG (圖形檢索增強生成) 架構** 起步，結合 Neo4j 圖形資料庫構建威脅實體關係網路，配合 Google Gemini Embedding 的語義向量化與 Anthropic Claude/Google Gemini 的分析能力，實現深度威脅關聯分析、攻擊路徑識別與專業安全建議生成。
-
-進一步發展為 **Agent to Agent 協作生態系**，包含：
-- **管理者 Agent (Stage 4)**：GraphRAG 威脅分析核心，負責攻擊圖譜生成與威脅關聯分析
-- **資安獵人 Agent (Stage 5)**：主動威脅狩獵，結合外部威脅情資進行智能告警
-- **執行者 Agent (Stage 6)**：自動化防禦執行，形成完整的偵測-分析-執行-驗證閉環
-
-這個協作生態系能夠實現 24/7 全自動威脅監控、分析、狩獵與防禦，大幅提升 SOC 團隊的威脅應對能力。
-
-### 🚀 當前實施狀態 - 模組化架構重構完成 (Stage 4+)
-
-- ✅ **Stage 1**: 基礎向量化系統 (已完成)
-- ✅ **Stage 2**: 核心 RAG 檢索增強生成 (已完成)  
-- ✅ **Stage 3**: AgenticRAG 代理關聯分析 (已完成)
-- ✅ **Stage 4**: GraphRAG 圖形威脅分析 (已完成)
-  - ✅ GraphRAG 架構規劃與設計
-  - ✅ 圖形持久層實施 (Neo4j 整合)
-  - ✅ 圖形原生檢索器實施
-  - ✅ 增強提示詞模板 (Cypher 路徑記號)
-  - ✅ 端到端測試與驗證
-  - ✅ 統一監控系統整合
-  - ✅ 生產部署就緒
-- ✅ **模組化重構**: 服務層架構實施 (已完成)
-  - ✅ 核心模組分離 (core/)
-  - ✅ 服務層實現 (services/)
-  - ✅ API 層整合 (api/)
-  - ✅ 階段性模組 (stages/)
-  - ✅ 工具模組 (utils/)
-  - ✅ 效能最佳化與平行處理
-- ✅ **Docker 優化**: 統一構建與部署系統 (已完成)
-  - ✅ 多階段 Dockerfile 優化
-  - ✅ 統一起動腳本 (start-unified-stack.sh)
-  - ✅ 健康檢查腳本 (health-check.sh)
-  - ✅ Docker Compose 配置優化
-  - ✅ 安全性與效能提升
-- 🚧 **Stage 5**: 資安獵人 Agent - 主動威脅狩獵 (規劃中)
-  - 📋 Agent 間通訊協議設計
-  - 📋 威脅狩獵引擎開發
-  - 📋 外部威脅情資整合
-  - 📋 智能告警系統實施
-- 📅 **Stage 6**: 執行者 Agent - 閉環自動化防禦 (Q2 2025)
-  - 📋 安全授權框架設計
-  - 📋 行動模組工具箱開發
-  - 📋 稽核與回饋機制
-  - 📋 系統整合與測試
-
-
 
 ---
 
