@@ -1,32 +1,61 @@
 # AgenticRAG AI 代理服務容器映像檔
+# 多階段構建 - 開發與生產環境優化版本
 # 基於 Python 3.11 精簡版本，針對生產環境優化
 
-# 使用官方 Python 3.11 精簡版映像檔作為基礎
-# 選擇 slim 版本以減少映像檔大小，提升部署效率
-FROM python:3.11-slim
+# 構建參數
+ARG BUILD_ENV=production
+ARG PYTHON_VERSION=3.11
+ARG USER=appuser
 
-# 設定容器內的工作目錄
-# 所有後續操作都將在此目錄執行
+# 基礎映像檔
+FROM python:${PYTHON_VERSION}-slim as base
+
+# 設定環境變數
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# 安裝系統依賴
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# 設定工作目錄
 WORKDIR /app
 
 # 複製 Python 依賴項定義檔案
-# 先複製 requirements.txt 以利用 Docker 層級快取
 COPY requirements.txt .
 
 # 安裝 Python 依賴項
-# 使用 --no-cache-dir 避免快取以減少映像檔大小
-# 包含 LangChain、OpenSearch、FastAPI 等核心套件
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 複製 AgenticRAG 應用程式原始碼
-# 包含主程式、嵌入服務、驗證腳本等所有核心模組
+# 開發環境配置
+FROM base as development
+EXPOSE 8000
+CMD ["uvicorn", "main_new:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
+
+# 生產環境配置
+FROM base as production
+# 創建非 root 用戶
+RUN groupadd -r ${USER} && useradd -r -g ${USER} ${USER}
+
+# 複製應用程式原始碼
 COPY ./app .
 
+# 設定檔案權限
+RUN chown -R ${USER}:${USER} /app
+
+# 切換到非 root 用戶
+USER ${USER}
+
 # 開放 FastAPI 應用程式預設的 8000 連接埠
-# 此連接埠用於健康檢查和 API 端點
 EXPOSE 8000
 
+# 健康檢查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
 # 定義容器啟動命令
-# 使用 uvicorn ASGI 伺服器執行 FastAPI 應用程式
-# 綁定到所有網路介面以允許外部存取
 CMD ["uvicorn", "main_new:app", "--host", "0.0.0.0", "--port", "8000"]

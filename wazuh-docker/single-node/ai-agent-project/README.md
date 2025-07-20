@@ -71,19 +71,7 @@ cp .env.example .env
 uvicorn app.main_new:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Docker 部署
-
-```bash
-# 建構映像檔
-docker build -t wazuh-ai-agent .
-
-# 執行容器
-docker run -d \
-  --name ai-agent \
-  --env-file .env \
-  -p 8000:8000 \
-  wazuh-ai-agent
-```
+> 📖 **完整部署指南請參考**: [部署指南](../../../docs/DEPLOYMENT.md)
 
 ## 🔧 配置說明
 
@@ -183,9 +171,10 @@ tail -f logs/ai_agent.log
 ## 🔗 相關文件
 
 - [主要專案說明](../../../README.md)
-- [技術白皮書](../../../MERGED_DOCUMENTATION.md)
+- [系統架構設計](../../../docs/ARCHITECTURE.md)
+- [部署指南](../../../docs/DEPLOYMENT.md)
+- [監控系統指南](../../../docs/MONITORING.md)
 - [模組化架構指南](app/REFACTORING_GUIDE.md)
-- [監控設置指南](docs/MONITORING_SETUP.md)
 
 ## 📝 版本資訊
 
