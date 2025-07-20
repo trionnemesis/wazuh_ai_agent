@@ -9,6 +9,175 @@
 [![Refactored](https://img.shields.io/badge/Architecture-Modular_Services-success.svg)](https://github.com)
 [![Docker Optimized](https://img.shields.io/badge/Docker-Optimized_&_Unified-success.svg)](https://github.com)
 
+## 📁 專案目錄架構
+
+```
+wazuh_ai_agent/
+├── 📄 README.md                           # 專案總覽與快速開始
+├── 📄 .gitattributes                      # Git 屬性配置
+├── 📁 docs/                               # 主要技術文檔
+│   ├── 📄 MERGED_DOCUMENTATION.md         # 完整技術白皮書
+│   ├── 📄 ARCHITECTURE.md                 # 系統架構設計
+│   ├── 📄 DEPLOYMENT.md                   # 部署指南
+│   └── 📄 MONITORING.md                   # 監控系統指南
+├── 📁 legacy/                             # 舊版本檔案
+│   └── 📄 README.md                       # 舊版本說明
+└── 📁 wazuh-docker/                       # Wazuh Docker 部署核心
+    ├── 📄 README.md                       # Wazuh Docker 總覽
+    ├── 📄 LICENSE                         # 授權文件
+    ├── 📄 VERSION                         # 版本資訊
+    ├── 📄 CHANGELOG.md                    # 變更日誌
+    ├── 📁 build-docker-images/            # Docker 映像建構工具
+    │   ├── 📄 build-images.sh             # 映像建構腳本
+    │   ├── 📄 build-images.yml            # 建構配置
+    │   ├── 📄 README.md                   # 建構工具說明
+    │   ├── 📁 wazuh-manager/              # Wazuh Manager 映像
+    │   ├── 📁 wazuh-indexer/              # Wazuh Indexer 映像
+    │   └── 📁 wazuh-dashboard/            # Wazuh Dashboard 映像
+    ├── 📁 indexer-certs-creator/          # SSL 憑證創建工具
+    │   ├── 📄 Dockerfile                  # 憑證創建容器
+    │   ├── 📄 README.md                   # 憑證創建說明
+    │   └── 📁 config/                     # 憑證配置
+    ├── 📁 single-node/                    # 單節點部署 (主要)
+    │   ├── 📄 start-unified-stack.sh      # 統一起動腳本
+    │   ├── 📄 stop-unified-stack.sh       # 統一停止腳本
+    │   ├── 📄 health-check.sh             # 健康檢查腳本
+    │   ├── 📄 common-functions.sh         # 共用函數庫
+    │   ├── 📄 docker-compose.main.yml     # 主要 Docker Compose
+    │   ├── 📄 docker-compose.anchors.yml  # Docker Compose 錨點
+    │   ├── 📄 docker-compose.override.yml # Docker Compose 覆寫
+    │   ├── 📄 generate-indexer-certs.yml  # 憑證生成配置
+    │   ├── 📄 README.md                   # 單節點部署說明
+    │   ├── 📄 UNIFIED_STACK_README.md     # 統一堆疊使用指南
+    │   ├── 📁 config/                     # Wazuh 配置檔案
+    │   │   ├── 📁 certs.yml               # 憑證配置
+    │   │   ├── 📁 wazuh_cluster/          # 叢集配置
+    │   │   ├── 📁 wazuh_dashboard/        # Dashboard 配置
+    │   │   ├── 📁 wazuh_indexer/          # Indexer 配置
+    │   │   └── 📁 wazuh_indexer_ssl_certs/ # SSL 憑證
+    │   └── 📁 ai-agent-project/           # AI Agent 核心專案
+    │       ├── 📄 Dockerfile              # AI Agent 容器配置
+    │       ├── 📄 README.md               # AI Agent 模組說明
+    │       ├── 📄 requirements.txt        # Python 依賴
+    │       ├── 📄 pytest.ini             # 測試配置
+    │       ├── 📄 MIGRATION_GUIDE.md      # 遷移指南
+    │       ├── 📄 cleanup_migration.sh    # 遷移清理腳本
+    │       ├── 📄 performance-optimization.env # 效能優化配置
+    │       ├── 📄 performance_test.py     # 效能測試
+    │       ├── 📄 test_stage3_functionality.py # Stage 3 功能測試
+    │       ├── 📄 stage3_demo.py          # Stage 3 演示
+    │       ├── 📄 start-monitoring.sh     # 監控啟動腳本
+    │       ├── 📁 app/                    # 主要應用程式碼
+    │       │   ├── 📄 main_new.py         # 主程式入口
+    │       │   ├── 📄 embedding_service.py # 向量化服務
+    │       │   ├── 📄 deploy_stage3.py    # Stage 3 部署
+    │       │   ├── 📄 setup_index_template.py # 索引模板設置
+    │       │   ├── 📄 verify_vectorization.py # 向量化驗證
+    │       │   ├── 📄 wazuh-alerts-vector-template.json # 向量模板
+    │       │   ├── 📄 IMPLEMENTATION_SUMMARY.md # 實作總結
+    │       │   ├── 📄 REFACTORING_GUIDE.md # 重構指南
+    │       │   ├── 📄 STAGE3_AGENTIC_CORRELATION.md # Stage 3 關聯
+    │       │   ├── 📄 README_VECTORIZATION.md # 向量化說明
+    │       │   ├── 📁 api/                # API 層
+    │       │   │   ├── 📄 __init__.py
+    │       │   │   ├── 📄 endpoints.py    # API 端點
+    │       │   │   └── 📄 health_check.py # 健康檢查
+    │       │   ├── 📁 core/               # 核心模組
+    │       │   │   ├── 📄 __init__.py
+    │       │   │   ├── 📄 config.py       # 配置管理
+    │       │   │   └── 📄 scheduler.py    # 排程器
+    │       │   ├── 📁 services/           # 服務層
+    │       │   │   ├── 📄 __init__.py
+    │       │   │   ├── 📄 base.py         # 基礎服務
+    │       │   │   ├── 📄 factory.py      # 服務工廠
+    │       │   │   ├── 📄 alert_service.py # 告警服務
+    │       │   │   ├── 📄 decision_service.py # 決策服務
+    │       │   │   ├── 📄 graph_service.py # 圖形服務
+    │       │   │   ├── 📄 llm_service.py  # LLM 服務
+    │       │   │   ├── 📄 metrics.py      # 指標服務
+    │       │   │   ├── 📄 neo4j_service.py # Neo4j 服務
+    │       │   │   ├── 📄 opensearch_service.py # OpenSearch 服務
+    │       │   │   └── 📄 retrieval_service.py # 檢索服務
+    │       │   ├── 📁 stages/             # 階段性模組
+    │       │   │   └── 📄 __init__.py
+    │       │   └── 📁 utils/              # 工具模組
+    │       │       ├── 📄 __init__.py
+    │       │       ├── 📄 error_handling.py # 錯誤處理
+    │       │       ├── 📄 logging_middleware.py # 日誌中間件
+    │       │       └── 📄 neo4j_adapter.py # Neo4j 適配器
+    │       ├── 📁 tests/                  # 測試檔案
+    │       │   ├── 📄 test_graph_persistence.py # 圖形持久化測試
+    │       │   ├── 📄 test_graphrag_retrieval.py # GraphRAG 檢索測試
+    │       │   └── 📄 test_stage3_agentic.py # Stage 3 代理測試
+    │       ├── 📁 config/                 # AI Agent 配置
+    │       │   ├── 📄 docker-compose.monitoring.yml # 監控配置
+    │       │   ├── 📄 docker-compose.neo4j.yml # Neo4j 配置
+    │       │   └── 📄 prometheus.yml      # Prometheus 配置
+    │       ├── 📁 docs/                   # AI Agent 文檔
+    │       │   ├── 📄 MONITORING_SETUP.md # 監控設置指南
+    │       │   ├── 📄 PERFORMANCE_OPTIMIZATION_GUIDE.md # 效能優化指南
+    │       │   └── 📄 PROMETHEUS_GRAFANA_INTEGRATION.md # 監控整合指南
+    │       └── 📁 grafana/                # Grafana 配置
+    │           ├── 📁 dashboards/         # 儀表板
+    │           │   └── 📄 ai-agent-monitoring.json # AI Agent 監控儀表板
+    │           └── 📁 provisioning/       # 自動配置
+    │               ├── 📁 dashboards/     # 儀表板配置
+    │               │   └── 📄 dashboard.yml
+    │               └── 📁 datasources/    # 資料來源配置
+    │                   └── 📄 prometheus.yml
+    └── 📁 multi-node/                     # 多節點部署
+        ├── 📄 docker-compose.yml          # 多節點 Docker Compose
+        ├── 📄 generate-indexer-certs.yml  # 多節點憑證生成
+        ├── 📄 volume-migrator.sh          # 資料卷遷移腳本
+        ├── 📄 README.md                   # 多節點部署說明
+        ├── 📄 Migration-to-Wazuh-4.4.md  # Wazuh 4.4 遷移指南
+        └── 📁 config/                     # 多節點配置
+            ├── 📁 certs.yml               # 憑證配置
+            ├── 📁 nginx/                  # Nginx 配置
+            │   └── 📄 nginx.conf          # Nginx 設定檔
+            ├── 📁 wazuh_cluster/          # 叢集配置
+            │   ├── 📄 wazuh_manager.conf  # Manager 配置
+            │   └── 📄 wazuh_worker.conf   # Worker 配置
+            ├── 📁 wazuh_dashboard/        # Dashboard 配置
+            │   ├── 📄 opensearch_dashboards.yml
+            │   └── 📄 wazuh.yml
+            └── 📁 wazuh_indexer/          # Indexer 配置
+                ├── 📄 internal_users.yml  # 內部用戶配置
+                ├── 📄 wazuh1.indexer.yml  # 節點 1 配置
+                ├── 📄 wazuh2.indexer.yml  # 節點 2 配置
+                └── 📄 wazuh3.indexer.yml  # 節點 3 配置
+```
+
+### 📋 目錄說明
+
+#### 🎯 **根目錄** - 專案總覽
+- **README.md**: 專案總覽、快速開始、架構說明
+- **docs/**: 主要技術文檔集合
+- **legacy/**: 舊版本檔案保留
+- **wazuh-docker/**: Wazuh Docker 部署核心
+
+#### 🏗️ **wazuh-docker/** - 部署核心
+- **build-docker-images/**: Docker 映像建構工具
+- **indexer-certs-creator/**: SSL 憑證創建工具
+- **single-node/**: 單節點部署 (主要使用)
+- **multi-node/**: 企業級多節點部署
+
+#### 🚀 **single-node/ai-agent-project/** - AI Agent 核心
+- **app/**: 主要應用程式碼 (模組化架構)
+- **tests/**: 單元測試與整合測試
+- **config/**: 配置檔案
+- **docs/**: AI Agent 專用文檔
+- **grafana/**: 監控儀表板配置
+
+#### 🔧 **app/** - 模組化架構
+- **api/**: RESTful API 層
+- **core/**: 核心配置與排程
+- **services/**: 業務邏輯服務層
+- **stages/**: 階段性功能模組
+- **utils/**: 共用工具模組
+
+---
+
 ## 📚 文件導航
 
 ### 🎯 主要文件
@@ -95,18 +264,7 @@
   - 📋 稽核與回饋機制
   - 📋 系統整合與測試
 
-### 📊 核心技術指標
 
-| **效能指標** | **當前數值** | **性能基準** |
-|------------|------------|------------|
-| **圖形查詢延遲** | ~5-15ms | 業界領先 |
-| **端到端處理時間** | ~1.2-1.8秒 | 優於業界標準 |
-| **威脅檢測準確性** | 94%+ | 超越傳統 SIEM |
-| **攻擊路徑識別率** | 91%+ | 行業頂尖水準 |
-| **主程式碼行數** | 3,070+ 行 (模組化) | 企業級規模 |
-| **Docker 映像大小** | 優化後減少 40% | 部署效率提升 |
-
-> 📖 **詳細技術指標請參考**: [系統架構設計](docs/ARCHITECTURE.md)
 
 ---
 
@@ -305,11 +463,10 @@ docker-compose -f docker-compose.main.yml logs -f ai-agent
 - AI Agent 效能監控
 - 系統資源使用率
 - Neo4j 圖形資料庫指標
+- GraphRAG 分析指標
+- 系統資源監控
 
 > 📊 **詳細監控指南請參考**: [監控系統指南](docs/MONITORING.md)
-- **GraphRAG 分析指標**: 圖形查詢效能、檢索成功率
-- **系統資源監控**: CPU、記憶體、磁碟、網路使用率
-- **Neo4j 圖形統計**: 節點數量、關係統計、查詢效能
 
 ---
 
@@ -318,12 +475,6 @@ docker-compose -f docker-compose.main.yml logs -f ai-agent
 ### 🐳 Docker 優化與統一部署系統
 
 #### 1. 多階段 Dockerfile 優化
-- **開發/生產環境分離**: 支援不同環境的構建目標
-- **安全性提升**: 非 root 用戶運行，減少攻擊面
-- **效能最佳化**: 層級快取、最小化映像檔大小
-- **健康檢查**: 內建服務健康監控
-
-#### 2. 多階段 Dockerfile 優化
 ```bash
 # 功能特色
 ✅ 開發/生產環境分離
@@ -333,7 +484,7 @@ docker-compose -f docker-compose.main.yml logs -f ai-agent
 ✅ 最小化映像檔大小
 ```
 
-#### 3. 統一起動腳本 (start-unified-stack.sh)
+#### 2. 統一起動腳本 (start-unified-stack.sh)
 ```bash
 # 功能特色
 ✅ 一鍵啟動所有服務
@@ -343,7 +494,7 @@ docker-compose -f docker-compose.main.yml logs -f ai-agent
 ✅ 詳細啟動日誌
 ```
 
-#### 4. 健康檢查腳本 (health-check.sh)
+#### 3. 健康檢查腳本 (health-check.sh)
 ```bash
 # 功能特色
 ✅ 全面服務健康檢查
@@ -605,35 +756,6 @@ chmod +x wazuh-docker/single-node/health-check.sh
 icacls wazuh-docker/single-node/start-unified-stack.sh /grant Everyone:F
 icacls wazuh-docker/single-node/health-check.sh /grant Everyone:F
 ```
-
----
-
-## 📚 文件資源
-
-> 💡 **提示**: 詳細的文件導航請參考上方的 [📚 文件導航](#-文件導航) 部分。
-
-### 快速參考
-
-| 文件類型 | 主要用途 | 推薦閱讀順序 |
-|---------|---------|------------|
-| **[本文件 (README.md)](README.md)** | 專案總覽與快速開始 | 1️⃣ 首先閱讀 |
-| **[技術白皮書](docs/MERGED_DOCUMENTATION.md)** | 完整技術文檔與決策記錄 | 2️⃣ 深入了解技術細節 |
-| **[系統架構設計](docs/ARCHITECTURE.md)** | 完整技術架構與核心組件 | 3️⃣ 理解系統架構 |
-| **[部署指南](docs/DEPLOYMENT.md)** | 詳細部署與配置說明 | 4️⃣ 實際部署操作 |
-| **[監控系統指南](docs/MONITORING.md)** | 監控配置與運維指南 | 5️⃣ 運維與監控 |
-
-### 開發者資源
-
-- **[AI Agent 模組](wazuh-docker/single-node/ai-agent-project/README.md)** - 開發者入門指南
-- **[模組化架構指南](wazuh-docker/single-node/ai-agent-project/app/REFACTORING_GUIDE.md)** - 架構設計參考
-- **[實作總結](wazuh-docker/single-node/ai-agent-project/app/IMPLEMENTATION_SUMMARY.md)** - 技術實作詳解
-- **[遷移指南](wazuh-docker/single-node/ai-agent-project/MIGRATION_GUIDE.md)** - 架構遷移指南
-
-### 運維資源
-
-- **[統一堆疊使用指南](wazuh-docker/single-node/UNIFIED_STACK_README.md)** - 生產環境部署
-- **[監控設置指南](wazuh-docker/single-node/ai-agent-project/docs/MONITORING_SETUP.md)** - 監控系統設置
-- **[效能優化指南](wazuh-docker/single-node/ai-agent-project/docs/PERFORMANCE_OPTIMIZATION_GUIDE.md)** - 系統效能調校
 
 ---
 
