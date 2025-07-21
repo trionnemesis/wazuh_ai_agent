@@ -1,3 +1,4 @@
+
 """
 快取管理器工具模組
 提供全域快取服務的管理和配置
@@ -80,3 +81,5 @@ def clear_all_caches():
 def is_cache_enabled() -> bool:
     """檢查快取是否已啟用"""
     return _cache_service is not None
+
+

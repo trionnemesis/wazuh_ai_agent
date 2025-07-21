@@ -9,6 +9,7 @@ import re
 from typing import List, Dict, Any
 from datetime import datetime
 from dateutil import parser
+from .cache_service import cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +149,7 @@ async def extract_graph_entities(alert: Dict[str, Any], context_data: Dict[str, 
     logger.info(f"Extracted {len(entities)} entities: {dict(zip(*zip(*[(e['type'], 1) for e in entities])))}")
     return entities
 
+@cache_service.cache_graph_query
 async def execute_graph_retrieval(cypher_queries: List[Dict[str, Any]], alert: Dict[str, Any]) -> Dict[str, Any]:
     """
     Graph-Native 檢索器：執行 Cypher 查詢來檢索相關的圖形子網

@@ -1,6 +1,8 @@
 """
 智能快取服務模組
 實作記憶體快取機制以優化常用查詢的效能
+
+
 """
 
 import logging
@@ -40,6 +42,7 @@ class CacheService:
         # 初始化快取儲存
         self.lru_cache = LRUCache(maxsize=lru_maxsize)
         self.ttl_cache = TTLCache(maxsize=ttl_maxsize, ttl=ttl_seconds)
+
         
         # 快取統計
         self.stats = {
@@ -297,3 +300,4 @@ def init_cache_service(**kwargs) -> CacheService:
     _cache_service = CacheService(**kwargs)
     logger.info("全域快取服務已初始化")
     return _cache_service
+

@@ -13,7 +13,13 @@ from ..api.health_check import perform_health_check
 from ..services.metrics import REGISTRY
 from ..utils.cache_manager import get_cache_service
 
+
+
+
 router = APIRouter()
+
+# 包含子路由器
+router.include_router(cache_router)
 
 @router.get("/")
 async def read_root():
@@ -29,7 +35,8 @@ async def read_root():
             "Enhanced decision engine",
             "Prometheus monitoring integration",
             "Graph-based threat analysis",
-            "Attack path discovery"
+            "Attack path discovery",
+            "Intelligent caching for embeddings"
         ],
         "config": get_config_summary()
     }
@@ -62,6 +69,7 @@ async def get_metrics():
 @router.get("/cache/stats")
 async def get_cache_stats():
     """
+
     快取統計資訊端點
     
     返回智能快取服務的統計資料，包括：
@@ -115,3 +123,4 @@ async def clear_cache(cache_type: str = None):
         "message": f"快取已清除: {cache_type or 'all'}",
         "timestamp": datetime.utcnow().isoformat()
     }
+
