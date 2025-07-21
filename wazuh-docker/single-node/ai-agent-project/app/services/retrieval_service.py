@@ -13,7 +13,7 @@ from core.config import (
     OPENSEARCH_URL, OPENSEARCH_USER, OPENSEARCH_PASSWORD,
     OPENSEARCH_MAX_CONNECTIONS, OPENSEARCH_CONNECTION_TIMEOUT
 )
-from .cache_service import cache_service
+from ..utils.cache_manager import get_cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +151,6 @@ async def execute_retrieval(queries: List[Dict[str, Any]], alert_vector: List[fl
     
     return context_data
 
-@cache_service.cache_vector_search
 async def execute_vector_search(alert_vector: List[float], parameters: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Execute k-NN vector similarity search for historical alerts.
@@ -161,53 +160,73 @@ async def execute_vector_search(alert_vector: List[float], parameters: Dict[str,
         parameters: Search parameters including k and filters
         
     Returns:
-        List of similar alert documents
+        List of similar historical alerts
     """
-    try:
-        k = parameters.get('k', 5)
-        include_ai_analysis = parameters.get('include_ai_analysis', True)
-        
-        # Build k-NN search query
-        knn_search_body = {
-            "size": k,
-            "query": {
-                "bool": {
-                    "must": [
-                        {
-                            "knn": {
-                                "alert_vector": {
-                                    "vector": alert_vector,
-                                    "k": k
+    # 獲取快取服務
+    cache_service = get_cache_service()
+    
+    # 生成快取鍵值
+    import hashlib
+    cache_key = f"vector_search:{hashlib.md5(str(alert_vector[:10]).encode()).hexdigest()}:{parameters.get('k', 5)}"
+    
+    async def compute_search():
+        try:
+            k = parameters.get('k', 5)
+            include_ai_analysis = parameters.get('include_ai_analysis', False)
+            
+            # Build k-NN search with filter support
+            knn_search_body = {
+                "size": k,
+                "query": {
+                    "bool": {
+                        "must": [
+                            {
+                                "knn": {
+                                    "alert_vector": {
+                                        "vector": alert_vector,
+                                        "k": k
+                                    }
                                 }
                             }
-                        }
-                    ]
-                }
-            },
-            "_source": ["rule", "agent", "ai_analysis", "timestamp", "data"]
-        }
-        
-        # Add filter for alerts with AI analysis if requested
-        if include_ai_analysis:
-            if "filter" not in knn_search_body["query"]["bool"]:
-                knn_search_body["query"]["bool"]["filter"] = []
-            knn_search_body["query"]["bool"]["filter"].append(
-                {"exists": {"field": "ai_analysis"}}
+                        ]
+                    }
+                },
+                "_source": ["rule", "agent", "ai_analysis", "timestamp", "data"]
+            }
+            
+            # Add filter for alerts with AI analysis if requested
+            if include_ai_analysis:
+                if "filter" not in knn_search_body["query"]["bool"]:
+                    knn_search_body["query"]["bool"]["filter"] = []
+                knn_search_body["query"]["bool"]["filter"].append(
+                    {"exists": {"field": "ai_analysis"}}
+                )
+            
+            response = await client.search(
+                index="wazuh-alerts-*",
+                body=knn_search_body
             )
-        
-        response = await client.search(
-            index="wazuh-alerts-*",
-            body=knn_search_body
+            
+            similar_alerts = response.get('hits', {}).get('hits', [])
+            return similar_alerts
+            
+        except Exception as e:
+            logger.error(f"Vector search failed: {str(e)}")
+            return []
+    
+    # 如果有快取服務，使用快取
+    if cache_service:
+        result = await cache_service.get_or_compute(
+            cache_key=cache_key,
+            compute_func=compute_search,
+            cache_type='ttl',
+            ttl_override=300  # 5分鐘快取
         )
-        
-        similar_alerts = response.get('hits', {}).get('hits', [])
-        return similar_alerts
-        
-    except Exception as e:
-        logger.error(f"Vector search failed: {str(e)}")
-        return []
+        return result
+    else:
+        # 沒有快取服務，直接執行
+        return await compute_search()
 
-@cache_service.cache_query_result
 async def execute_keyword_time_search(parameters: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Enhanced keyword and time-range search for system metrics and logs.
@@ -218,81 +237,108 @@ async def execute_keyword_time_search(parameters: Dict[str, Any]) -> List[Dict[s
     Returns:
         List of matching documents
     """
-    try:
-        keywords = parameters.get('keywords', [])
-        host = parameters.get('host', '')
-        time_window_minutes = parameters.get('time_window_minutes', 5)
-        timestamp = parameters.get('timestamp')
-        
-        if not timestamp:
-            logger.warning("No timestamp provided for time-range search")
-            return []
-        
-        # Parse timestamp and calculate time range
-        if isinstance(timestamp, str):
-            alert_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-        else:
-            alert_time = datetime.utcnow()
-        
-        start_time = alert_time - timedelta(minutes=time_window_minutes)
-        end_time = alert_time + timedelta(minutes=time_window_minutes)
-        
-        # Build enhanced keyword and time-range query
-        search_body = {
-            "size": 15,  # Increased for better context
-            "query": {
-                "bool": {
-                    "should": [  # Using should for better matching flexibility
-                        {
-                            "multi_match": {
-                                "query": " ".join(keywords),
-                                "fields": ["rule.description^2", "data.*", "full_log", "location"],
-                                "type": "best_fields",
-                                "fuzziness": "AUTO"
-                            }
-                        },
-                        {
-                            "terms": {
-                                "rule.description.keyword": keywords
-                            }
-                        }
-                    ],
-                    "filter": [
-                        {
-                            "range": {
-                                "timestamp": {
-                                    "gte": start_time.isoformat(),
-                                    "lte": end_time.isoformat()
+    # 獲取快取服務
+    cache_service = get_cache_service()
+    
+    # 生成快取鍵值
+    import hashlib
+    cache_key_parts = [
+        "keyword_search",
+        str(parameters.get('keywords', [])),
+        parameters.get('host', ''),
+        str(parameters.get('time_window_minutes', 5))
+    ]
+    cache_key = hashlib.md5(":".join(cache_key_parts).encode()).hexdigest()
+    
+    async def compute_search():
+        try:
+            keywords = parameters.get('keywords', [])
+            host = parameters.get('host', '')
+            time_window_minutes = parameters.get('time_window_minutes', 5)
+            timestamp = parameters.get('timestamp')
+            
+            if not timestamp:
+                logger.warning("No timestamp provided for time-range search")
+                return []
+            
+            # Parse timestamp and calculate time range
+            if isinstance(timestamp, str):
+                alert_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            else:
+                alert_time = datetime.utcnow()
+            
+            start_time = alert_time - timedelta(minutes=time_window_minutes)
+            end_time = alert_time + timedelta(minutes=time_window_minutes)
+            
+            # Build enhanced keyword and time-range query
+            search_body = {
+                "size": 15,  # Increased for better context
+                "query": {
+                    "bool": {
+                        "should": [  # Using should for better matching flexibility
+                            {
+                                "multi_match": {
+                                    "query": " ".join(keywords),
+                                    "fields": ["rule.description^2", "data.*", "full_log", "location"],
+                                    "type": "best_fields",
+                                    "fuzziness": "AUTO"
+                                }
+                            },
+                            {
+                                "terms": {
+                                    "rule.description.keyword": keywords
                                 }
                             }
-                        }
-                    ],
-                    "minimum_should_match": 1
-                }
-            },
-            "sort": [
-                {"timestamp": {"order": "desc"}},
-                {"_score": {"order": "desc"}}
-            ]
-        }
-        
-        # Add host filter if specified
-        if host:
-            search_body["query"]["bool"]["filter"].append({
-                "term": {"agent.name.keyword": host}
-            })
-        
-        response = await client.search(
-            index="wazuh-alerts-*",
-            body=search_body
+                        ],
+                        "filter": [
+                            {
+                                "range": {
+                                    "timestamp": {
+                                        "gte": start_time.isoformat(),
+                                        "lte": end_time.isoformat()
+                                    }
+                                }
+                            }
+                        ],
+                        "minimum_should_match": 1
+                    }
+                },
+                "sort": [
+                    {"timestamp": {"order": "desc"}},
+                    {"_score": {"order": "desc"}}
+                ]
+            }
+            
+            # Add host filter if specified
+            if host:
+                search_body["query"]["bool"]["filter"].append(
+                    {"term": {"agent.name.keyword": host}}
+                )
+            
+            response = await client.search(
+                index="wazuh-alerts-*",
+                body=search_body
+            )
+            
+            results = response.get('hits', {}).get('hits', [])
+            return results
+            
+        except Exception as e:
+            logger.error(f"Keyword/time search failed: {str(e)}")
+            return []
+    
+    # 如果有快取服務，使用快取
+    if cache_service:
+        result = await cache_service.get_or_compute(
+            cache_key=cache_key,
+            compute_func=compute_search,
+            cache_type='ttl',
+            ttl_override=300  # 5分鐘快取
         )
-        
-        results = response.get('hits', {}).get('hits', [])
-        return results
-        
-    except Exception as e:
-        logger.error(f"Keyword/time search failed: {str(e)}")
-        return []
+        return result
+    else:
+        # 沒有快取服務，直接執行
+        return await compute_search()
 
 async def query_new_alerts(limit: int = 10) -> List[Dict[str, Any]]:
     """Query OpenSearch for new unanalyzed alerts"""
