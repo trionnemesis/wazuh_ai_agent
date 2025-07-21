@@ -11,6 +11,7 @@ from ..core.config import get_config_summary, APP_STAGE
 from ..core.scheduler import get_scheduler_status
 from ..api.health_check import perform_health_check
 from ..services.metrics import REGISTRY
+from ..services.cache_service import cache_service
 
 router = APIRouter()
 
@@ -57,3 +58,48 @@ async def get_metrics():
         content=generate_latest(REGISTRY),
         media_type=CONTENT_TYPE_LATEST
     )
+
+@router.get("/cache/stats")
+async def get_cache_stats():
+    """
+    快取統計端點 - 返回快取使用情況和效能指標
+    
+    Returns:
+        Dict: 快取統計資訊，包括命中率、大小等
+    """
+    stats = cache_service.get_stats()
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "cache_stats": stats,
+        "cache_config": {
+            "query_cache_ttl": "5 minutes",
+            "vector_cache_type": "LRU",
+            "graph_cache_ttl": "10 minutes"
+        }
+    }
+
+@router.post("/cache/invalidate/{cache_type}")
+async def invalidate_cache(cache_type: str, key: str = None):
+    """
+    使快取無效端點 - 清除指定類型的快取
+    
+    Args:
+        cache_type: 快取類型 (query, vector, graph)
+        key: 可選，特定的快取鍵
+        
+    Returns:
+        Dict: 操作結果
+    """
+    try:
+        cache_service.invalidate(cache_type, key)
+        return {
+            "status": "success",
+            "message": f"Cache '{cache_type}' invalidated" + (f" for key '{key}'" if key else ""),
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "timestamp": datetime.now().isoformat()
+        }

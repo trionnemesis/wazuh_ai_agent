@@ -13,6 +13,7 @@ from core.config import (
     OPENSEARCH_URL, OPENSEARCH_USER, OPENSEARCH_PASSWORD,
     OPENSEARCH_MAX_CONNECTIONS, OPENSEARCH_CONNECTION_TIMEOUT
 )
+from .cache_service import cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +151,7 @@ async def execute_retrieval(queries: List[Dict[str, Any]], alert_vector: List[fl
     
     return context_data
 
+@cache_service.cache_vector_search
 async def execute_vector_search(alert_vector: List[float], parameters: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Execute k-NN vector similarity search for historical alerts.
@@ -205,6 +207,7 @@ async def execute_vector_search(alert_vector: List[float], parameters: Dict[str,
         logger.error(f"Vector search failed: {str(e)}")
         return []
 
+@cache_service.cache_query_result
 async def execute_keyword_time_search(parameters: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Enhanced keyword and time-range search for system metrics and logs.

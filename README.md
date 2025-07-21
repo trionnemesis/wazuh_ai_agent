@@ -8,6 +8,7 @@
 [![GraphRAG Status](https://img.shields.io/badge/GraphRAG-Stage_4_完成-success.svg)](https://github.com)
 [![Refactored](https://img.shields.io/badge/Architecture-Modular_Services-success.svg)](https://github.com)
 [![Docker Optimized](https://img.shields.io/badge/Docker-Optimized_&_Unified-success.svg)](https://github.com)
+[![Caching](https://img.shields.io/badge/Caching-Intelligent_Memory_Cache-success.svg)](https://github.com)
 
 ## 🎯 專案概述
 
@@ -37,6 +38,7 @@
   - ✅ 生產部署就緒
 - ✅ **模組化重構**: 服務層架構實施 (已完成)
 - ✅ **Docker 優化**: 統一構建與部署系統 (已完成)
+- ✅ **智能快取**: 記憶體快取機制優化查詢效能 (已完成)
 - 🚧 **Stage 5**: 資安獵人 Agent - 主動威脅狩獵 (規劃中)
 - 📅 **Stage 6**: 執行者 Agent - 閉環自動化防禦 (Q2 2025)
 
@@ -54,6 +56,7 @@
 | **[系統架構設計](docs/ARCHITECTURE.md)** | 完整技術架構與核心組件 | 架構師、技術主管 |
 | **[部署指南](docs/DEPLOYMENT.md)** | 詳細部署與配置說明 | DevOps、系統管理員 |
 | **[監控系統指南](docs/MONITORING.md)** | 監控配置與運維指南 | 運維工程師 |
+| **[智能快取實作](docs/INTELLIGENT_CACHING_IMPLEMENTATION.md)** | 記憶體快取機制詳解 | 開發工程師、架構師 |
 
 ### 📊 專案報告與總結
 - **[專案報告總覽](docs/PROJECT_REPORTS.md)** - 所有開發報告的快速索引
