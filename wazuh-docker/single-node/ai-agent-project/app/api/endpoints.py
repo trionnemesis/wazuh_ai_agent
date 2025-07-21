@@ -11,8 +11,12 @@ from ..core.config import get_config_summary, APP_STAGE
 from ..core.scheduler import get_scheduler_status
 from ..api.health_check import perform_health_check
 from ..services.metrics import REGISTRY
+from ..api.cache_stats import router as cache_router
 
 router = APIRouter()
+
+# 包含子路由器
+router.include_router(cache_router)
 
 @router.get("/")
 async def read_root():
@@ -28,7 +32,8 @@ async def read_root():
             "Enhanced decision engine",
             "Prometheus monitoring integration",
             "Graph-based threat analysis",
-            "Attack path discovery"
+            "Attack path discovery",
+            "Intelligent caching for embeddings"
         ],
         "config": get_config_summary()
     }

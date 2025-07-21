@@ -9,8 +9,9 @@
 # 2. 指數退避重試機制，確保服務穩定性
 # 3. 專門的安全警報內容處理邏輯
 # 4. 完整的錯誤處理與監控日誌
+# 5. 智能快取機制，提升效能並降低 API 成本
 #
-# 版本: 2.0 (Stage 4 Compatible)
+# 版本: 2.1 (Stage 4 Compatible with Caching)
 # 更新: 2024年12月
 
 import os
@@ -19,6 +20,7 @@ import asyncio
 from typing import List, Optional, Dict, Any
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from .utils.text_chunking import SmartTextChunker, get_optimal_text, smart_chunk_text
+from .utils.cache_manager import get_cache_manager, embedding_cache, batch_embedding_cache
 
 # 獲取當前模組的日誌記錄器
 logger = logging.getLogger(__name__)
@@ -37,6 +39,7 @@ class GeminiEmbeddingService:
     - 📏 彈性維度：MRL 技術支援 1-768 維度調整
     - 🎯 專門優化：針對安全警報內容的專門處理邏輯
     - 📊 監控日誌：完整的執行狀態與效能監控
+    - 💾 智能快取：LRU+TTL 快取機制減少重複運算
     
     技術規格：
     - 模型：Google Gemini text-embedding-004
@@ -50,6 +53,7 @@ class GeminiEmbeddingService:
         max_retries (int): API 調用失敗時的最大重試次數
         retry_delay (float): 重試間的初始延遲時間（秒）
         client (GoogleGenerativeAIEmbeddings): Google 嵌入服務客戶端實例
+        cache_manager: 快取管理器實例
     """
     
     def __init__(self):
@@ -65,6 +69,8 @@ class GeminiEmbeddingService:
         - EMBEDDING_DIMENSION: 向量維度 1-768（預設: 768，None 表示使用模型預設）
         - EMBEDDING_MAX_RETRIES: 最大重試次數（預設: 3）
         - EMBEDDING_RETRY_DELAY: 初始重試延遲秒數（預設: 1.0）
+        - EMBEDDING_CACHE_SIZE: 快取大小（預設: 1000）
+        - EMBEDDING_CACHE_TTL: 快取 TTL（預設: 3600 秒）
         
         Raises:
             ValueError: 當 GOOGLE_API_KEY 環境變數未設定時
@@ -91,13 +97,19 @@ class GeminiEmbeddingService:
         # 初始化 Google Gemini 客戶端
         self.client = self._initialize_client()
         
+        # 初始化快取管理器
+        self.cache_manager = get_cache_manager()
+        
         # 記錄初始化完成狀態
         dimension_info = self.dimension or 768
+        cache_stats = self.cache_manager.get_stats()
+        
         logger.info(f"GeminiEmbeddingService 已成功初始化")
         logger.info(f"  🤖 模型: {self.model_name}")
         logger.info(f"  📏 維度: {dimension_info}")
         logger.info(f"  🔄 最大重試: {self.max_retries}")
         logger.info(f"  ⏱️ 重試延遲: {self.retry_delay}秒")
+        logger.info(f"  💾 快取: {'啟用' if cache_stats['enabled'] else '停用'} (大小: {cache_stats['maxsize']}, TTL: {cache_stats['ttl']}秒)")
         
     def _get_embedding_dimension(self) -> Optional[int]:
         """
@@ -211,10 +223,10 @@ class GeminiEmbeddingService:
     
     async def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """
-        將文檔列表轉換為向量列表
+        將文檔列表轉換為向量列表（支援智能快取）
         
         此方法適用於批次處理多個文檔，會自動清理和預處理文字內容，
-        確保輸入符合 API 要求。
+        確保輸入符合 API 要求。支援部分快取命中以提升效能。
         
         Args:
             texts (List[str]): 要嵌入的文字字串列表
@@ -229,35 +241,42 @@ class GeminiEmbeddingService:
             - 空文字會被替換為 "empty content"
             - 文字會被截斷至 8000 字符以符合 API 限制
             - 使用重試機制確保穩定性
+            - 支援智能快取機制
         """
         if not texts:
             logger.warning("收到空的文字列表")
             return []
         
-        # 清理和預處理文字
-        cleaned_texts = []
-        for text in texts:
-            if not text or not text.strip():
-                cleaned_texts.append("empty content")
-            else:
-                # 使用智能文本分塊替代硬截斷
-                cleaned_text = get_optimal_text(text.strip(), self.max_text_length)
-                cleaned_texts.append(cleaned_text)
+        # 使用快取裝飾器包裝的內部方法
+        @batch_embedding_cache(self.cache_manager, prefix="doc_embed")
+        async def _embed_documents_with_cache(self, texts: List[str]) -> List[List[float]]:
+            # 清理和預處理文字
+            cleaned_texts = []
+            for text in texts:
+                if not text or not text.strip():
+                    cleaned_texts.append("empty content")
+                else:
+                    # 使用智能文本分塊替代硬截斷
+                    cleaned_text = get_optimal_text(text.strip(), self.max_text_length)
+                    cleaned_texts.append(cleaned_text)
+            
+            try:
+                return await self._retry_embedding_operation(
+                    self.client.aembed_documents, 
+                    cleaned_texts
+                )
+            except Exception as e:
+                logger.error(f"批次文檔向量化失敗: {str(e)}")
+                raise
         
-        try:
-            return await self._retry_embedding_operation(
-                self.client.aembed_documents, 
-                cleaned_texts
-            )
-        except Exception as e:
-            logger.error(f"批次文檔向量化失敗: {str(e)}")
-            raise
+        return await _embed_documents_with_cache(self, texts)
     
     async def embed_query(self, text: str) -> List[float]:
         """
-        將查詢文字轉換為向量
+        將查詢文字轉換為向量（支援智能快取）
         
         此方法專門用於單一查詢文字的向量化，適合用於相似度搜尋場景。
+        整合快取機制以提升常用查詢的效能。
         
         Args:
             text (str): 要嵌入的文字字串
@@ -272,26 +291,32 @@ class GeminiEmbeddingService:
             - 空文字會被替換為 "empty query"
             - 文字會被截斷至 8000 字符以符合 API 限制
             - 包含向量維度驗證日誌
+            - 支援智能快取機制
         """
-        if not text or not text.strip():
-            logger.warning("收到空的查詢文字，使用預設值")
-            text = "empty query"
-        
-        # 清理和預處理文字
-        cleaned_text = get_optimal_text(text.strip(), self.max_text_length)
-        
-        try:
-            vector = await self._retry_embedding_operation(
-                self.client.aembed_query, 
-                cleaned_text
-            )
+        # 使用快取裝飾器包裝的內部方法
+        @embedding_cache(self.cache_manager, prefix="query_embed")
+        async def _embed_query_with_cache(self, text: str) -> List[float]:
+            if not text or not text.strip():
+                logger.warning("收到空的查詢文字，使用預設值")
+                text = "empty query"
             
-            logger.debug(f"查詢向量化成功，維度: {len(vector) if vector else 0}")
-            return vector
+            # 清理和預處理文字
+            cleaned_text = get_optimal_text(text.strip(), self.max_text_length)
             
-        except Exception as e:
-            logger.error(f"查詢向量化失敗: {str(e)}")
-            raise
+            try:
+                vector = await self._retry_embedding_operation(
+                    self.client.aembed_query, 
+                    cleaned_text
+                )
+                
+                logger.debug(f"查詢向量化成功，維度: {len(vector) if vector else 0}")
+                return vector
+                
+            except Exception as e:
+                logger.error(f"查詢向量化失敗: {str(e)}")
+                raise
+        
+        return await _embed_query_with_cache(self, text)
     
     def get_vector_dimension(self) -> int:
         """
@@ -317,7 +342,15 @@ class GeminiEmbeddingService:
             - 記錄詳細的測試結果
         """
         try:
+            # 暫時停用快取以確保真實測試
+            original_enabled = self.cache_manager.enabled
+            self.cache_manager.enabled = False
+            
             test_vector = await self.embed_query("connection test")
+            
+            # 恢復快取設定
+            self.cache_manager.enabled = original_enabled
+            
             if test_vector and len(test_vector) > 0:
                 logger.info(f"嵌入服務連線測試成功，向量維度: {len(test_vector)}")
                 return True
@@ -330,10 +363,11 @@ class GeminiEmbeddingService:
     
     async def embed_alert_content(self, alert_source: Dict[str, Any]) -> List[float]:
         """
-        專門用於向量化警報內容的方法
+        專門用於向量化警報內容的方法（支援智能快取）
         
         此方法針對 Wazuh 警報結構進行特殊處理，提取並結構化關鍵資訊後
-        進行向量化，優化針對警報特定內容的語意表示。
+        進行向量化，優化針對警報特定內容的語意表示。整合快取機制以提升
+        重複警報的處理效能。
         
         處理的警報欄位包括：
         - 規則描述與等級
@@ -354,6 +388,7 @@ class GeminiEmbeddingService:
             - 結構化提取重要警報欄位
             - 自動處理缺失欄位
             - 包含後備機制確保系統穩定性
+            - 支援智能快取機制
         """
         try:
             rule = alert_source.get('rule', {})
@@ -411,4 +446,25 @@ class GeminiEmbeddingService:
             # 後備至基本描述
             fallback_text = f"規則: {alert_source.get('rule', {}).get('description', '未知')}"
             logger.info(f"使用後備文字: {fallback_text}")
-            return await self.embed_query(fallback_text) 
+            return await self.embed_query(fallback_text)
+    
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """
+        獲取快取統計資訊
+        
+        Returns:
+            Dict[str, Any]: 快取統計資訊，包含命中率、使用率等
+        """
+        return self.cache_manager.get_stats()
+    
+    def clear_cache(self) -> None:
+        """
+        清空快取
+        
+        在需要時手動清空所有快取項目，例如：
+        - 模型更新後
+        - 記憶體不足時
+        - 測試環境重置
+        """
+        self.cache_manager.clear()
+        logger.info("向量嵌入快取已清空") 
