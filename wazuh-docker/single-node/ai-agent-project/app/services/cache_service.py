@@ -186,6 +186,54 @@ class CacheService:
             return wrapper
         return decorator
     
+    def cache_query_result(self, func):
+        """
+        快取查詢結果的裝飾器
+        
+        用於包裝 OpenSearch 查詢函數，自動處理快取邏輯。
+        
+        Args:
+            func: 要包裝的查詢函數
+            
+        Returns:
+            包裝後的函數
+        """
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # 生成快取鍵值
+            # 從參數中提取有意義的快取鍵組成部分
+            cache_key_parts = [func.__name__]
+            
+            # 處理位置參數
+            for arg in args:
+                if isinstance(arg, (str, int, float, bool)):
+                    cache_key_parts.append(str(arg))
+                elif isinstance(arg, dict):
+                    # 對字典參數進行排序以確保一致性
+                    sorted_items = sorted(arg.items())
+                    cache_key_parts.append(str(sorted_items))
+                elif isinstance(arg, list):
+                    cache_key_parts.append(str(arg))
+            
+            # 處理關鍵字參數
+            for key, value in sorted(kwargs.items()):
+                cache_key_parts.append(f"{key}={value}")
+            
+            # 生成最終的快取鍵
+            cache_key = hashlib.md5(":".join(cache_key_parts).encode()).hexdigest()
+            cache_key = f"query:{cache_key}"
+            
+            # 獲取或計算結果
+            result = await self.get_or_compute(
+                cache_key=cache_key,
+                compute_func=lambda: func(*args, **kwargs),
+                cache_type='ttl'  # 查詢結果使用 TTL 快取
+            )
+            
+            return result
+        
+        return wrapper
+    
     def cache_neo4j_query(self, cache_type: str = 'lru'):
         """
         用於 Neo4j 查詢的快取裝飾器
