@@ -27,6 +27,12 @@
 |---------|------|----------|
 | [自動化優化報告](AUTOMATION_OPTIMIZATION_REPORT.md) | CI/CD 和自動化流程優化報告 | 2024年12月 |
 
+### 🚀 效能優化報告
+
+| 報告名稱 | 說明 | 完成日期 |
+|---------|------|----------|
+| [智能快取實作報告](../wazuh-docker/single-node/ai-agent-project/docs/INTELLIGENT_CACHING_REPORT.md) | 智能快取機制的實作與效能提升 | 2025年1月 |
+
 ### 📊 專案里程碑
 
 - **Stage 1-3**: 基礎 RAG 到 AgenticRAG 實施完成

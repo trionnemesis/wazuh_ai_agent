@@ -44,6 +44,12 @@ DEFAULT_RETRIEVAL_LIMIT = int(os.getenv("DEFAULT_RETRIEVAL_LIMIT", "10"))
 VECTOR_SEARCH_K = int(os.getenv("VECTOR_SEARCH_K", "7"))
 TIME_WINDOW_MINUTES = int(os.getenv("TIME_WINDOW_MINUTES", "5"))
 
+# === 快取設定 ===
+CACHE_ENABLED = os.getenv("CACHE_ENABLED", "true").lower() == "true"
+CACHE_LRU_MAXSIZE = int(os.getenv("CACHE_LRU_MAXSIZE", "1000"))
+CACHE_TTL_MAXSIZE = int(os.getenv("CACHE_TTL_MAXSIZE", "500"))
+CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "3600"))
+
 def validate_config():
     """驗證必要的配置是否已設置"""
     errors = []
@@ -71,5 +77,8 @@ def get_config_summary() -> dict:
         "opensearch_url": OPENSEARCH_URL,
         "neo4j_uri": NEO4J_URI,
         "scheduler_interval": SCHEDULER_INTERVAL_SECONDS,
-        "vector_search_k": VECTOR_SEARCH_K
+        "vector_search_k": VECTOR_SEARCH_K,
+        "cache_enabled": CACHE_ENABLED,
+        "cache_lru_size": CACHE_LRU_MAXSIZE,
+        "cache_ttl_size": CACHE_TTL_MAXSIZE
     }

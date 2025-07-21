@@ -4,9 +4,11 @@ Neo4j 服務模組
 """
 
 import logging
+import hashlib
 from typing import Optional, List, Dict, Any
 
 from ..core.config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
+from ..utils.cache_manager import get_cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -77,13 +79,14 @@ async def check_neo4j_connection() -> bool:
         logger.error(f"Neo4j 連接檢查失敗: {str(e)}")
         return False
 
-async def execute_cypher_query(query: str, parameters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+async def execute_cypher_query(query: str, parameters: Dict[str, Any] = None, use_cache: bool = True) -> List[Dict[str, Any]]:
     """
-    執行 Cypher 查詢
+    執行 Cypher 查詢（支援快取）
     
     Args:
         query: Cypher 查詢語句
         parameters: 查詢參數
+        use_cache: 是否使用快取
         
     Returns:
         List[Dict]: 查詢結果列表
@@ -93,16 +96,43 @@ async def execute_cypher_query(query: str, parameters: Dict[str, Any] = None) ->
         logger.warning("Neo4j 驅動程式不可用")
         return []
     
-    try:
-        async with driver.session() as session:
-            result = await session.run(query, parameters or {})
-            records = []
-            async for record in result:
-                records.append(dict(record))
-            return records
-    except Exception as e:
-        logger.error(f"執行 Cypher 查詢失敗: {str(e)}")
-        return []
+    # 如果啟用快取且有快取服務
+    cache_service = get_cache_service()
+    if use_cache and cache_service:
+        # 生成快取鍵值
+        cache_key = f"neo4j:{hashlib.md5((query + str(parameters or {})).encode()).hexdigest()}"
+        
+        async def compute_query():
+            async with driver.session() as session:
+                result = await session.run(query, parameters or {})
+                records = []
+                async for record in result:
+                    records.append(dict(record))
+                return records
+        
+        try:
+            # 使用快取服務
+            result = await cache_service.get_or_compute(
+                cache_key=cache_key,
+                compute_func=compute_query,
+                cache_type='lru'  # Neo4j 查詢使用 LRU 快取
+            )
+            return result
+        except Exception as e:
+            logger.error(f"執行 Cypher 查詢失敗: {str(e)}")
+            return []
+    else:
+        # 不使用快取，直接執行
+        try:
+            async with driver.session() as session:
+                result = await session.run(query, parameters or {})
+                records = []
+                async for record in result:
+                    records.append(dict(record))
+                return records
+        except Exception as e:
+            logger.error(f"執行 Cypher 查詢失敗: {str(e)}")
+            return []
 
 async def create_constraint(label: str, property_name: str) -> bool:
     """

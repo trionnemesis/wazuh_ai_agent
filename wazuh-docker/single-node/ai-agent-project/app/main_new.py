@@ -7,11 +7,15 @@ import logging
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
-from core.config import APP_TITLE, APP_VERSION, validate_config
+from core.config import (
+    APP_TITLE, APP_VERSION, validate_config,
+    CACHE_ENABLED, CACHE_LRU_MAXSIZE, CACHE_TTL_MAXSIZE, CACHE_TTL_SECONDS
+)
 from core.scheduler import start_scheduler, shutdown_scheduler
 from api.endpoints import router as api_router
 from services.opensearch_service import close_opensearch_client
 from services.neo4j_service import close_neo4j_driver
+from utils.cache_manager import initialize_cache_service
 
 # 配置日誌
 logging.basicConfig(
@@ -28,6 +32,16 @@ async def lifespan(app: FastAPI):
     
     # 驗證配置
     validate_config()
+    
+    # 初始化快取服務
+    cache_service = initialize_cache_service(
+        lru_maxsize=CACHE_LRU_MAXSIZE,
+        ttl_maxsize=CACHE_TTL_MAXSIZE,
+        ttl_seconds=CACHE_TTL_SECONDS,
+        enable_cache=CACHE_ENABLED
+    )
+    if cache_service:
+        logger.info("✅ 智能快取服務已啟動")
     
     # 啟動排程器
     start_scheduler()
