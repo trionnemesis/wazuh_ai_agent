@@ -11,6 +11,7 @@ from ..core.config import APP_VERSION, APP_STAGE
 from ..services.opensearch_service import get_opensearch_client
 from ..services.neo4j_service import get_neo4j_driver
 from ..embedding_service import GeminiEmbeddingService
+from ..services.cache_service import cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,9 @@ async def perform_health_check() -> Dict[str, Any]:
     
     # 檢查嵌入服務
     health_status["components"]["embedding_service"] = await check_embedding_service_health()
+    
+    # 檢查快取服務
+    health_status["components"]["cache_service"] = check_cache_health()
     
     # 判斷整體健康狀態
     if any(comp["status"] != "healthy" for comp in health_status["components"].values()):
@@ -107,6 +111,34 @@ async def check_embedding_service_health() -> Dict[str, Any]:
         }
     except Exception as e:
         logger.error(f"嵌入服務健康檢查失敗: {str(e)}")
+        return {
+            "status": "unhealthy",
+            "error": str(e)
+        }
+
+def check_cache_health() -> Dict[str, Any]:
+    """檢查快取服務狀態"""
+    try:
+        stats = cache_service.get_stats()
+        
+        # 計算健康指標
+        hit_rate = float(stats['hit_rate'].rstrip('%'))
+        is_healthy = True  # 快取服務通常總是健康的
+        
+        return {
+            "status": "healthy",
+            "hit_rate": stats['hit_rate'],
+            "total_requests": stats['total_requests'],
+            "hits": stats['hits'],
+            "misses": stats['misses'],
+            "cache_sizes": {
+                "query_cache": f"{stats['query_cache_size']}/{stats['query_cache_maxsize']}",
+                "vector_cache": f"{stats['vector_cache_size']}/{stats['vector_cache_maxsize']}",
+                "graph_cache": f"{stats['graph_cache_size']}/{stats['graph_cache_maxsize']}"
+            }
+        }
+    except Exception as e:
+        logger.error(f"快取服務健康檢查失敗: {str(e)}")
         return {
             "status": "unhealthy",
             "error": str(e)

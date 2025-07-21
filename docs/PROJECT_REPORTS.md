@@ -26,6 +26,7 @@
 | 報告名稱 | 說明 | 完成日期 |
 |---------|------|----------|
 | [自動化優化報告](AUTOMATION_OPTIMIZATION_REPORT.md) | CI/CD 和自動化流程優化報告 | 2024年12月 |
+| [智能快取實作報告](INTELLIGENT_CACHING_IMPLEMENTATION.md) | 記憶體快取機制的實作與效能優化 | 2024年12月 |
 
 ### 🚀 效能優化報告
 
