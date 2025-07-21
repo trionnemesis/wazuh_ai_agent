@@ -1,209 +1,303 @@
 """
 智能快取服務模組
-提供記憶體快取機制來優化常用查詢結果
+實作記憶體快取機制以優化常用查詢的效能
+
+
 """
 
 import logging
 import hashlib
 import json
-from typing import Any, Dict, Optional, Callable, Union, List
-from datetime import datetime, timedelta
+import time
+from typing import Any, Dict, Optional, Callable, Union
 from functools import wraps
-import asyncio
-
 from cachetools import TTLCache, LRUCache
-from cachetools.keys import hashkey
+from datetime import datetime, timedelta
+import asyncio
 
 logger = logging.getLogger(__name__)
 
 class CacheService:
-    """智能快取服務，提供LRU和TTL快取機制"""
+    """
+    智能快取服務
     
-    def __init__(self):
-        # 查詢結果快取 - 使用TTL快取，5分鐘過期
-        self.query_cache = TTLCache(maxsize=1000, ttl=300)  # 5分鐘TTL
+    提供多層級快取策略：
+    - LRU (Least Recently Used) 快取：用於高頻查詢
+    - TTL (Time To Live) 快取：用於時效性資料
+    - 統計分析：追蹤快取命中率和效能提升
+    """
+    
+    def __init__(self, 
+                 lru_maxsize: int = 1000,
+                 ttl_maxsize: int = 500,
+                 ttl_seconds: int = 3600):
+        """
+        初始化快取服務
         
-        # 向量搜尋快取 - 使用LRU快取
-        self.vector_cache = LRUCache(maxsize=500)
-        
-        # 圖形查詢快取 - 使用TTL快取，10分鐘過期
-        self.graph_cache = TTLCache(maxsize=500, ttl=600)  # 10分鐘TTL
+        Args:
+            lru_maxsize: LRU 快取最大容量
+            ttl_maxsize: TTL 快取最大容量
+            ttl_seconds: TTL 快取過期時間（秒）
+        """
+        # 初始化快取儲存
+        self.lru_cache = LRUCache(maxsize=lru_maxsize)
+        self.ttl_cache = TTLCache(maxsize=ttl_maxsize, ttl=ttl_seconds)
+
         
         # 快取統計
         self.stats = {
             'hits': 0,
             'misses': 0,
             'evictions': 0,
-            'total_requests': 0
+            'total_requests': 0,
+            'saved_time_ms': 0
         }
         
-        logger.info("CacheService initialized with TTL and LRU caches")
-    
-    def _generate_cache_key(self, prefix: str, params: Union[Dict, tuple]) -> str:
-        """生成快取鍵"""
-        if isinstance(params, dict):
-            # 將字典轉換為穩定的字符串表示
-            stable_str = json.dumps(params, sort_keys=True, default=str)
-        else:
-            stable_str = str(params)
+        # 快取配置
+        self.config = {
+            'lru_maxsize': lru_maxsize,
+            'ttl_maxsize': ttl_maxsize,
+            'ttl_seconds': ttl_seconds
+        }
         
-        # 使用SHA256生成短鍵
-        hash_obj = hashlib.sha256(stable_str.encode())
-        return f"{prefix}:{hash_obj.hexdigest()[:16]}"
+        logger.info(f"快取服務初始化完成 - LRU: {lru_maxsize}, TTL: {ttl_maxsize}/{ttl_seconds}s")
     
-    def get(self, cache_type: str, key: str) -> Optional[Any]:
-        """從快取中獲取資料"""
+    def _generate_cache_key(self, 
+                           func_name: str, 
+                           args: tuple, 
+                           kwargs: dict) -> str:
+        """
+        生成快取鍵值
+        
+        Args:
+            func_name: 函數名稱
+            args: 位置參數
+            kwargs: 關鍵字參數
+            
+        Returns:
+            str: 快取鍵值
+        """
+        # 將參數序列化為穩定的字串
+        key_data = {
+            'func': func_name,
+            'args': args,
+            'kwargs': kwargs
+        }
+        
+        # 使用 JSON 序列化並計算 hash
+        key_string = json.dumps(key_data, sort_keys=True, default=str)
+        cache_key = hashlib.md5(key_string.encode()).hexdigest()
+        
+        return f"{func_name}:{cache_key}"
+    
+    async def get_or_compute(self,
+                           cache_key: str,
+                           compute_func: Callable,
+                           cache_type: str = 'lru',
+                           ttl_override: Optional[int] = None) -> Any:
+        """
+        獲取快取或計算結果
+        
+        Args:
+            cache_key: 快取鍵值
+            compute_func: 計算函數（當快取未命中時呼叫）
+            cache_type: 快取類型 ('lru' 或 'ttl')
+            ttl_override: 覆蓋預設 TTL（僅用於 ttl 類型）
+            
+        Returns:
+            快取或計算的結果
+        """
+        start_time = time.time()
         self.stats['total_requests'] += 1
         
-        cache = self._get_cache(cache_type)
-        if cache is None:
-            return None
+        # 選擇快取儲存
+        cache_store = self.lru_cache if cache_type == 'lru' else self.ttl_cache
         
-        try:
-            value = cache.get(key)
-            if value is not None:
-                self.stats['hits'] += 1
-                logger.debug(f"Cache hit for {cache_type}:{key}")
-                return value
-            else:
-                self.stats['misses'] += 1
-                logger.debug(f"Cache miss for {cache_type}:{key}")
-                return None
-        except KeyError:
-            self.stats['misses'] += 1
-            return None
-    
-    def set(self, cache_type: str, key: str, value: Any) -> None:
-        """將資料存入快取"""
-        cache = self._get_cache(cache_type)
-        if cache is None:
-            return
-        
-        try:
-            # 檢查快取是否已滿
-            if len(cache) >= cache.maxsize:
-                self.stats['evictions'] += 1
+        # 檢查快取
+        if cache_key in cache_store:
+            self.stats['hits'] += 1
+            result = cache_store[cache_key]
             
-            cache[key] = value
-            logger.debug(f"Cached {cache_type}:{key}")
-        except Exception as e:
-            logger.error(f"Failed to cache {cache_type}:{key}: {str(e)}")
-    
-    def invalidate(self, cache_type: str, key: Optional[str] = None) -> None:
-        """使快取無效"""
-        cache = self._get_cache(cache_type)
-        if cache is None:
-            return
+            # 計算節省的時間
+            elapsed_ms = (time.time() - start_time) * 1000
+            self.stats['saved_time_ms'] += elapsed_ms
+            
+            logger.debug(f"快取命中: {cache_key} (節省 {elapsed_ms:.2f}ms)")
+            return result
         
-        if key:
-            cache.pop(key, None)
-            logger.debug(f"Invalidated cache {cache_type}:{key}")
-        else:
-            cache.clear()
-            logger.info(f"Cleared all {cache_type} cache")
+        # 快取未命中，執行計算
+        self.stats['misses'] += 1
+        logger.debug(f"快取未命中: {cache_key}")
+        
+        try:
+            # 執行計算函數
+            if asyncio.iscoroutinefunction(compute_func):
+                result = await compute_func()
+            else:
+                result = compute_func()
+            
+            # 儲存結果到快取
+            if cache_type == 'ttl' and ttl_override:
+                # 使用自訂 TTL
+                temp_cache = TTLCache(maxsize=1, ttl=ttl_override)
+                temp_cache[cache_key] = result
+                cache_store.update(temp_cache)
+            else:
+                cache_store[cache_key] = result
+            
+            elapsed_ms = (time.time() - start_time) * 1000
+            logger.debug(f"計算完成並快取: {cache_key} (耗時 {elapsed_ms:.2f}ms)")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"計算函數執行失敗: {str(e)}")
+            raise
     
-    def _get_cache(self, cache_type: str) -> Optional[Union[TTLCache, LRUCache]]:
-        """根據類型獲取對應的快取實例"""
-        cache_map = {
-            'query': self.query_cache,
-            'vector': self.vector_cache,
-            'graph': self.graph_cache
-        }
-        return cache_map.get(cache_type)
+    def cache_embedding(self, ttl_seconds: int = 3600):
+        """
+        用於向量嵌入的快取裝飾器
+        
+        Args:
+            ttl_seconds: 快取過期時間（秒）
+        """
+        def decorator(func):
+            @wraps(func)
+            async def wrapper(self, text: str, *args, **kwargs):
+                # 生成快取鍵值
+                cache_key = f"embed:{hashlib.md5(text.encode()).hexdigest()}"
+                
+                # 使用快取服務
+                cache_service = getattr(self, '_cache_service', None)
+                if not cache_service:
+                    # 如果沒有快取服務，直接執行函數
+                    return await func(self, text, *args, **kwargs)
+                
+                # 獲取或計算結果
+                result = await cache_service.get_or_compute(
+                    cache_key=cache_key,
+                    compute_func=lambda: func(self, text, *args, **kwargs),
+                    cache_type='ttl',
+                    ttl_override=ttl_seconds
+                )
+                
+                return result
+            
+            return wrapper
+        return decorator
+    
+    def cache_neo4j_query(self, cache_type: str = 'lru'):
+        """
+        用於 Neo4j 查詢的快取裝飾器
+        
+        Args:
+            cache_type: 快取類型 ('lru' 或 'ttl')
+        """
+        def decorator(func):
+            @wraps(func)
+            async def wrapper(*args, **kwargs):
+                # 提取查詢參數
+                query = args[0] if args else kwargs.get('query', '')
+                parameters = args[1] if len(args) > 1 else kwargs.get('parameters', {})
+                
+                # 生成快取鍵值
+                cache_key = f"neo4j:{hashlib.md5((query + str(parameters)).encode()).hexdigest()}"
+                
+                # 獲取全域快取服務
+                from ..utils.cache_manager import get_cache_service
+                cache_service = get_cache_service()
+                
+                if not cache_service:
+                    # 如果沒有快取服務，直接執行函數
+                    return await func(*args, **kwargs)
+                
+                # 獲取或計算結果
+                result = await cache_service.get_or_compute(
+                    cache_key=cache_key,
+                    compute_func=lambda: func(*args, **kwargs),
+                    cache_type=cache_type
+                )
+                
+                return result
+            
+            return wrapper
+        return decorator
+    
+    def clear_cache(self, cache_type: Optional[str] = None):
+        """
+        清除快取
+        
+        Args:
+            cache_type: 要清除的快取類型，None 表示清除所有
+        """
+        if cache_type == 'lru' or cache_type is None:
+            self.lru_cache.clear()
+            logger.info("LRU 快取已清除")
+        
+        if cache_type == 'ttl' or cache_type is None:
+            self.ttl_cache.clear()
+            logger.info("TTL 快取已清除")
     
     def get_stats(self) -> Dict[str, Any]:
-        """獲取快取統計資訊"""
-        hit_rate = (self.stats['hits'] / self.stats['total_requests'] * 100) if self.stats['total_requests'] > 0 else 0
+        """
+        獲取快取統計資訊
+        
+        Returns:
+            統計資訊字典
+        """
+        hit_rate = 0
+        if self.stats['total_requests'] > 0:
+            hit_rate = (self.stats['hits'] / self.stats['total_requests']) * 100
         
         return {
-            **self.stats,
             'hit_rate': f"{hit_rate:.2f}%",
-            'query_cache_size': len(self.query_cache),
-            'vector_cache_size': len(self.vector_cache),
-            'graph_cache_size': len(self.graph_cache),
-            'query_cache_maxsize': self.query_cache.maxsize,
-            'vector_cache_maxsize': self.vector_cache.maxsize,
-            'graph_cache_maxsize': self.graph_cache.maxsize
+            'total_requests': self.stats['total_requests'],
+            'hits': self.stats['hits'],
+            'misses': self.stats['misses'],
+            'saved_time_ms': self.stats['saved_time_ms'],
+            'lru_size': len(self.lru_cache),
+            'ttl_size': len(self.ttl_cache),
+            'config': self.config
         }
     
-    def cache_query_result(self, func: Callable) -> Callable:
-        """查詢結果快取裝飾器"""
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            # 生成快取鍵
-            cache_key = self._generate_cache_key('query', (args, kwargs))
-            
-            # 嘗試從快取獲取
-            cached_result = self.get('query', cache_key)
-            if cached_result is not None:
-                return cached_result
-            
-            # 執行原始函數
-            if asyncio.iscoroutinefunction(func):
-                result = await func(*args, **kwargs)
-            else:
-                result = func(*args, **kwargs)
-            
-            # 存入快取
-            self.set('query', cache_key, result)
-            
-            return result
+    def get_cache_info(self) -> Dict[str, Any]:
+        """
+        獲取詳細的快取資訊
         
-        return wrapper
-    
-    def cache_vector_search(self, func: Callable) -> Callable:
-        """向量搜尋快取裝飾器"""
-        @wraps(func)
-        async def wrapper(alert_vector: List[float], *args, **kwargs):
-            # 生成快取鍵 - 使用向量的前10個值作為鍵的一部分
-            vector_key = str(alert_vector[:10]) if len(alert_vector) >= 10 else str(alert_vector)
-            cache_key = self._generate_cache_key('vector', (vector_key, args, kwargs))
-            
-            # 嘗試從快取獲取
-            cached_result = self.get('vector', cache_key)
-            if cached_result is not None:
-                return cached_result
-            
-            # 執行原始函數
-            if asyncio.iscoroutinefunction(func):
-                result = await func(alert_vector, *args, **kwargs)
-            else:
-                result = func(alert_vector, *args, **kwargs)
-            
-            # 存入快取
-            self.set('vector', cache_key, result)
-            
-            return result
+        Returns:
+            快取資訊字典
+        """
+        info = {
+            'lru_cache': {
+                'size': len(self.lru_cache),
+                'maxsize': self.config['lru_maxsize'],
+                'usage': f"{(len(self.lru_cache) / self.config['lru_maxsize']) * 100:.1f}%"
+            },
+            'ttl_cache': {
+                'size': len(self.ttl_cache),
+                'maxsize': self.config['ttl_maxsize'],
+                'ttl_seconds': self.config['ttl_seconds'],
+                'usage': f"{(len(self.ttl_cache) / self.config['ttl_maxsize']) * 100:.1f}%"
+            },
+            'performance': {
+                'hit_rate': f"{(self.stats['hits'] / max(self.stats['total_requests'], 1)) * 100:.2f}%",
+                'avg_saved_time_ms': self.stats['saved_time_ms'] / max(self.stats['hits'], 1)
+            }
+        }
         
-        return wrapper
-    
-    def cache_graph_query(self, func: Callable) -> Callable:
-        """圖形查詢快取裝飾器"""
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            # 生成快取鍵
-            cache_key = self._generate_cache_key('graph', (args, kwargs))
-            
-            # 嘗試從快取獲取
-            cached_result = self.get('graph', cache_key)
-            if cached_result is not None:
-                return cached_result
-            
-            # 執行原始函數
-            if asyncio.iscoroutinefunction(func):
-                result = await func(*args, **kwargs)
-            else:
-                result = func(*args, **kwargs)
-            
-            # 存入快取
-            self.set('graph', cache_key, result)
-            
-            return result
-        
-        return wrapper
+        return info
 
-# 創建全域快取服務實例
-cache_service = CacheService()
+# 全域快取服務實例
+_cache_service: Optional[CacheService] = None
 
-# 匯出常用功能
-__all__ = ['cache_service', 'CacheService']
+def get_cache_service() -> Optional[CacheService]:
+    """獲取全域快取服務實例"""
+    return _cache_service
+
+def init_cache_service(**kwargs) -> CacheService:
+    """初始化全域快取服務"""
+    global _cache_service
+    _cache_service = CacheService(**kwargs)
+    logger.info("全域快取服務已初始化")
+    return _cache_service
+

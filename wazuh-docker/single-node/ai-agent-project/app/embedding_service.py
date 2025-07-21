@@ -22,6 +22,7 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from .utils.text_chunking import SmartTextChunker, get_optimal_text, smart_chunk_text
 from .utils.cache_manager import get_cache_manager, embedding_cache, batch_embedding_cache
 
+
 # 獲取當前模組的日誌記錄器
 logger = logging.getLogger(__name__)
 
@@ -97,8 +98,9 @@ class GeminiEmbeddingService:
         # 初始化 Google Gemini 客戶端
         self.client = self._initialize_client()
         
-        # 初始化快取管理器
-        self.cache_manager = get_cache_manager()
+        # 初始化快取服務
+        self._cache_service = get_cache_service()
+
         
         # 記錄初始化完成狀態
         dimension_info = self.dimension or 768
@@ -273,10 +275,12 @@ class GeminiEmbeddingService:
     
     async def embed_query(self, text: str) -> List[float]:
         """
-        將查詢文字轉換為向量（支援智能快取）
+
+        將查詢文字轉換為向量（支援快取）
         
         此方法專門用於單一查詢文字的向量化，適合用於相似度搜尋場景。
-        整合快取機制以提升常用查詢的效能。
+        新增智能快取功能，減少重複查詢的API調用。
+
         
         Args:
             text (str): 要嵌入的文字字串
@@ -291,19 +295,42 @@ class GeminiEmbeddingService:
             - 空文字會被替換為 "empty query"
             - 文字會被截斷至 8000 字符以符合 API 限制
             - 包含向量維度驗證日誌
-            - 支援智能快取機制
+            - 支援智能快取以優化效能
         """
-        # 使用快取裝飾器包裝的內部方法
-        @embedding_cache(self.cache_manager, prefix="query_embed")
-        async def _embed_query_with_cache(self, text: str) -> List[float]:
-            if not text or not text.strip():
-                logger.warning("收到空的查詢文字，使用預設值")
-                text = "empty query"
+        if not text or not text.strip():
+            logger.warning("收到空的查詢文字，使用預設值")
+            text = "empty query"
+        
+        # 清理和預處理文字
+        cleaned_text = get_optimal_text(text.strip(), self.max_text_length)
+        
+        # 如果有快取服務，使用快取
+        if self._cache_service:
+            import hashlib
+            cache_key = f"embed:{hashlib.md5(cleaned_text.encode()).hexdigest()}"
             
-            # 清理和預處理文字
-            cleaned_text = get_optimal_text(text.strip(), self.max_text_length)
+            async def compute_embedding():
+                return await self._retry_embedding_operation(
+                    self.client.aembed_query, 
+                    cleaned_text
+                )
             
             try:
+                vector = await self._cache_service.get_or_compute(
+                    cache_key=cache_key,
+                    compute_func=compute_embedding,
+                    cache_type='ttl',
+                    ttl_override=3600  # 1小時快取
+                )
+                logger.debug(f"查詢向量化成功（使用快取），維度: {len(vector) if vector else 0}")
+                return vector
+            except Exception as e:
+                logger.error(f"查詢向量化失敗: {str(e)}")
+                raise
+        else:
+            # 沒有快取服務，直接執行
+            try:
+
                 vector = await self._retry_embedding_operation(
                     self.client.aembed_query, 
                     cleaned_text
@@ -315,9 +342,6 @@ class GeminiEmbeddingService:
             except Exception as e:
                 logger.error(f"查詢向量化失敗: {str(e)}")
                 raise
-        
-        return await _embed_query_with_cache(self, text)
-    
     def get_vector_dimension(self) -> int:
         """
         取得實際向量維度

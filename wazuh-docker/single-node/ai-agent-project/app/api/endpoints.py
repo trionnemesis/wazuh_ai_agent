@@ -11,7 +11,9 @@ from ..core.config import get_config_summary, APP_STAGE
 from ..core.scheduler import get_scheduler_status
 from ..api.health_check import perform_health_check
 from ..services.metrics import REGISTRY
-from ..services.cache_service import cache_service
+from ..utils.cache_manager import get_cache_service
+
+
 
 
 router = APIRouter()
@@ -67,44 +69,58 @@ async def get_metrics():
 @router.get("/cache/stats")
 async def get_cache_stats():
     """
-    快取統計端點 - 返回快取使用情況和效能指標
+
+    快取統計資訊端點
+    
+    返回智能快取服務的統計資料，包括：
+    - 快取命中率
+    - 總請求數
+    - 快取大小
+    - 節省的時間
     
     Returns:
-        Dict: 快取統計資訊，包括命中率、大小等
+        Dict: 快取統計資訊
     """
-    stats = cache_service.get_stats()
-    return {
-        "timestamp": datetime.now().isoformat(),
-        "cache_stats": stats,
-        "cache_config": {
-            "query_cache_ttl": "5 minutes",
-            "vector_cache_type": "LRU",
-            "graph_cache_ttl": "10 minutes"
+    cache_service = get_cache_service()
+    if not cache_service:
+        return {
+            "status": "disabled",
+            "message": "快取服務未啟用"
         }
+    
+    stats = cache_service.get_stats()
+    info = cache_service.get_cache_info()
+    
+    return {
+        "status": "enabled",
+        "statistics": stats,
+        "cache_info": info,
+        "timestamp": datetime.utcnow().isoformat()
     }
 
-@router.post("/cache/invalidate/{cache_type}")
-async def invalidate_cache(cache_type: str, key: str = None):
+@router.post("/cache/clear")
+async def clear_cache(cache_type: str = None):
     """
-    使快取無效端點 - 清除指定類型的快取
+    清除快取端點
     
     Args:
-        cache_type: 快取類型 (query, vector, graph)
-        key: 可選，特定的快取鍵
-        
+        cache_type: 要清除的快取類型 ('lru', 'ttl', 或 None 表示全部)
+    
     Returns:
-        Dict: 操作結果
+        Dict: 清除結果
     """
-    try:
-        cache_service.invalidate(cache_type, key)
-        return {
-            "status": "success",
-            "message": f"Cache '{cache_type}' invalidated" + (f" for key '{key}'" if key else ""),
-            "timestamp": datetime.now().isoformat()
-        }
-    except Exception as e:
+    cache_service = get_cache_service()
+    if not cache_service:
         return {
             "status": "error",
-            "message": str(e),
-            "timestamp": datetime.now().isoformat()
+            "message": "快取服務未啟用"
         }
+    
+    cache_service.clear_cache(cache_type)
+    
+    return {
+        "status": "success",
+        "message": f"快取已清除: {cache_type or 'all'}",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+

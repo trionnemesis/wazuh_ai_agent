@@ -1,180 +1,292 @@
 """
-快取服務測試
-測試記憶體快取機制的功能和效能
+
+快取服務測試模組
+驗證智能快取功能的正確性和效能提升
 """
 
+import pytest
 import asyncio
 import time
-import json
-from datetime import datetime
-
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import hashlib
+from unittest.mock import AsyncMock, patch, MagicMock
 
 from app.services.cache_service import CacheService
+from app.utils.cache_manager import initialize_cache_service, get_cache_service
 
-async def test_cache_basic_operations():
-    """測試快取基本操作"""
-    print("\n=== 測試快取基本操作 ===")
+class TestCacheService:
+    """快取服務單元測試"""
     
-    cache = CacheService()
+    @pytest.fixture
+    def cache_service(self):
+        """創建測試用的快取服務實例"""
+        return CacheService(
+            lru_maxsize=100,
+            ttl_maxsize=50,
+            ttl_seconds=60
+        )
     
-    # 測試設置和獲取
-    cache.set('query', 'test_key', {'data': 'test_value'})
-    result = cache.get('query', 'test_key')
-    assert result == {'data': 'test_value'}
-    print("✅ 設置和獲取測試通過")
-    
-    # 測試快取未命中
-    result = cache.get('query', 'non_existent_key')
-    assert result is None
-    print("✅ 快取未命中測試通過")
-    
-    # 測試快取無效化
-    cache.invalidate('query', 'test_key')
-    result = cache.get('query', 'test_key')
-    assert result is None
-    print("✅ 快取無效化測試通過")
-    
-    # 測試快取統計
-    stats = cache.get_stats()
-    print(f"📊 快取統計: {json.dumps(stats, indent=2)}")
-
-async def test_cache_decorators():
-    """測試快取裝飾器"""
-    print("\n=== 測試快取裝飾器 ===")
-    
-    cache = CacheService()
-    call_count = 0
-    
-    @cache.cache_query_result
-    async def expensive_query(param1, param2):
-        nonlocal call_count
-        call_count += 1
-        await asyncio.sleep(0.1)  # 模擬耗時操作
-        return f"Result for {param1}, {param2}"
-    
-    # 第一次調用 - 應該執行函數
-    start = time.time()
-    result1 = await expensive_query("test", "123")
-    duration1 = time.time() - start
-    print(f"第一次調用: {result1} (耗時: {duration1:.3f}秒)")
-    
-    # 第二次調用 - 應該從快取返回
-    start = time.time()
-    result2 = await expensive_query("test", "123")
-    duration2 = time.time() - start
-    print(f"第二次調用: {result2} (耗時: {duration2:.3f}秒)")
-    
-    assert result1 == result2
-    assert call_count == 1  # 函數只應該被調用一次
-    assert duration2 < duration1 * 0.1  # 快取調用應該快得多
-    print("✅ 快取裝飾器測試通過")
-
-async def test_ttl_cache():
-    """測試TTL快取過期"""
-    print("\n=== 測試TTL快取過期 ===")
-    
-    # 創建一個短TTL的快取用於測試
-    from cachetools import TTLCache
-    test_cache = TTLCache(maxsize=10, ttl=1)  # 1秒過期
-    
-    # 設置值
-    test_cache['test_key'] = 'test_value'
-    assert test_cache.get('test_key') == 'test_value'
-    print("✅ TTL快取設置成功")
-    
-    # 等待過期
-    await asyncio.sleep(1.5)
-    assert test_cache.get('test_key') is None
-    print("✅ TTL快取過期測試通過")
-
-async def test_lru_cache():
-    """測試LRU快取驅逐"""
-    print("\n=== 測試LRU快取驅逐 ===")
-    
-    from cachetools import LRUCache
-    test_cache = LRUCache(maxsize=3)
-    
-    # 填滿快取
-    test_cache['key1'] = 'value1'
-    test_cache['key2'] = 'value2'
-    test_cache['key3'] = 'value3'
-    
-    # 訪問 key1，使其成為最近使用
-    _ = test_cache['key1']
-    
-    # 添加新鍵，應該驅逐 key2（最少使用）
-    test_cache['key4'] = 'value4'
-    
-    assert 'key1' in test_cache
-    assert 'key2' not in test_cache
-    assert 'key3' in test_cache
-    assert 'key4' in test_cache
-    print("✅ LRU驅逐測試通過")
-
-async def test_cache_performance():
-    """測試快取效能提升"""
-    print("\n=== 測試快取效能提升 ===")
-    
-    cache = CacheService()
-    
-    # 模擬昂貴的查詢
-    async def simulate_expensive_query(query_id):
-        await asyncio.sleep(0.5)  # 模擬500ms延遲
-        return {
-            'query_id': query_id,
-            'timestamp': datetime.now().isoformat(),
-            'data': [i for i in range(100)]
-        }
-    
-    # 不使用快取的查詢
-    print("\n不使用快取:")
-    start = time.time()
-    for i in range(5):
-        result = await simulate_expensive_query('test_query')
-    no_cache_duration = time.time() - start
-    print(f"5次查詢耗時: {no_cache_duration:.3f}秒")
-    
-    # 使用快取的查詢
-    print("\n使用快取:")
-    @cache.cache_query_result
-    async def cached_query(query_id):
-        return await simulate_expensive_query(query_id)
-    
-    start = time.time()
-    for i in range(5):
-        result = await cached_query('test_query')
-    cached_duration = time.time() - start
-    print(f"5次查詢耗時: {cached_duration:.3f}秒")
-    
-    speedup = no_cache_duration / cached_duration
-    print(f"\n🚀 效能提升: {speedup:.1f}x")
-    
-    # 獲取最終統計
-    stats = cache.get_stats()
-    print(f"\n📊 最終快取統計:")
-    print(f"  - 總請求數: {stats['total_requests']}")
-    print(f"  - 命中數: {stats['hits']}")
-    print(f"  - 未命中數: {stats['misses']}")
-    print(f"  - 命中率: {stats['hit_rate']}")
-
-async def main():
-    """主測試函數"""
-    print("🧪 開始測試智能快取服務\n")
-    
-    try:
-        await test_cache_basic_operations()
-        await test_cache_decorators()
-        await test_ttl_cache()
-        await test_lru_cache()
-        await test_cache_performance()
+    @pytest.mark.asyncio
+    async def test_lru_cache_basic(self, cache_service):
+        """測試 LRU 快取基本功能"""
+        # 定義計算函數
+        call_count = 0
+        async def compute_func():
+            nonlocal call_count
+            call_count += 1
+            return f"result_{call_count}"
         
-        print("\n✅ 所有測試通過！")
-    except Exception as e:
-        print(f"\n❌ 測試失敗: {str(e)}")
-        raise
+        # 第一次調用 - 應該執行計算
+        result1 = await cache_service.get_or_compute(
+            cache_key="test_key_1",
+            compute_func=compute_func,
+            cache_type='lru'
+        )
+        assert result1 == "result_1"
+        assert call_count == 1
+        
+        # 第二次調用相同的鍵 - 應該從快取返回
+        result2 = await cache_service.get_or_compute(
+            cache_key="test_key_1",
+            compute_func=compute_func,
+            cache_type='lru'
+        )
+        assert result2 == "result_1"  # 相同的結果
+        assert call_count == 1  # 計算函數沒有被再次調用
+        
+        # 統計資訊驗證
+        stats = cache_service.get_stats()
+        assert stats['total_requests'] == 2
+        assert stats['hits'] == 1
+        assert stats['misses'] == 1
+        assert stats['hit_rate'] == "50.00%"
+    
+    @pytest.mark.asyncio
+    async def test_ttl_cache_expiration(self, cache_service):
+        """測試 TTL 快取過期功能"""
+        # 創建短期 TTL 快取
+        short_ttl_cache = CacheService(
+            lru_maxsize=100,
+            ttl_maxsize=50,
+            ttl_seconds=1  # 1秒過期
+        )
+        
+        call_count = 0
+        async def compute_func():
+            nonlocal call_count
+            call_count += 1
+            return f"ttl_result_{call_count}"
+        
+        # 第一次調用
+        result1 = await short_ttl_cache.get_or_compute(
+            cache_key="ttl_test",
+            compute_func=compute_func,
+            cache_type='ttl'
+        )
+        assert result1 == "ttl_result_1"
+        
+        # 立即再次調用 - 應該從快取返回
+        result2 = await short_ttl_cache.get_or_compute(
+            cache_key="ttl_test",
+            compute_func=compute_func,
+            cache_type='ttl'
+        )
+        assert result2 == "ttl_result_1"
+        
+        # 等待過期
+        await asyncio.sleep(1.5)
+        
+        # 過期後調用 - 應該重新計算
+        result3 = await short_ttl_cache.get_or_compute(
+            cache_key="ttl_test",
+            compute_func=compute_func,
+            cache_type='ttl'
+        )
+        assert result3 == "ttl_result_2"
+        assert call_count == 2
+    
+    @pytest.mark.asyncio
+    async def test_cache_key_generation(self, cache_service):
+        """測試快取鍵值生成"""
+        key1 = cache_service._generate_cache_key(
+            "test_func",
+            ("arg1", "arg2"),
+            {"kwarg1": "value1"}
+        )
+        
+        # 相同參數應該生成相同的鍵
+        key2 = cache_service._generate_cache_key(
+            "test_func",
+            ("arg1", "arg2"),
+            {"kwarg1": "value1"}
+        )
+        assert key1 == key2
+        
+        # 不同參數應該生成不同的鍵
+        key3 = cache_service._generate_cache_key(
+            "test_func",
+            ("arg1", "arg3"),  # 不同的參數
+            {"kwarg1": "value1"}
+        )
+        assert key1 != key3
+    
+    def test_cache_clear(self, cache_service):
+        """測試快取清除功能"""
+        # 添加一些數據到快取
+        cache_service.lru_cache["lru_key"] = "lru_value"
+        cache_service.ttl_cache["ttl_key"] = "ttl_value"
+        
+        # 清除 LRU 快取
+        cache_service.clear_cache('lru')
+        assert len(cache_service.lru_cache) == 0
+        assert len(cache_service.ttl_cache) == 1
+        
+        # 清除所有快取
+        cache_service.clear_cache()
+        assert len(cache_service.lru_cache) == 0
+        assert len(cache_service.ttl_cache) == 0
+    
+    def test_cache_info(self, cache_service):
+        """測試快取資訊獲取"""
+        # 添加一些數據
+        for i in range(10):
+            cache_service.lru_cache[f"lru_{i}"] = f"value_{i}"
+        
+        info = cache_service.get_cache_info()
+        
+        assert info['lru_cache']['size'] == 10
+        assert info['lru_cache']['maxsize'] == 100
+        assert info['lru_cache']['usage'] == "10.0%"
+        
+        assert 'ttl_cache' in info
+        assert 'performance' in info
+
+
+class TestEmbeddingCache:
+    """測試嵌入服務的快取功能"""
+    
+    @pytest.mark.asyncio
+    async def test_embedding_cache_integration(self):
+        """測試嵌入服務與快取的整合"""
+        # 初始化快取服務
+        cache_service = initialize_cache_service(enable_cache=True)
+        
+        # 模擬嵌入服務
+        with patch('app.embedding_service.GeminiEmbeddingService') as MockEmbedding:
+            mock_service = MockEmbedding.return_value
+            mock_service._cache_service = cache_service
+            
+            # 模擬 embed_query 方法
+            embed_call_count = 0
+            async def mock_embed(text):
+                nonlocal embed_call_count
+                embed_call_count += 1
+                return [0.1, 0.2, 0.3] * 256  # 768維向量
+            
+            # 測試相同文本的多次嵌入
+            test_text = "test security alert"
+            cache_key = f"embed:{hashlib.md5(test_text.encode()).hexdigest()}"
+            
+            # 第一次調用
+            result1 = await cache_service.get_or_compute(
+                cache_key=cache_key,
+                compute_func=lambda: mock_embed(test_text),
+                cache_type='ttl'
+            )
+            
+            # 第二次調用應該從快取返回
+            result2 = await cache_service.get_or_compute(
+                cache_key=cache_key,
+                compute_func=lambda: mock_embed(test_text),
+                cache_type='ttl'
+            )
+            
+            assert result1 == result2
+            assert embed_call_count == 1  # 只調用一次
+
+
+class TestNeo4jCache:
+    """測試 Neo4j 查詢的快取功能"""
+    
+    @pytest.mark.asyncio
+    async def test_neo4j_query_cache(self):
+        """測試 Neo4j 查詢快取"""
+        # 初始化快取服務
+        cache_service = initialize_cache_service(enable_cache=True)
+        
+        # 測試查詢
+        test_query = "MATCH (n:Alert) RETURN n LIMIT 10"
+        test_params = {"limit": 10}
+        cache_key = f"neo4j:{hashlib.md5((test_query + str(test_params)).encode()).hexdigest()}"
+        
+        # 模擬查詢結果
+        query_call_count = 0
+        async def mock_query():
+            nonlocal query_call_count
+            query_call_count += 1
+            return [{"id": 1, "type": "Alert"}, {"id": 2, "type": "Alert"}]
+        
+        # 第一次查詢
+        result1 = await cache_service.get_or_compute(
+            cache_key=cache_key,
+            compute_func=mock_query,
+            cache_type='lru'
+        )
+        
+        # 第二次查詢應該從快取返回
+        result2 = await cache_service.get_or_compute(
+            cache_key=cache_key,
+            compute_func=mock_query,
+            cache_type='lru'
+        )
+        
+        assert result1 == result2
+        assert query_call_count == 1
+        
+        # 驗證快取統計
+        stats = cache_service.get_stats()
+        assert stats['hits'] >= 1
+
+
+class TestCachePerformance:
+    """測試快取效能提升"""
+    
+    @pytest.mark.asyncio
+    async def test_performance_improvement(self):
+        """測試快取帶來的效能提升"""
+        cache_service = CacheService()
+        
+        # 模擬耗時操作
+        async def slow_operation():
+            await asyncio.sleep(0.1)  # 模擬100ms的操作
+            return "slow_result"
+        
+        # 測量第一次調用時間
+        start_time = time.time()
+        result1 = await cache_service.get_or_compute(
+            cache_key="perf_test",
+            compute_func=slow_operation,
+            cache_type='lru'
+        )
+        first_call_time = time.time() - start_time
+        
+        # 測量快取命中時間
+        start_time = time.time()
+        result2 = await cache_service.get_or_compute(
+            cache_key="perf_test",
+            compute_func=slow_operation,
+            cache_type='lru'
+        )
+        cache_hit_time = time.time() - start_time
+        
+        # 驗證結果
+        assert result1 == result2
+        assert first_call_time > 0.09  # 應該超過100ms
+        assert cache_hit_time < 0.01   # 快取命中應該非常快
+        
+        # 計算效能提升
+        improvement_ratio = first_call_time / cache_hit_time
+        assert improvement_ratio > 10  # 至少10倍的效能提升
+
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    pytest.main([__file__, "-v"])
