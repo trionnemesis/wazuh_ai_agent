@@ -51,9 +51,9 @@ graph TD
 
     subgraph "自動化回應與通知"
         E --> J[動作執行器 Action Executor];
-        J --> K[安全設備 API <br/> (防火牆, EDR ...)];
+        J --> K["安全設備 API<br/>(防火牆, EDR ...)"];
         E --> L[通知服務 (Slack/Email)];
-        E --> M[人工審批介面 <br/> (Human-in-the-Loop)];
+        E --> M["人工審批介面<br/>(Human-in-the-Loop)"];
     end
 
     subgraph "監控層"
