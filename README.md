@@ -5,10 +5,12 @@
 [![Neo4j](https://img.shields.io/badge/Neo4j-5.15_Community-red.svg)](https://neo4j.com/)
 [![Google Gemini](https://img.shields.io/badge/Embedding-Gemini_text--embedding--004-orange.svg)](https://ai.google.dev/)
 [![Claude AI](https://img.shields.io/badge/LLM-Claude_3_Haiku-purple.svg)](https://www.anthropic.com/)
-[![GraphRAG Status](https://img.shields.io/badge/GraphRAG-Stage_4_完成-success.svg)](https://github.com)
+[![GraphRAG Status](https://img.shields.io/badge/GraphRAG-Stage_5_完成-success.svg)](https://github.com)
 [![Refactored](https://img.shields.io/badge/Architecture-Modular_Services-success.svg)](https://github.com)
 [![Docker Optimized](https://img.shields.io/badge/Docker-Optimized_&_Unified-success.svg)](https://github.com)
 [![Caching](https://img.shields.io/badge/Caching-Intelligent_Memory_Cache-success.svg)](https://github.com)
+[![Agent System](https://img.shields.io/badge/Agent_System-3_Agent_Collaboration-success.svg)](https://github.com)
+[![Threat Hunting](https://img.shields.io/badge/Threat_Hunting-Active_Investigation-success.svg)](https://github.com)
 
 ## 🎯 專案概述
 
@@ -18,7 +20,7 @@
 
 進一步發展為 **Agent to Agent 協作生態系**，包含：
 - **管理者 Agent (Stage 4)**：GraphRAG 威脅分析核心，負責攻擊圖譜生成與威脅關聯分析
-- **資安獵人 Agent (Stage 5)**：主動威脅狩獵，結合外部威脅情資進行智能告警
+- **資安獵人 Agent (Stage 5)**：主動威脅狩獵專家，執行深度調查、關聯分析與威脅情資查詢 ✅
 - **執行者 Agent (Stage 6)**：自動化防禦執行，形成完整的偵測-分析-執行-驗證閉環
 
 這個協作生態系能夠實現 24/7 全自動威脅監控、分析、狩獵與防禦，大幅提升 SOC 團隊的威脅應對能力。
@@ -40,7 +42,17 @@
 - ✅ **Docker 優化**: 統一構建與部署系統 (已完成)
 - ✅ **智能快取**: 記憶體快取機制實作 (已完成)
 
-- 🚧 **Stage 5**: 資安獵人 Agent - 主動威脅狩獵 (規劃中)
+- ✅ **Stage 5**: 資安獵人 Agent - 主動威脅狩獵 (已完成)
+  - ✅ 三代理協作架構實施 (Manager, Hunter, Executor)
+  - ✅ 獵人代理深度威脅調查與關聯分析
+  - ✅ GraphRAG 圖形實體關係分析
+  - ✅ 向量相似性搜尋歷史事件
+  - ✅ 多源資料關聯與威脅情資查詢
+  - ✅ 完整威脅檔案建構
+  - ✅ 異步消息隊列架構 (RabbitMQ)
+  - ✅ 人機協作決策機制
+  - ✅ 可擴展模組化設計
+  - ✅ 生產就緒部署系統
 - 📅 **Stage 6**: 執行者 Agent - 閉環自動化防禦 (Q2 2025)
 
 ---
@@ -61,6 +73,7 @@
 
 ### 📊 專案報告與總結
 - **[專案報告總覽](docs/PROJECT_REPORTS.md)** - 所有開發報告的快速索引
+- **[Stage 5 完成報告](security-agent-system/README.md)** - 🔥 資安獵人Agent三代理協作系統
 - **[模組化重構總結](docs/REFACTORING_SUMMARY.md)** - 系統重構的詳細成果
 - **[測試策略文件](docs/TESTING_STRATEGY.md)** - 完整測試框架與實踐
 - **[測試優化報告](docs/TESTING_OPTIMIZATION_REPORT.md)** - 測試流程優化成果
@@ -80,7 +93,34 @@
 
 ## 🚀 快速開始
 
-### 1. 環境準備
+### 🔥 新功能：Security Agent System (Stage 5)
+
+體驗最新的三代理協作威脅狩獵系統：
+
+```bash
+# 啟動 Security Agent System
+cd security-agent-system
+
+# 複製並配置環境變數
+cp .env.example .env
+# 編輯 .env 填入您的 LLM API keys
+
+# 一鍵啟動完整系統
+./start.sh
+
+# 提交測試警報
+python main.py submit-alert -t "測試威脅" -d "橫向移動偵測" -s HIGH
+
+# 查看系統狀態
+python main.py status
+
+# 執行攻擊模擬
+python main.py simulate
+```
+
+系統將自動啟動：Manager Agent (分派器)、Hunter Agent (調查專家)、Executor Agent (執行器) 三個智能代理，實現完整的威脅狩獵與回應流程。
+
+### 1. 傳統 GraphRAG 系統環境準備
 
 ```bash
 # 克隆專案
@@ -182,6 +222,7 @@ wazuh_ai_agent/
 
 | 我想要... | 查看文件 |
 |-----------|----------|
+| 🔥 體驗最新Stage 5系統 | [資安獵人Agent系統](security-agent-system/README.md) |
 | 了解系統架構 | [系統架構設計](docs/ARCHITECTURE.md) |
 | 部署系統 | [部署指南](docs/DEPLOYMENT.md) |
 | 設置監控 | [監控系統指南](docs/MONITORING.md) |
@@ -232,11 +273,18 @@ wazuh_ai_agent/
 - ⚡ 平行處理提升 3x 效能
 - 📊 完整的效能監控與追蹤
 
+### 最新成就 - Stage 5 完成 🎉
+- ✅ **三代理協作系統**：Manager、Hunter、Executor 三位一體架構
+- ✅ **深度威脅狩獵**：GraphRAG + 向量搜尋的智能關聯分析
+- ✅ **異步訊息架構**：RabbitMQ 驅動的高效能協作機制
+- ✅ **人機協作決策**：關鍵安全決策的人工審核機制
+- ✅ **生產就緒系統**：完整的 Docker 化部署與監控體系
+
 ### 未來展望
-- 🎯 Stage 5：資安獵人 Agent 開發
 - 🔄 Stage 6：閉環自動化防禦系統
 - 🌍 多語言支援
 - 🤝 更多第三方威脅情資整合
+- 🧠 機器學習強化的威脅預測
 
 
 
