@@ -34,7 +34,7 @@ graph TD
     end
 
     subgraph "三代理協作系統 (Security Agent System)"
-        B --> C[管理者代理 Manager Agent];
+        A -->|直接接收警報| C[管理者代理 Manager Agent];
         C -->|分派任務到 hunting_queue| B;
         B -->|接收任務| D[獵人代理 Hunter Agent];
         D -->|發布分析結果到 execution_queue| B;
@@ -43,25 +43,28 @@ graph TD
 
     subgraph "核心分析與資料層"
         D -- "1. 圖形查詢 (GraphRAG)" --> F[Neo4j 圖形資料庫];
-        D -- "2. 向量搜尋 (相似事件)" --> G[ChromaDB 向量資料庫];
-        D -- "3. 威脅情資 & 上下文擴充" --> H[LLM / 外部 API];
-        E -- "生成最終報告與建議" --> H;
+        D -- "2. 向量搜尋 (相似事件)" --> G[OpenSearch 向量資料庫 / ChromaDB];
+        D -- "3. 威脅情資查詢" --> H[外部威脅情資 API];
+        D -- "4. 深度分析" --> I[LLM 分析引擎];
+        E -- "5. 最終報告生成" --> I;
     end
 
     subgraph "自動化回應與通知"
-        E --> I[動作執行器 Action Executor];
-        I --> J[安全設備 API <br/> (防火牆, EDR ...)];
-        E --> K[通知服務 (Slack)];
+        E --> J[動作執行器 Action Executor];
+        J --> K[安全設備 API <br/> (防火牆, EDR ...)];
+        E --> L[通知服務 (Slack/Email)];
+        E --> M[人工審批介面 <br/> (Human-in-the-Loop)];
     end
 
     subgraph "監控層"
-        L[Prometheus]
-        M[Grafana]
-        C -- "暴露 /metrics" --> L;
-        D -- "暴露 /metrics" --> L;
-        E -- "暴露 /metrics" --> L;
-        F -- "暴露 /metrics" --> L;
-        L -- "查詢指標" --> M;
+        N[Prometheus]
+        O[Grafana]
+        B -- "暴露 /metrics" --> N;
+        C -- "暴露 /metrics" --> N;
+        D -- "暴露 /metrics" --> N;
+        E -- "暴露 /metrics" --> N;
+        F -- "暴露 /metrics" --> N;
+        N -- "查詢指標" --> O;
     end
 
     style C fill:#c9f,stroke:#333,stroke-width:2px
