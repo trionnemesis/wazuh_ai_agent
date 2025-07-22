@@ -25,6 +25,50 @@
 
 這個協作生態系能夠實現 24/7 全自動威脅監控、分析、狩獵與防禦，大幅提升 SOC 團隊的威脅應對能力。
 
+## 🏗️ 系統架構圖
+
+```mermaid
+graph TD
+    subgraph "數據源 & SIEM"
+        A[Wazuh Manager] -->|產生警報| B{RabbitMQ 訊息佇列};
+    end
+
+    subgraph "三代理協作系統 (Security Agent System)"
+        B --> C[管理者代理 Manager Agent];
+        C -->|分派任務到 hunting_queue| B;
+        B -->|接收任務| D[獵人代理 Hunter Agent];
+        D -->|發布分析結果到 execution_queue| B;
+        B -->|接收分析結果| E[執行者代理 Executor Agent];
+    end
+
+    subgraph "核心分析與資料層"
+        D -- "1. 圖形查詢 (GraphRAG)" --> F[Neo4j 圖形資料庫];
+        D -- "2. 向量搜尋 (相似事件)" --> G[ChromaDB 向量資料庫];
+        D -- "3. 威脅情資 & 上下文擴充" --> H[LLM / 外部 API];
+        E -- "生成最終報告與建議" --> H;
+    end
+
+    subgraph "自動化回應與通知"
+        E --> I[動作執行器 Action Executor];
+        I --> J[安全設備 API <br/> (防火牆, EDR ...)];
+        E --> K[通知服務 (Slack)];
+    end
+
+    subgraph "監控層"
+        L[Prometheus]
+        M[Grafana]
+        C -- "暴露 /metrics" --> L;
+        D -- "暴露 /metrics" --> L;
+        E -- "暴露 /metrics" --> L;
+        F -- "暴露 /metrics" --> L;
+        L -- "查詢指標" --> M;
+    end
+
+    style C fill:#c9f,stroke:#333,stroke-width:2px
+    style D fill:#f9f,stroke:#333,stroke-width:2px
+    style E fill:#fcf,stroke:#333,stroke-width:2px
+```
+
 ### 🚀 當前實施狀態 - 模組化架構重構完成 (Stage 4+)
 
 - ✅ **Stage 1**: 基礎向量化系統 (已完成)
