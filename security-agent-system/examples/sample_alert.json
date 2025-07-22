@@ -1,0 +1,32 @@
+{
+  "alert_id": "wazuh_2024012010301234",
+  "source": "wazuh",
+  "timestamp": "2024-01-20T10:30:12.345Z",
+  "severity": "HIGH",
+  "title": "Potential Lateral Movement - Multiple RDP Connections",
+  "description": "Multiple RDP connection attempts detected from a single source IP to various internal servers within a short time window. This pattern is consistent with lateral movement techniques used by threat actors.",
+  "raw_data": {
+    "rule_id": "100202",
+    "rule_description": "Multiple RDP connections from single source",
+    "rule_level": 12,
+    "event_count": 15,
+    "time_window": "5 minutes"
+  },
+  "affected_assets": [
+    "srv-dc-01.corp.local",
+    "srv-db-01.corp.local", 
+    "srv-web-02.corp.local",
+    "srv-app-03.corp.local"
+  ],
+  "source_ips": ["10.10.50.123"],
+  "destination_ips": [
+    "10.10.10.10",
+    "10.10.10.20",
+    "10.10.10.30",
+    "10.10.10.40"
+  ],
+  "user_accounts": ["CORP\\admin_user"],
+  "file_hashes": [],
+  "suspected_category": "LATERAL_MOVEMENT",
+  "confidence_score": 0.85
+}
