@@ -7,6 +7,10 @@ from datetime import datetime, timedelta
 from fastapi import FastAPI
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+# Prometheus 監控相關
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
+from fastapi import Response
+
 # LangChain 相關套件引入
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_anthropic import ChatAnthropic
@@ -41,6 +45,48 @@ client = AsyncOpenSearch(
     verify_certs=False,
     ssl_show_warn=False,
     connection_class=AsyncHttpConnection
+)
+
+# === Prometheus 指標定義 ===
+# 計數器指標
+alerts_processed_total = Counter(
+    'wazuh_alerts_processed_total',
+    'Total number of Wazuh alerts processed',
+    ['status']
+)
+
+alerts_vectorized_total = Counter(
+    'wazuh_alerts_vectorized_total',
+    'Total number of alerts vectorized'
+)
+
+ai_analysis_total = Counter(
+    'wazuh_ai_analysis_total',
+    'Total number of AI analyses performed',
+    ['severity', 'decision']
+)
+
+# 直方圖指標
+processing_duration = Histogram(
+    'wazuh_alert_processing_duration_seconds',
+    'Time spent processing alerts',
+    ['operation']
+)
+
+embedding_duration = Histogram(
+    'wazuh_embedding_generation_duration_seconds',
+    'Time spent generating embeddings'
+)
+
+# 測量指標
+active_alerts = Gauge(
+    'wazuh_active_alerts',
+    'Number of active alerts in the system'
+)
+
+system_health = Gauge(
+    'wazuh_system_health',
+    'System health status (1=healthy, 0=unhealthy)'
 )
 
 def get_llm():
@@ -733,7 +779,9 @@ async def process_single_alert(alert: Dict[str, Any]) -> None:
     try:
         # Step 2: Vectorize new alert
         logger.info(f"🔮 STEP 2: Vectorizing alert {alert_id}")
-        alert_vector = await embedding_service.embed_alert_content(alert_source)
+        with embedding_duration.time():
+            alert_vector = await embedding_service.embed_alert_content(alert_source)
+        alerts_vectorized_total.inc()
         logger.info(f"   ✅ Alert vectorized (dimension: {len(alert_vector)})")
         
         # Step 3: Decide - Determine contextual queries needed
@@ -767,6 +815,11 @@ async def process_single_alert(alert: Dict[str, Any]) -> None:
                 break
         
         logger.info(f"   ✅ AI Analysis generated (Risk: {risk_level}): {analysis_result[:150]}...")
+        
+        # 更新 AI 分析指標
+        severity = risk_level.lower() if risk_level != "Unknown" else "unknown"
+        decision = "escalate" if risk_level in ['Critical', 'High'] else "monitor"
+        ai_analysis_total.labels(severity=severity, decision=decision).inc()
         
         # Step 7: Update - Store results in OpenSearch
         logger.info(f"💾 STEP 7: STORING RESULTS - Updating alert {alert_id} with agentic analysis")
@@ -841,11 +894,13 @@ async def triage_new_alerts():
                 await process_single_alert(alert)
                 
                 successful_processing += 1
+                alerts_processed_total.labels(status='success').inc()
                 print(f"✅ [{i}/{len(alerts)}] Successfully processed alert {alert_id}")
                 logger.info(f"✅ Alert {alert_id} processing completed successfully")
                 
             except Exception as e:
                 failed_processing += 1
+                alerts_processed_total.labels(status='failed').inc()
                 print(f"❌ [{i}/{len(alerts)}] Failed to process alert {alert_id}: {str(e)}")
                 logger.error(f"❌ Alert {alert_id} processing failed: {str(e)}")
                 continue
@@ -979,6 +1034,34 @@ async def health_check():
         logger.error(f"健康檢查失敗: {str(e)}")
     
     return health_status
+
+@app.get("/metrics")
+async def get_metrics():
+    """
+    Prometheus 指標端點
+    
+    暴露應用程式效能指標供 Prometheus 收集
+    
+    Returns:
+        Response: Prometheus 格式的指標資料
+    """
+    # 更新系統健康狀態指標
+    try:
+        health = await health_check()
+        system_health.set(1 if health.get("status") == "healthy" else 0)
+        
+        # 更新活躍警報數量
+        if "processing_stats" in health:
+            active_alerts.set(health["processing_stats"].get("total_alerts", 0))
+    except Exception as e:
+        logger.error(f"更新指標時發生錯誤: {str(e)}")
+        system_health.set(0)
+    
+    # 生成並返回 Prometheus 格式的指標
+    return Response(
+        content=generate_latest(REGISTRY),
+        media_type=CONTENT_TYPE_LATEST
+    )
 
 @app.on_event("shutdown")
 def shutdown_event():

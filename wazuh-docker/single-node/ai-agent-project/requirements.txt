@@ -4,6 +4,7 @@
 # === Web 框架與 API 服務 ===
 fastapi          # 現代、快速的 Web 框架，用於建構 RESTful API
 uvicorn          # ASGI 伺服器，用於執行 FastAPI 應用程式
+prometheus-client # Prometheus 監控指標客戶端
 
 # === 任務排程 ===
 apscheduler      # 高級 Python 排程器，用於定期執行警報分析任務
