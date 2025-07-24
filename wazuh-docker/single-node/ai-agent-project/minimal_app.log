@@ -1,0 +1,16 @@
+nohup: ignoring input
+INFO:     Started server process [4666]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+啟動最小化 FastAPI 應用...
+訪問 http://localhost:8000/ 查看狀態
+訪問 http://localhost:8000/metrics 查看 Prometheus 指標
+INFO:     127.0.0.1:44158 - "GET /metrics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53576 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53588 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53602 - "GET /metrics HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [4666]

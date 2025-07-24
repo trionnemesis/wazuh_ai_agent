@@ -1,29 +1,31 @@
 """
 排程器模組
-負責管理 APScheduler 的設定與任務定義
+負責定期執行威脅情報收集任務
 """
 
 import logging
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from datetime import datetime
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR
 from typing import Optional
 
-from ..core.config import SCHEDULER_INTERVAL_SECONDS, SCHEDULER_MISFIRE_GRACE_TIME
+from .config import SCHEDULER_INTERVAL_SECONDS, SCHEDULER_MISFIRE_GRACE_TIME
 
 logger = logging.getLogger(__name__)
 
 # 全域排程器實例
-scheduler: Optional[AsyncIOScheduler] = None
+scheduler: Optional[BackgroundScheduler] = None
 
-def get_scheduler() -> AsyncIOScheduler:
+def get_scheduler() -> BackgroundScheduler:
     """獲取排程器實例"""
     global scheduler
     if scheduler is None:
-        scheduler = AsyncIOScheduler()
+        scheduler = BackgroundScheduler()
     return scheduler
 
 def start_scheduler():
     """啟動排程器"""
-    from ..services.alert_service import triage_new_alerts  # 避免循環導入
+    from services.alert_service import triage_new_alerts  # 避免循環導入
     
     sched = get_scheduler()
     
