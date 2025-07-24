@@ -1,0 +1,13 @@
+nohup: ignoring input
+Traceback (most recent call last):
+  File "/workspace/wazuh-docker/single-node/ai-agent-project/start_app.py", line 40, in <module>
+    from app.main_new import app
+  File "/workspace/wazuh-docker/single-node/ai-agent-project/app/main_new.py", line 10, in <module>
+    from core.config import (
+    ...<2 lines>...
+    )
+ModuleNotFoundError: No module named 'core'
+正在啟動 Wazuh GraphRAG AI Agent...
+Python 路徑: ['/workspace/wazuh-docker/single-node/ai-agent-project', '/workspace/wazuh-docker/single-node/ai-agent-project', '/usr/lib/python313.zip', '/usr/lib/python3.13', '/usr/lib/python3.13/lib-dynload', '/home/ubuntu/.local/lib/python3.13/site-packages', '/usr/local/lib/python3.13/dist-packages', '/usr/lib/python3/dist-packages']
+工作目錄: /workspace/wazuh-docker/single-node/ai-agent-project
+啟動錯誤: No module named 'core'
