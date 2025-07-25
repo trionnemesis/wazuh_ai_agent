@@ -38,7 +38,7 @@ if __name__ == "__main__":
         print(f"工作目錄: {os.getcwd()}")
         
         # 導入並運行應用程式
-        from app.main_new import app
+        from main_new import app
         import uvicorn
         
         uvicorn.run(

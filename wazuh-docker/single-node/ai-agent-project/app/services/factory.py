@@ -7,6 +7,9 @@ import os
 from typing import Dict, Any, Optional, Type, TypeVar
 from services.base import BaseService, ServiceError
 from utils.logging_middleware import get_logger
+from services.cache_service import get_cache_service
+from services.opensearch_service import get_opensearch_client
+from services.neo4j_service import get_neo4j_driver
 
 # 服務類型變量
 T = TypeVar('T', bound=BaseService)

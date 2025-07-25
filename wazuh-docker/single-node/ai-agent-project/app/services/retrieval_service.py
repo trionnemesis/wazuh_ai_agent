@@ -13,7 +13,7 @@ from core.config import (
     OPENSEARCH_URL, OPENSEARCH_USER, OPENSEARCH_PASSWORD,
     OPENSEARCH_MAX_CONNECTIONS, OPENSEARCH_CONNECTION_TIMEOUT
 )
-from ..utils.cache_manager import get_cache_service
+from utils.cache_manager import get_cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -381,7 +381,7 @@ async def execute_hybrid_retrieval(alert: Dict[str, Any]) -> Dict[str, Any]:
         graph_retrieval_fallback_total,
         record_graph_retrieval_fallback
     )
-    from ..embedding_service import GeminiEmbeddingService
+    from embedding_service import GeminiEmbeddingService
     
     logger.info("🔗🔍 HYBRID RETRIEVAL: Combining graph and traditional methods")
     

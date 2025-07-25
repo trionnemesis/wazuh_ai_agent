@@ -25,13 +25,13 @@ def get_scheduler() -> BackgroundScheduler:
 
 def start_scheduler():
     """啟動排程器"""
-    from services.alert_service import triage_new_alerts  # 避免循環導入
+    from services.alert_service import triage_new_alerts_sync  # 避免循環導入
     
     sched = get_scheduler()
     
     # 添加定時任務
     sched.add_job(
-        triage_new_alerts, 
+        triage_new_alerts_sync, 
         'interval', 
         seconds=SCHEDULER_INTERVAL_SECONDS, 
         id='agentic_triage_job', 

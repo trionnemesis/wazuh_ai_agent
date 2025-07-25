@@ -1,0 +1,1 @@
+from core.config import GEMINI_API_KEY 

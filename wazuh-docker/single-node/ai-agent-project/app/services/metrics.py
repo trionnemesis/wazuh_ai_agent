@@ -6,6 +6,7 @@ Prometheus 監控指標模組
 from prometheus_client import (
     Counter, Histogram, Gauge, CollectorRegistry
 )
+from core.config import PROMETHEUS_ENABLED
 
 # === Prometheus 監控指標初始化 ===
 # 創建 Prometheus 指標收集器，用於監控 AI Agent 效能

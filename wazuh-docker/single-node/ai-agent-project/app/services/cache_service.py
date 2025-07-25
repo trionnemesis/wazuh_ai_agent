@@ -9,13 +9,13 @@ import logging
 import hashlib
 import json
 import time
-from typing import Any, Dict, Optional, Callable, Union
+from typing import Any, Dict, Optional, Callable
 from functools import wraps
 from cachetools import TTLCache, LRUCache
-from datetime import datetime, timedelta
 import asyncio
 
 logger = logging.getLogger(__name__)
+
 
 class CacheService:
     """
@@ -91,22 +91,10 @@ class CacheService:
         return f"{func_name}:{cache_key}"
     
     async def get_or_compute(self,
-                           cache_key: str,
-                           compute_func: Callable,
-                           cache_type: str = 'lru',
-                           ttl_override: Optional[int] = None) -> Any:
-        """
-        獲取快取或計算結果
-        
-        Args:
-            cache_key: 快取鍵值
-            compute_func: 計算函數（當快取未命中時呼叫）
-            cache_type: 快取類型 ('lru' 或 'ttl')
-            ttl_override: 覆蓋預設 TTL（僅用於 ttl 類型）
-            
-        Returns:
-            快取或計算的結果
-        """
+                            cache_key: str,
+                            compute_func: Callable,
+                            cache_type: str = 'lru',
+                            ttl_override: Optional[int] = None) -> Any:
         start_time = time.time()
         self.stats['total_requests'] += 1
         
@@ -252,7 +240,7 @@ class CacheService:
                 cache_key = f"neo4j:{hashlib.md5((query + str(parameters)).encode()).hexdigest()}"
                 
                 # 獲取全域快取服務
-                from ..utils.cache_manager import get_cache_service
+                from utils.cache_manager import get_cache_service
                 cache_service = get_cache_service()
                 
                 if not cache_service:

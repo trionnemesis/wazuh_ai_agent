@@ -10,8 +10,8 @@ import time
 import hashlib
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from app.services.cache_service import CacheService
-from app.utils.cache_manager import initialize_cache_service, get_cache_service
+from services.cache_service import CacheService
+from utils.cache_manager import initialize_cache_service, get_cache_service
 
 class TestCacheService:
     """快取服務單元測試"""

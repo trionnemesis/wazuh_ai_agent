@@ -8,7 +8,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
 import logging
-from ..embedding_service import GeminiEmbeddingService
+from embedding_service import GeminiEmbeddingService
 
 # 獲取日誌記錄器
 logger = logging.getLogger(__name__)

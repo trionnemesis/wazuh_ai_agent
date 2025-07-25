@@ -13,7 +13,7 @@ from functools import wraps
 from cachetools import TTLCache
 import asyncio
 
-from ..services.cache_service import CacheService, init_cache_service
+from services.cache_service import CacheService, init_cache_service
 
 logger = logging.getLogger(__name__)
 

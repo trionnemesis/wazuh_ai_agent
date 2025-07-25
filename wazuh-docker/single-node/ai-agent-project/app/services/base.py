@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional, List
 import logging
 from utils.error_handling import handle_errors, BaseApplicationError
 from utils.logging_middleware import get_logger
+from utils.error_handling import ServiceError
 
 
 class BaseService(ABC):

@@ -23,8 +23,8 @@ NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "wazuh-graph-2024")
 
 # === 大型語言模型 (LLM) 提供商配置 ===
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic").lower()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 # === 日誌配置 ===
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
@@ -49,6 +49,10 @@ CACHE_ENABLED = os.getenv("CACHE_ENABLED", "true").lower() == "true"
 CACHE_LRU_MAXSIZE = int(os.getenv("CACHE_LRU_MAXSIZE", "1000"))
 CACHE_TTL_MAXSIZE = int(os.getenv("CACHE_TTL_MAXSIZE", "500"))
 CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "3600"))
+
+PROMETHEUS_ENABLED = os.getenv("PROMETHEUS_ENABLED", "true").lower() == "true"
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 def validate_config():
     """驗證必要的配置是否已設置"""

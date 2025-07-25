@@ -7,15 +7,20 @@ import logging
 from typing import Optional
 from opensearchpy import AsyncOpenSearch, AsyncHttpConnection
 
-from ..core.config import (
-    OPENSEARCH_URL, OPENSEARCH_USER, OPENSEARCH_PASSWORD,
-    OPENSEARCH_MAX_CONNECTIONS, OPENSEARCH_CONNECTION_TIMEOUT
+from core.config import (
+    OPENSEARCH_URL,
+    OPENSEARCH_USER,
+    OPENSEARCH_PASSWORD,
+    OPENSEARCH_MAX_CONNECTIONS,
+    OPENSEARCH_CONNECTION_TIMEOUT
 )
 
 logger = logging.getLogger(__name__)
 
+
 # 全域 OpenSearch 客戶端實例
 _client: Optional[AsyncOpenSearch] = None
+
 
 def get_opensearch_client() -> AsyncOpenSearch:
     """
@@ -44,6 +49,7 @@ def get_opensearch_client() -> AsyncOpenSearch:
     
     return _client
 
+
 async def close_opensearch_client():
     """關閉 OpenSearch 客戶端連接"""
     global _client
@@ -52,6 +58,7 @@ async def close_opensearch_client():
         await _client.close()
         _client = None
         logger.info("OpenSearch 客戶端已關閉")
+
 
 async def check_opensearch_connection() -> bool:
     """
@@ -67,6 +74,7 @@ async def check_opensearch_connection() -> bool:
     except Exception as e:
         logger.error(f"OpenSearch 連接檢查失敗: {str(e)}")
         return False
+
 
 async def ensure_index_exists(index_name: str) -> bool:
     """

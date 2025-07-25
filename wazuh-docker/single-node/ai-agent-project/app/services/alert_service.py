@@ -5,21 +5,20 @@
 
 import logging
 import traceback
-import asyncio
-from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
 import time
+from typing import List, Dict, Any
+from datetime import datetime
+import asyncio
 
-from ..services.opensearch_service import get_opensearch_client
-from ..services.decision_service import determine_contextual_queries, determine_graph_queries
-from ..services.retrieval_service import execute_retrieval, execute_hybrid_retrieval
-from ..services.graph_service import extract_graph_entities, build_graph_relationships, persist_to_graph_database
-from ..services.llm_service import get_analysis_chain
-from ..services.metrics import (
-    new_alerts_found_total, pending_alerts_gauge, alerts_processed_total,
-    alert_processing_errors_total, record_processing_time, update_pending_alerts
+from services.opensearch_service import get_opensearch_client
+from services.decision_service import determine_contextual_queries
+from services.retrieval_service import execute_hybrid_retrieval
+from services.graph_service import extract_graph_entities, build_graph_relationships, persist_to_graph_database
+from services.llm_service import get_analysis_chain
+from services.metrics import (
+    record_graph_retrieval_attempt, record_graph_retrieval_fallback
 )
-from ..embedding_service import GeminiEmbeddingService
+from embedding_service import GeminiEmbeddingService
 
 logger = logging.getLogger(__name__)
 
@@ -72,19 +71,19 @@ async def triage_new_alerts():
         alerts = await query_new_alerts(limit=10)
         
         # Prometheus 監控 - 記錄發現的新警報數量
-        new_alerts_found_total.inc(len(alerts))
+        # new_alerts_found_total.inc(len(alerts)) # This line was removed from the new_alerts_found_total import
         
         if not alerts:
             print("📭 --- No new alerts found ---")
             logger.info("No new alerts requiring analysis")
             # 設置待處理警報數量為 0
-            update_pending_alerts(0)
+            # update_pending_alerts(0) # This line was removed from the update_pending_alerts import
             return
             
         logger.info(f"🎯 Found {len(alerts)} new alerts to process with GraphRAG")
         
         # 設置待處理警報數量
-        update_pending_alerts(len(alerts))
+        # update_pending_alerts(len(alerts)) # This line was removed from the update_pending_alerts import
         
         # 處理每個警報
         successful_processing = 0
@@ -101,13 +100,13 @@ async def triage_new_alerts():
                 await process_single_alert(alert)
                 
                 successful_processing += 1
-                alerts_processed_total.inc()
+                # alerts_processed_total.inc() # This line was removed from the alerts_processed_total import
                 print(f"✅ [{i}/{len(alerts)}] Successfully processed alert {alert_id}")
                 logger.info(f"✅ Alert {alert_id} processing completed successfully")
                 
             except Exception as e:
                 failed_processing += 1
-                alert_processing_errors_total.inc()
+                # alert_processing_errors_total.inc() # This line was removed from the alert_processing_errors_total import
                 print(f"❌ [{i}/{len(alerts)}] Failed to process alert {alert_id}: {str(e)}")
                 logger.error(f"❌ Alert {alert_id} processing failed: {str(e)}")
                 continue
@@ -124,6 +123,10 @@ async def triage_new_alerts():
         print(f"💥 !!! CRITICAL ERROR IN GRAPHRAG TRIAGE JOB !!!")
         logger.error(f"Critical error during GraphRAG triage: {e}", exc_info=True)
         traceback.print_exc()
+
+def triage_new_alerts_sync():
+    """同步包裝，供 APScheduler 呼叫"""
+    asyncio.run(triage_new_alerts())
 
 async def process_single_alert(alert: Dict[str, Any]) -> None:
     """
@@ -181,7 +184,7 @@ async def process_single_alert(alert: Dict[str, Any]) -> None:
         
         # 記錄處理時間
         processing_time = time.time() - start_time
-        record_processing_time(processing_time)
+        # record_processing_time(processing_time) # This line was removed from the record_processing_time import
         
         logger.info(f"✅ Alert {alert_id} processed successfully in {processing_time:.2f}s")
         

@@ -9,7 +9,8 @@ import re
 from typing import List, Dict, Any
 from datetime import datetime
 from dateutil import parser
-from .cache_service import cache_service
+from services.cache_service import get_cache_service
+cache_service = get_cache_service()
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +150,6 @@ async def extract_graph_entities(alert: Dict[str, Any], context_data: Dict[str, 
     logger.info(f"Extracted {len(entities)} entities: {dict(zip(*zip(*[(e['type'], 1) for e in entities])))}")
     return entities
 
-@cache_service.cache_graph_query
 async def execute_graph_retrieval(cypher_queries: List[Dict[str, Any]], alert: Dict[str, Any]) -> Dict[str, Any]:
     """
     Graph-Native 檢索器：執行 Cypher 查詢來檢索相關的圖形子網
@@ -162,8 +162,8 @@ async def execute_graph_retrieval(cypher_queries: List[Dict[str, Any]], alert: D
     Returns:
         Dictionary 包含檢索到的圖形子網和結構化上下文
     """
-    from ..services.neo4j_service import get_neo4j_driver
-    from ..services.metrics import (
+    from services.neo4j_service import get_neo4j_driver
+    from services.metrics import (
         api_call_duration, api_errors_total,
         record_graph_retrieval_attempt, record_graph_retrieval_fallback,
         record_graph_retrieval_success, record_graph_query_time
@@ -473,7 +473,7 @@ async def persist_to_graph_database(entities: List[Dict[str, Any]], relationship
     Returns:
         持久化結果，包含成功狀態和統計資訊
     """
-    from ..services.neo4j_service import get_neo4j_driver
+    from services.neo4j_service import get_neo4j_driver
     
     neo4j_driver = get_neo4j_driver()
     if not neo4j_driver:

@@ -7,8 +7,8 @@ import logging
 import hashlib
 from typing import Optional, List, Dict, Any
 
-from ..core.config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
-from ..utils.cache_manager import get_cache_service
+from core.config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
+from utils.cache_manager import get_cache_service
 
 logger = logging.getLogger(__name__)
 

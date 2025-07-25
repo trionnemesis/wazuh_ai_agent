@@ -11,7 +11,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
-from core.config import LLM_PROVIDER, GEMINI_API_KEY, ANTHROPIC_API_KEY
+from core.config import OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY
 
 logger = logging.getLogger(__name__)
 

@@ -17,8 +17,8 @@ from pathlib import Path
 # 添加專案根目錄到 Python 路徑
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.embedding_service import GeminiEmbeddingService
-from app.utils.cache_manager import get_cache_manager
+from embedding_service import GeminiEmbeddingService
+from utils.cache_manager import get_cache_manager
 
 
 async def demo_single_embedding():

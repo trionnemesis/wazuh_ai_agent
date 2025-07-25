@@ -6,7 +6,7 @@ API 端點模組
 from datetime import datetime
 from fastapi import APIRouter, Response
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
-
+from api.cache_stats import router as cache_router
 from core.config import get_config_summary, APP_STAGE
 from core.scheduler import get_scheduler_status
 from api.health_check import perform_health_check

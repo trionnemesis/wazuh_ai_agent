@@ -9,7 +9,7 @@ import pytest
 import asyncio
 import time
 from unittest.mock import Mock, patch
-from app.utils.cache_manager import CacheManager, embedding_cache, batch_embedding_cache, get_cache_manager
+from utils.cache_manager import CacheManager, embedding_cache, batch_embedding_cache, get_cache_manager
 
 
 class TestCacheManager:

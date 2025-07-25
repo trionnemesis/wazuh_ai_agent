@@ -7,13 +7,18 @@ import logging
 from datetime import datetime
 from typing import Dict, Any
 
-from ..core.config import APP_VERSION, APP_STAGE
-from ..services.opensearch_service import get_opensearch_client
-from ..services.neo4j_service import get_neo4j_driver
-from ..embedding_service import GeminiEmbeddingService
-from ..services.cache_service import cache_service
+from core.config import APP_VERSION, APP_STAGE
+
+
+from services.opensearch_service import get_opensearch_client
+from services.neo4j_service import get_neo4j_driver
+from embedding_service import GeminiEmbeddingService
+from services.cache_service import get_cache_service
+cache_service = get_cache_service()
+
 
 logger = logging.getLogger(__name__)
+
 
 async def perform_health_check() -> Dict[str, Any]:
     """
@@ -29,34 +34,40 @@ async def perform_health_check() -> Dict[str, Any]:
         "stage": APP_STAGE,
         "components": {}
     }
-    
+
     # 檢查 OpenSearch
     health_status["components"]["opensearch"] = await check_opensearch_health()
-    
+
     # 檢查 Neo4j
     health_status["components"]["neo4j"] = await check_neo4j_health()
-    
+
     # 檢查嵌入服務
-    health_status["components"]["embedding_service"] = await check_embedding_service_health()
-    
+    health_status["components"]["embedding_service"] = (
+        await check_embedding_service_health()
+    )
+
     # 檢查快取服務
     health_status["components"]["cache_service"] = check_cache_health()
-    
+
     # 判斷整體健康狀態
-    if any(comp["status"] != "healthy" for comp in health_status["components"].values()):
+    if any(
+        comp["status"] != "healthy"
+        for comp in health_status["components"].values()
+    ):
         health_status["status"] = "degraded"
-    
+
     return health_status
+
 
 async def check_opensearch_health() -> Dict[str, Any]:
     """檢查 OpenSearch 連線狀態"""
     try:
         client = get_opensearch_client()
         info = await client.info()
-        
+
         # 檢查向量索引
         index_exists = await client.indices.exists("wazuh-alerts-vectors")
-        
+
         return {
             "status": "healthy",
             "cluster_name": info.get("cluster_name", "unknown"),
@@ -70,6 +81,7 @@ async def check_opensearch_health() -> Dict[str, Any]:
             "error": str(e)
         }
 
+
 async def check_neo4j_health() -> Dict[str, Any]:
     """檢查 Neo4j 連線狀態"""
     try:
@@ -79,11 +91,11 @@ async def check_neo4j_health() -> Dict[str, Any]:
                 "status": "unavailable",
                 "message": "Neo4j driver not initialized"
             }
-        
+
         async with driver.session() as session:
             result = await session.run("RETURN 1 as test")
             await result.single()
-        
+
         return {
             "status": "healthy",
             "message": "Neo4j connection successful"
@@ -95,15 +107,16 @@ async def check_neo4j_health() -> Dict[str, Any]:
             "error": str(e)
         }
 
+
 async def check_embedding_service_health() -> Dict[str, Any]:
     """檢查嵌入服務狀態"""
     try:
         embedding_service = GeminiEmbeddingService()
-        
+
         # 測試向量化功能
         test_text = "Health check test"
         vector = await embedding_service.embed_text(test_text)
-        
+
         return {
             "status": "healthy",
             "embedding_dimension": len(vector) if vector else 0,
@@ -116,15 +129,13 @@ async def check_embedding_service_health() -> Dict[str, Any]:
             "error": str(e)
         }
 
+
 def check_cache_health() -> Dict[str, Any]:
     """檢查快取服務狀態"""
     try:
         stats = cache_service.get_stats()
-        
-        # 計算健康指標
-        hit_rate = float(stats['hit_rate'].rstrip('%'))
-        is_healthy = True  # 快取服務通常總是健康的
-        
+        # hit_rate = float(stats['hit_rate'].rstrip('%'))  # 已移除未使用變數
+        # is_healthy = True  # 已移除未使用變數
         return {
             "status": "healthy",
             "hit_rate": stats['hit_rate'],
@@ -132,9 +143,18 @@ def check_cache_health() -> Dict[str, Any]:
             "hits": stats['hits'],
             "misses": stats['misses'],
             "cache_sizes": {
-                "query_cache": f"{stats['query_cache_size']}/{stats['query_cache_maxsize']}",
-                "vector_cache": f"{stats['vector_cache_size']}/{stats['vector_cache_maxsize']}",
-                "graph_cache": f"{stats['graph_cache_size']}/{stats['graph_cache_maxsize']}"
+                "query_cache": (
+                    f"{stats['query_cache_size']}/"
+                    f"{stats['query_cache_maxsize']}"
+                ),
+                "vector_cache": (
+                    f"{stats['vector_cache_size']}/"
+                    f"{stats['vector_cache_maxsize']}"
+                ),
+                "graph_cache": (
+                    f"{stats['graph_cache_size']}/"
+                    f"{stats['graph_cache_maxsize']}"
+                )
             }
         }
     except Exception as e:

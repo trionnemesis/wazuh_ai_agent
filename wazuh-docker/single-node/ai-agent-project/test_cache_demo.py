@@ -7,8 +7,8 @@
 import asyncio
 import time
 import hashlib
-from app.services.cache_service import CacheService
-from app.utils.cache_manager import initialize_cache_service
+from services.cache_service import CacheService
+from utils.cache_manager import initialize_cache_service
 
 async def simulate_embedding_query(text: str, delay: float = 0.2):
     """模擬向量嵌入查詢（帶延遲）"""

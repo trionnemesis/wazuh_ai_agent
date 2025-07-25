@@ -9,15 +9,15 @@ from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from typing import Dict, Any, List
 
 # 導入要測試的模組
-from app.services.embedding_service import GeminiEmbeddingService
-from app.services.graph_service import Neo4jGraphService
-from app.services.retrieval_service import RetrievalService
-from app.services.llm_service import LLMService
-from app.core.graph_entity_extractor import GraphEntityExtractor
-from app.core.graph_relationship_builder import GraphRelationshipBuilder
-from app.core.graph_query_engine import GraphQueryEngine
-from app.utils.text_chunking import SmartTextChunker, get_optimal_text, smart_chunk_text
-from app.utils.error_handling import OpenSearchError, Neo4jError, LLMError, EmbeddingError
+from services.embedding_service import GeminiEmbeddingService
+from services.graph_service import Neo4jGraphService
+from services.retrieval_service import RetrievalService
+from services.llm_service import LLMService
+from core.graph_entity_extractor import GraphEntityExtractor
+from core.graph_relationship_builder import GraphRelationshipBuilder
+from core.graph_query_engine import GraphQueryEngine
+from utils.text_chunking import SmartTextChunker, get_optimal_text, smart_chunk_text
+from utils.error_handling import OpenSearchError, Neo4jError, LLMError, EmbeddingError
 
 
 class TestGeminiEmbeddingService:
@@ -454,7 +454,7 @@ class TestErrorHandling:
     @pytest.mark.unit
     def test_error_context_manager(self):
         """測試錯誤上下文管理器"""
-        from app.utils.error_handling import ErrorContext
+        from utils.error_handling import ErrorContext
         
         with ErrorContext("test operation", reraise=False) as ctx:
             # 正常操作

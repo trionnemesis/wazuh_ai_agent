@@ -8,8 +8,8 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 import json
 
-from ..services.llm_service import get_llm
-from ..core.config import NEO4J_URI
+from services.llm_service import get_llm
+from core.config import NEO4J_URI
 from langchain_core.prompts import ChatPromptTemplate
 
 logger = logging.getLogger(__name__)
