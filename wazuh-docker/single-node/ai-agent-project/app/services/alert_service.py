@@ -8,7 +8,6 @@ import traceback
 import time
 from typing import List, Dict, Any
 from datetime import datetime
-import asyncio
 
 from services.opensearch_service import get_opensearch_client
 from services.decision_service import determine_contextual_queries
@@ -125,7 +124,7 @@ async def triage_new_alerts():
         traceback.print_exc()
 
 def triage_new_alerts_sync():
-    """同步包裝，供 APScheduler 呼叫"""
+    import asyncio
     asyncio.run(triage_new_alerts())
 
 async def process_single_alert(alert: Dict[str, Any]) -> None:

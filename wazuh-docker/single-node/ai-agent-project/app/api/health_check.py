@@ -13,8 +13,7 @@ from core.config import APP_VERSION, APP_STAGE
 from services.opensearch_service import get_opensearch_client
 from services.neo4j_service import get_neo4j_driver
 from embedding_service import GeminiEmbeddingService
-from services.cache_service import get_cache_service
-cache_service = get_cache_service()
+from utils.cache_manager import get_cache_service
 
 
 logger = logging.getLogger(__name__)
@@ -47,7 +46,7 @@ async def perform_health_check() -> Dict[str, Any]:
     )
 
     # 檢查快取服務
-    health_status["components"]["cache_service"] = check_cache_health()
+    health_status["components"]["cache_service"] = await check_cache_health()
 
     # 判斷整體健康狀態
     if any(
@@ -66,7 +65,9 @@ async def check_opensearch_health() -> Dict[str, Any]:
         info = await client.info()
 
         # 檢查向量索引
-        index_exists = await client.indices.exists("wazuh-alerts-vectors")
+        index_exists = await client.indices.exists(
+            index="wazuh-alerts-vectors"
+        )
 
         return {
             "status": "healthy",
@@ -115,11 +116,13 @@ async def check_embedding_service_health() -> Dict[str, Any]:
 
         # 測試向量化功能
         test_text = "Health check test"
-        vector = await embedding_service.embed_text(test_text)
+        vector = await embedding_service.embed_documents([test_text])
 
         return {
             "status": "healthy",
-            "embedding_dimension": len(vector) if vector else 0,
+            "embedding_dimension": (
+                len(vector[0]) if vector and len(vector) > 0 else 0
+            ),
             "service_type": "Gemini"
         }
     except Exception as e:
@@ -130,12 +133,13 @@ async def check_embedding_service_health() -> Dict[str, Any]:
         }
 
 
-def check_cache_health() -> Dict[str, Any]:
+async def check_cache_health() -> Dict[str, Any]:
     """檢查快取服務狀態"""
     try:
+        cache_service = get_cache_service()
+        if cache_service is None:
+            raise ValueError("Cache service 未初始化")
         stats = cache_service.get_stats()
-        # hit_rate = float(stats['hit_rate'].rstrip('%'))  # 已移除未使用變數
-        # is_healthy = True  # 已移除未使用變數
         return {
             "status": "healthy",
             "hit_rate": stats['hit_rate'],
