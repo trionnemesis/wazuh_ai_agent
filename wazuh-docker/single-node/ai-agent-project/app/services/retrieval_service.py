@@ -14,21 +14,11 @@ from core.config import (
     OPENSEARCH_MAX_CONNECTIONS, OPENSEARCH_CONNECTION_TIMEOUT
 )
 from utils.cache_manager import get_cache_service
+from services.opensearch_service import get_opensearch_client
 
 logger = logging.getLogger(__name__)
 
-# 初始化 OpenSearch 客戶端
-client = AsyncOpenSearch(
-    hosts=[OPENSEARCH_URL],
-    http_auth=(OPENSEARCH_USER, OPENSEARCH_PASSWORD),
-    use_ssl=True,
-    verify_certs=False,
-    ssl_show_warn=False,
-    pool_maxsize=OPENSEARCH_MAX_CONNECTIONS,
-    max_retries=3,
-    retry_on_timeout=True,
-    timeout=OPENSEARCH_CONNECTION_TIMEOUT
-)
+# 移除了模組層級的客戶端初始化，改為使用 get_opensearch_client() 函數
 
 async def execute_retrieval(queries: List[Dict[str, Any]], alert_vector: List[float]) -> Dict[str, Any]:
     """
@@ -202,6 +192,7 @@ async def execute_vector_search(alert_vector: List[float], parameters: Dict[str,
                     {"exists": {"field": "ai_analysis"}}
                 )
             
+            client = await get_opensearch_client()
             response = await client.search(
                 index="wazuh-alerts-*",
                 body=knn_search_body
@@ -315,6 +306,7 @@ async def execute_keyword_time_search(parameters: Dict[str, Any]) -> List[Dict[s
                     {"term": {"agent.name.keyword": host}}
                 )
             
+            client = await get_opensearch_client()
             response = await client.search(
                 index="wazuh-alerts-*",
                 body=search_body
@@ -343,6 +335,7 @@ async def execute_keyword_time_search(parameters: Dict[str, Any]) -> List[Dict[s
 async def query_new_alerts(limit: int = 10) -> List[Dict[str, Any]]:
     """Query OpenSearch for new unanalyzed alerts"""
     try:
+        client = await get_opensearch_client()
         response = await client.search(
             index="wazuh-alerts-*",
             body={

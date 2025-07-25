@@ -59,26 +59,23 @@ async def perform_health_check() -> Dict[str, Any]:
 
 
 async def check_opensearch_health() -> Dict[str, Any]:
-    """檢查 OpenSearch 連線狀態"""
+    """檢查 OpenSearch 健康狀態"""
     try:
-        client = get_opensearch_client()
+        client = await get_opensearch_client()
         info = await client.info()
-
-        # 檢查向量索引
-        index_exists = await client.indices.exists(
-            index="wazuh-alerts-vectors"
-        )
-
+        cluster_health = await client.cluster.health()
+        
         return {
-            "status": "healthy",
-            "cluster_name": info.get("cluster_name", "unknown"),
+            "status": cluster_health.get("status", "unknown"),
             "version": info.get("version", {}).get("number", "unknown"),
-            "vector_index_exists": index_exists
+            "cluster_name": cluster_health.get("cluster_name", "unknown"),
+            "number_of_nodes": cluster_health.get("number_of_nodes", 0),
+            "active_shards": cluster_health.get("active_shards", 0)
         }
     except Exception as e:
-        logger.error(f"OpenSearch 健康檢查失敗: {str(e)}")
+        logger.error(f"OpenSearch health check failed: {e}")
         return {
-            "status": "unhealthy",
+            "status": "error",
             "error": str(e)
         }
 
