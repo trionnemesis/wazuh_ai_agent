@@ -37,6 +37,9 @@ if __name__ == "__main__":
         print(f"Python 路徑: {sys.path}")
         print(f"工作目錄: {os.getcwd()}")
         
+        # 切換到 app 目錄
+        os.chdir(app_path)
+        
         # 導入並運行應用程式
         from main_new import app
         import uvicorn

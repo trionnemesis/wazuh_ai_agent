@@ -20,7 +20,7 @@ import asyncio
 from typing import List, Optional, Dict, Any
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from utils.text_chunking import SmartTextChunker, get_optimal_text, smart_chunk_text
-from utils.cache_manager import get_cache_manager, embedding_cache, batch_embedding_cache
+from utils.cache_manager import get_cache_manager, embedding_cache, batch_embedding_cache, get_cache_service
 
 
 # 獲取當前模組的日誌記錄器
