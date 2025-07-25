@@ -34,7 +34,7 @@ async def query_new_alerts(limit: int = 10) -> List[Dict[str, Any]]:
     Returns:
         List[Dict]: 新警報列表
     """
-    client = get_opensearch_client()
+    client = await get_opensearch_client()
     
     query = {
         "query": {
@@ -195,7 +195,7 @@ async def update_alert_with_analysis(alert_id: str, analysis_data: Dict[str, Any
         alert_id: 警報 ID
         analysis_data: 分析結果數據
     """
-    client = get_opensearch_client()
+    client = await get_opensearch_client()
     
     try:
         # 首先獲取警報索引

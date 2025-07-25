@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/workspace/wazuh-docker/single-node/ai-agent-project/app/main_new.py", line 7, in <module>
+    from fastapi import FastAPI
+ModuleNotFoundError: No module named 'fastapi'

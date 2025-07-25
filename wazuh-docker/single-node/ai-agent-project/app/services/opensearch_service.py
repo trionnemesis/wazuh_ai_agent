@@ -22,9 +22,10 @@ logger = logging.getLogger(__name__)
 _client: Optional[AsyncOpenSearch] = None
 
 
-def get_opensearch_client() -> AsyncOpenSearch:
+async def get_opensearch_client() -> AsyncOpenSearch:
     """
     獲取 OpenSearch 客戶端實例（單例模式）
+    注意：必須在異步上下文中調用
     
     Returns:
         AsyncOpenSearch: 配置好的 OpenSearch 客戶端
@@ -68,7 +69,7 @@ async def check_opensearch_connection() -> bool:
         bool: 連接是否成功
     """
     try:
-        client = get_opensearch_client()
+        client = await get_opensearch_client()
         await client.info()
         return True
     except Exception as e:
@@ -87,7 +88,7 @@ async def ensure_index_exists(index_name: str) -> bool:
         bool: 索引是否存在
     """
     try:
-        client = get_opensearch_client()
+        client = await get_opensearch_client()
         exists = await client.indices.exists(index_name)
         
         if not exists:
