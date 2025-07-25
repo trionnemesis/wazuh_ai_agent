@@ -4,15 +4,16 @@ API 端點模組
 """
 
 from datetime import datetime
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Response, Depends
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from api.cache_stats import router as cache_router
 from core.config import get_config_summary, APP_STAGE
 from core.scheduler import get_scheduler_status
 from api.health_check import perform_health_check
 from services.metrics import REGISTRY
-from utils.cache_manager import get_cache_service
-
+from utils.cache_manager import get_cache_service, CacheService
+import asyncio
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 
 
@@ -42,21 +43,9 @@ async def read_root():
     }
 
 @router.get("/health")
-async def health_check():
-    """
-    詳細健康檢查端點
-    
-    提供完整的系統狀態資訊，包括：
-    - OpenSearch 連線狀態
-    - Neo4j 連線狀態
-    - 嵌入服務可用性
-    - 向量化統計資料
-    - 系統配置資訊
-    
-    Returns:
-        Dict: 詳細的健康檢查報告
-    """
-    return await perform_health_check()
+def health_check(cache_service: CacheService = Depends(get_cache_service)):
+    stats = cache_service.get_stats()
+    return {"status": "ok", "cache_stats": stats}
 
 @router.get("/metrics")
 async def get_metrics():
