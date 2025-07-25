@@ -19,7 +19,7 @@ from utils.cache_manager import get_cache_service
 logger = logging.getLogger(__name__)
 
 
-async def perform_health_check() -> Dict[str, Any]:
+async def perform_health_check(cache_service=None) -> Dict[str, Any]:
     """
     執行詳細的健康檢查
     
@@ -46,7 +46,7 @@ async def perform_health_check() -> Dict[str, Any]:
     )
 
     # 檢查快取服務
-    health_status["components"]["cache_service"] = await check_cache_health()
+    health_status["components"]["cache_service"] = await check_cache_health(cache_service)
 
     # 判斷整體健康狀態
     if any(
@@ -130,10 +130,9 @@ async def check_embedding_service_health() -> Dict[str, Any]:
         }
 
 
-async def check_cache_health() -> Dict[str, Any]:
+async def check_cache_health(cache_service) -> Dict[str, Any]:
     """檢查快取服務狀態"""
     try:
-        cache_service = get_cache_service()
         if cache_service is None:
             raise ValueError("Cache service 未初始化")
         stats = cache_service.get_stats()

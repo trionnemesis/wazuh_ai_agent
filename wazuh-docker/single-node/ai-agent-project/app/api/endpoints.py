@@ -43,9 +43,9 @@ async def read_root():
     }
 
 @router.get("/health")
-def health_check(cache_service: CacheService = Depends(get_cache_service)):
-    stats = cache_service.get_stats()
-    return {"status": "ok", "cache_stats": stats}
+async def health_check(cache_service: CacheService = Depends(get_cache_service)):
+    """健康檢查端點 - 返回所有組件的健康狀態"""
+    return await perform_health_check(cache_service)
 
 @router.get("/metrics")
 async def get_metrics():

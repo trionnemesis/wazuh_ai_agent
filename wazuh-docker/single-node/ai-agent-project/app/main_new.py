@@ -6,12 +6,14 @@ Wazuh GraphRAG AI Agent
 import logging
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
+import asyncio
 
 from core.config import (
     APP_TITLE, APP_VERSION, validate_config,
-    CACHE_ENABLED, CACHE_LRU_MAXSIZE, CACHE_TTL_MAXSIZE, CACHE_TTL_SECONDS
+    CACHE_ENABLED, CACHE_LRU_MAXSIZE, CACHE_TTL_MAXSIZE, CACHE_TTL_SECONDS,
+    SCHEDULER_INTERVAL_SECONDS, SCHEDULER_MISFIRE_GRACE_TIME
 )
-from core.scheduler import start_scheduler, shutdown_scheduler
+from core.scheduler import start_scheduler, shutdown_scheduler, get_scheduler, async_job_wrapper
 from api.endpoints import router as api_router
 from services.opensearch_service import close_opensearch_client
 from services.neo4j_service import close_neo4j_driver
@@ -43,8 +45,22 @@ async def lifespan(app: FastAPI):
     if cache_service:
         logger.info("✅ 智能快取服務已啟動")
     
-    # 啟動排程器
-    start_scheduler()
+    # 在異步上下文中啟動排程器
+    # 確保使用當前的事件迴圈
+    loop = asyncio.get_running_loop()
+    scheduler = get_scheduler(loop)
+    
+    # 添加定時任務
+    scheduler.add_job(
+        async_job_wrapper,
+        'interval', 
+        seconds=SCHEDULER_INTERVAL_SECONDS, 
+        id='agentic_triage_job', 
+        misfire_grace_time=SCHEDULER_MISFIRE_GRACE_TIME
+    )
+    
+    scheduler.start()
+    logger.info(f"✅ 排程器已在異步上下文中啟動，每 {SCHEDULER_INTERVAL_SECONDS} 秒執行一次任務")
     
     yield
     
