@@ -123,10 +123,6 @@ async def triage_new_alerts():
         logger.error(f"Critical error during GraphRAG triage: {e}", exc_info=True)
         traceback.print_exc()
 
-def triage_new_alerts_sync():
-    import asyncio
-    asyncio.run(triage_new_alerts())
-
 async def process_single_alert(alert: Dict[str, Any]) -> None:
     """
     處理單個警報的完整流程
