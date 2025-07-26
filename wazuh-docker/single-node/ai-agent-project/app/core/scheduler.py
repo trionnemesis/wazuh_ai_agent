@@ -17,17 +17,19 @@ logger = logging.getLogger(__name__)
 # 全域排程器實例
 scheduler: Optional[AsyncIOScheduler] = None
 
-def get_scheduler() -> AsyncIOScheduler:
+def get_scheduler(loop=None) -> AsyncIOScheduler:
     """獲取排程器實例"""
     global scheduler
     if scheduler is None:
-        # 使用當前的事件循環
-        try:
-            loop = asyncio.get_running_loop()
-            scheduler = AsyncIOScheduler(event_loop=loop)
-        except RuntimeError:
-            # 如果沒有運行中的事件循環，創建一個新的
-            scheduler = AsyncIOScheduler()
+        # 使用提供的事件循環或當前的事件循環
+        if loop is None:
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                # 如果沒有運行中的事件循環，創建一個新的
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+        scheduler = AsyncIOScheduler(event_loop=loop)
     return scheduler
 
 async def async_job_wrapper():
@@ -41,7 +43,14 @@ async def async_job_wrapper():
 
 def start_scheduler():
     """啟動排程器"""
-    sched = get_scheduler()
+    # 確保在事件迴圈中運行
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        logger.warning("沒有找到運行中的事件迴圈，將在稍後初始化排程器")
+        return
+        
+    sched = get_scheduler(loop)
     
     # 添加定時任務 - 直接使用異步函數
     sched.add_job(
