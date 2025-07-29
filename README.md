@@ -67,9 +67,37 @@
 ### 🗂️ 模組級文件
 
 #### AI Agent 核心模組
-- **[AI Agent 模組](wazuh-docker/single-node/ai-agent-project/README.md)** - AI 代理服務詳細說明
-- **[模組化架構指南](wazuh-docker/single-node/ai-agent-project/app/REFACTORING_GUIDE.md)** - 模組化重構詳解
-- **[實作總結](wazuh-docker/single-node/ai-agent-project/app/IMPLEMENTATION_SUMMARY.md)** - AgenticRAG 技術實作詳解
+- **[AI Agent 模組](docs/wazuh-docker/single-node/ai-agent-project/README.md)** - AI 代理服務詳細說明
+- **[模組化架構指南](docs/wazuh-docker/single-node/ai-agent-project/app/REFACTORING_GUIDE.md)** - 模組化重構詳解
+- **[實作總結](docs/wazuh-docker/single-node/ai-agent-project/app/IMPLEMENTATION_SUMMARY.md)** - AgenticRAG 技術實作詳解
+- **[遷移指南](docs/wazuh-docker/single-node/ai-agent-project/MIGRATION_GUIDE.md)** - 模組化架構遷移步驟
+- **[優化總結](docs/wazuh-docker/single-node/ai-agent-project/OPTIMIZATION_SUMMARY.md)** - 架構與效能優化
+
+#### AI Agent 進階文檔
+- **[向量化說明](docs/wazuh-docker/single-node/ai-agent-project/app/README_VECTORIZATION.md)**
+- **[Stage3 Agentic Correlation](docs/wazuh-docker/single-node/ai-agent-project/app/STAGE3_AGENTIC_CORRELATION.md)**
+- **[Async Error Fix](docs/wazuh-docker/single-node/ai-agent-project/app/ASYNC_ERROR_FIX.md)**
+- **[Vector Field Error Solution](docs/wazuh-docker/single-node/ai-agent-project/app/VECTOR_FIELD_ERROR_SOLUTION.md)**
+
+#### 快取與監控
+- **[快取實作](docs/wazuh-docker/single-node/ai-agent-project/docs/CACHE_IMPLEMENTATION.md)**
+- **[快取快速啟動](docs/wazuh-docker/single-node/ai-agent-project/docs/CACHE_QUICKSTART.md)**
+- **[Prometheus/Grafana 整合](docs/wazuh-docker/single-node/ai-agent-project/docs/PROMETHEUS_GRAFANA_INTEGRATION.md)**
+- **[性能優化指南](docs/wazuh-docker/single-node/ai-agent-project/docs/PERFORMANCE_OPTIMIZATION_GUIDE.md)**
+- **[Intelligent Caching Report](docs/wazuh-docker/single-node/ai-agent-project/docs/INTELLIGENT_CACHING_REPORT.md)**
+- **[Metrics Endpoint 修正](docs/wazuh-docker/single-node/ai-agent-project/docs/metrics-endpoint-fix.md)**
+
+#### Wazuh Docker 部署文檔
+- **[Docker 專案 README](docs/wazuh-docker/README.md)** - Docker 部署總覽
+- **[變更日誌](docs/wazuh-docker/CHANGELOG.md)** - Docker 更新歷程
+- **[建構映像檔指南](docs/wazuh-docker/build-docker-images/README.md)** - 自行建構 Docker 映像
+- **[憑證生成工具](docs/wazuh-docker/indexer-certs-creator/README.md)** - 建立索引憑證
+- **[單節點部署](docs/wazuh-docker/single-node/README.md)**
+- **[多節點部署](docs/wazuh-docker/multi-node/README.md)**
+- **[版本遷移指南](docs/wazuh-docker/multi-node/Migration-to-Wazuh-4.4.md)**
+
+#### 歸檔文件
+- **[舊版文件索引](docs/legacy/README.md)** - 已重構歷史文件
 
 ---
 
@@ -150,8 +178,10 @@ wazuh_ai_agent/
 │   ├── 📄 TESTING_STRATEGY.md             # 測試策略文件
 │   ├── 📄 TESTING_OPTIMIZATION_REPORT.md  # 測試優化報告
 │   ├── 📄 CLEANUP_COMPLETION_REPORT.md    # 清理完成報告
-│   └── 📄 AUTOMATION_OPTIMIZATION_REPORT.md # 自動化優化報告
-├── 📁 legacy/                             # 舊版本檔案
+│   ├── 📄 AUTOMATION_OPTIMIZATION_REPORT.md # 自動化優化報告
+│   ├── 📁 wazuh-docker/                   # Docker 相關文件
+│   │   └── ...                            # README、CHANGELOG 等
+│   └── 📁 legacy/                         # 歷史檔案
 └── 📁 wazuh-docker/                       # Wazuh Docker 部署核心
     ├── 📁 single-node/                    # 單節點部署 (主要)
     │   ├── 📄 start-unified-stack.sh      # 統一起動腳本
