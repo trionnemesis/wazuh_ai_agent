@@ -23,7 +23,7 @@
 
 這個協作生態系能夠實現 24/7 全自動威脅監控、分析、狩獵與防禦，大幅提升 SOC 團隊的威脅應對能力。
 
-### 🚀 當前實施狀態 - 模組化架構重構完成 (Stage 4+)
+### 🚀 當前實施狀態 - 異步優化與自動化完成 (Stage 4++)
 
 - ✅ **Stage 1**: 基礎向量化系統 (已完成)
 - ✅ **Stage 2**: 核心 RAG 檢索增強生成 (已完成)  
@@ -39,9 +39,42 @@
 - ✅ **模組化重構**: 服務層架構實施 (已完成)
 - ✅ **Docker 優化**: 統一構建與部署系統 (已完成)
 - ✅ **智能快取**: 記憶體快取機制實作 (已完成)
+- ✅ **異步遷移**: 全系統異步架構升級 (已完成)
+  - ✅ 異步 OpenSearch 客戶端
+  - ✅ 異步排程器實作
+  - ✅ 並發錯誤修復與穩定性提升
+- ✅ **自動化優化**: 生產級部署自動化 (已完成)
+  - ✅ 健壯性啟動腳本 v2.0
+  - ✅ 集中化配置管理
+  - ✅ Docker 構建優化
+  - ✅ 自動化測試與驗證
 
 - 🚧 **Stage 5**: 資安獵人 Agent - 主動威脅狩獵 (規劃中)
 - 📅 **Stage 6**: 執行者 Agent - 閉環自動化防禦 (Q2 2025)
+
+### 🔥 最新成就與優化
+
+**2024年12月最新更新**：
+
+1. **🔄 全系統異步遷移完成**
+   - 解決並發處理中的超時問題
+   - 提升系統穩定性與效能
+   - 支援高並發威脅分析處理
+
+2. **🚀 自動化部署優化**
+   - 實作健壯性啟動腳本，取代不可靠的延遲等待
+   - 集中化配置管理，支援開發/生產環境分離
+   - Docker 構建與依賴管理優化
+
+3. **📊 監控與快取增強**
+   - 智能記憶體快取系統實作
+   - Prometheus/Grafana 深度整合
+   - 即時效能監控與告警
+
+4. **📚 文件架構重構**
+   - 消除 60% 文件重複內容
+   - 建立單一事實來源原則
+   - 完整測試策略文件化
 
 ---
 
@@ -61,8 +94,11 @@
 
 ### 📊 專案報告與總結
 - **[專案報告總覽](docs/PROJECT_REPORTS.md)** - 所有開發報告的快速索引
-- **[模組化重構總結](docs/REFACTORING_SUMMARY.md)** - 系統重構的詳細成果
+- **[模組化重構總結](docs/REFACTORING_SUMMARY.md)** - 系統重構的詳細成果與文件架構優化
+- **[自動化優化報告](docs/AUTOMATION_OPTIMIZATION_REPORT.md)** - 部署腳本與配置管理優化成果
 - **[測試策略文件](docs/TESTING_STRATEGY.md)** - 完整測試框架與實踐
+- **[測試優化報告](docs/TESTING_OPTIMIZATION_REPORT.md)** - 測試流程改進與效能提升
+- **[清理完成報告](docs/CLEANUP_COMPLETION_REPORT.md)** - 專案清理與標準化完成報告
 
 ### 🗂️ 模組級文件
 
@@ -74,18 +110,19 @@
 - **[優化總結](docs/wazuh-docker/single-node/ai-agent-project/OPTIMIZATION_SUMMARY.md)** - 架構與效能優化
 
 #### AI Agent 進階文檔
-- **[向量化說明](docs/wazuh-docker/single-node/ai-agent-project/app/README_VECTORIZATION.md)**
-- **[Stage3 Agentic Correlation](docs/wazuh-docker/single-node/ai-agent-project/app/STAGE3_AGENTIC_CORRELATION.md)**
-- **[Async Error Fix](docs/wazuh-docker/single-node/ai-agent-project/app/ASYNC_ERROR_FIX.md)**
-- **[Vector Field Error Solution](docs/wazuh-docker/single-node/ai-agent-project/app/VECTOR_FIELD_ERROR_SOLUTION.md)**
+- **[向量化說明](docs/wazuh-docker/single-node/ai-agent-project/app/README_VECTORIZATION.md)** - 向量化處理詳細說明
+- **[Stage3 Agentic Correlation](docs/wazuh-docker/single-node/ai-agent-project/app/STAGE3_AGENTIC_CORRELATION.md)** - 代理關聯分析技術實作
+- **[異步錯誤修正](docs/wazuh-docker/single-node/ai-agent-project/app/ASYNC_ERROR_FIX.md)** - 異步架構問題解決方案
+- **[向量字段錯誤解決](docs/wazuh-docker/single-node/ai-agent-project/app/VECTOR_FIELD_ERROR_SOLUTION.md)** - 向量字段問題排除
+- **[異步遷移指南](docs/wazuh-docker/single-node/ai-agent-project/docs/ASYNC_ONLY_MIGRATION.md)** - 完整異步架構遷移步驟
 
-#### 快取與監控
-- **[快取實作](docs/wazuh-docker/single-node/ai-agent-project/docs/CACHE_IMPLEMENTATION.md)**
-- **[快取快速啟動](docs/wazuh-docker/single-node/ai-agent-project/docs/CACHE_QUICKSTART.md)**
-- **[Prometheus/Grafana 整合](docs/wazuh-docker/single-node/ai-agent-project/docs/PROMETHEUS_GRAFANA_INTEGRATION.md)**
-- **[性能優化指南](docs/wazuh-docker/single-node/ai-agent-project/docs/PERFORMANCE_OPTIMIZATION_GUIDE.md)**
-- **[Intelligent Caching Report](docs/wazuh-docker/single-node/ai-agent-project/docs/INTELLIGENT_CACHING_REPORT.md)**
-- **[Metrics Endpoint 修正](docs/wazuh-docker/single-node/ai-agent-project/docs/metrics-endpoint-fix.md)**
+#### 快取與監控系統
+- **[智能快取實作](docs/wazuh-docker/single-node/ai-agent-project/docs/CACHE_IMPLEMENTATION.md)** - 核心快取機制設計
+- **[快取快速啟動](docs/wazuh-docker/single-node/ai-agent-project/docs/CACHE_QUICKSTART.md)** - 快取系統快速部署指南
+- **[智能快取報告](docs/wazuh-docker/single-node/ai-agent-project/docs/INTELLIGENT_CACHING_REPORT.md)** - 記憶體快取效能分析
+- **[Prometheus/Grafana 整合](docs/wazuh-docker/single-node/ai-agent-project/docs/PROMETHEUS_GRAFANA_INTEGRATION.md)** - 監控系統深度整合
+- **[性能優化指南](docs/wazuh-docker/single-node/ai-agent-project/docs/PERFORMANCE_OPTIMIZATION_GUIDE.md)** - 系統效能調優策略
+- **[Metrics Endpoint 修正](docs/wazuh-docker/single-node/ai-agent-project/docs/metrics-endpoint-fix.md)** - 監控端點問題解決
 
 #### Wazuh Docker 部署文檔
 - **[Docker 專案 README](docs/wazuh-docker/README.md)** - Docker 部署總覽
@@ -145,8 +182,15 @@ NEO4J_PASSWORD=wazuh-graph-2024
 ### 3. 啟動系統
 
 ```bash
-# 使用統一起動腳本
+# 使用優化的健壯性啟動腳本 v2.0
 ./start-unified-stack.sh
+
+# 可選：執行獨立健康檢查
+./health-check.sh
+
+# 可選：管理配置
+./manage-config.sh init  # 初始化配置環境
+./manage-config.sh validate  # 驗證配置完整性
 ```
 
 ### 4. 驗證部署
@@ -168,7 +212,7 @@ NEO4J_PASSWORD=wazuh-graph-2024
 ```
 wazuh_ai_agent/
 ├── 📄 README.md                           # 專案總覽與快速開始
-├── 📁 docs/                               # 主要技術文檔
+├── 📁 docs/                               # 主要技術文檔 (單一事實來源)
 │   ├── 📄 DOCUMENT_CATALOG.md             # 📚 完整文件分類目錄
 │   ├── 📄 ARCHITECTURE.md                 # 系統架構設計
 │   ├── 📄 DEPLOYMENT.md                   # 部署指南
@@ -179,15 +223,42 @@ wazuh_ai_agent/
 │   ├── 📄 TESTING_OPTIMIZATION_REPORT.md  # 測試優化報告
 │   ├── 📄 CLEANUP_COMPLETION_REPORT.md    # 清理完成報告
 │   ├── 📄 AUTOMATION_OPTIMIZATION_REPORT.md # 自動化優化報告
+│   ├── 📄 INTELLIGENT_CACHING_IMPLEMENTATION.md # 智能快取實作
+│   ├── 📄 INTELLIGENT_CACHING_REPORT.md   # 快取效能報告
 │   ├── 📁 wazuh-docker/                   # Docker 相關文件
-│   │   └── ...                            # README、CHANGELOG 等
-│   └── 📁 legacy/                         # 歷史檔案
+│   │   ├── 📄 README.md                   # Docker 部署總覽
+│   │   ├── 📄 CHANGELOG.md                # 版本更新歷程
+│   │   ├── 📁 single-node/                # 單節點部署文件
+│   │   │   └── 📁 ai-agent-project/       # AI Agent 模組文件
+│   │   ├── 📁 multi-node/                 # 多節點部署文件
+│   │   ├── 📁 build-docker-images/        # 映像檔構建文件
+│   │   └── 📁 indexer-certs-creator/      # 憑證生成文件
+│   └── 📁 legacy/                         # 歷史檔案歸檔
 └── 📁 wazuh-docker/                       # Wazuh Docker 部署核心
     ├── 📁 single-node/                    # 單節點部署 (主要)
-    │   ├── 📄 start-unified-stack.sh      # 統一起動腳本
+    │   ├── 📄 start-unified-stack.sh      # 健壯性統一啟動腳本 v2.0
+    │   ├── 📄 stop-unified-stack.sh       # 優雅停止腳本
+    │   ├── 📄 health-check.sh             # 深度健康檢查腳本
+    │   ├── 📄 manage-config.sh            # 集中化配置管理
     │   ├── 📄 docker-compose.main.yml     # 主要 Docker Compose
+    │   ├── 📄 docker-compose.override.yml # 配置覆寫與優化
+    │   ├── 📄 .env                        # 生產環境配置
+    │   ├── 📄 env.example                 # 配置範例與說明
     │   └── 📁 ai-agent-project/           # AI Agent 核心專案
-    └── 📁 multi-node/                     # 多節點部署
+    │       ├── 📄 Dockerfile              # 優化容器構建
+    │       ├── 📄 requirements.txt        # 依賴管理
+    │       ├── 📁 app/                    # 模組化應用架構
+    │       │   ├── 📄 main_new.py         # 異步主程式
+    │       │   ├── 📁 api/                # FastAPI 路由層
+    │       │   ├── 📁 core/               # 核心業務邏輯
+    │       │   ├── 📁 services/           # 服務層架構
+    │       │   ├── 📁 stages/             # 階段性模組
+    │       │   └── 📁 utils/              # 工具與配置
+    │       ├── 📁 tests/                  # 完整測試套件
+    │       └── 📁 docs/                   # 模組級文件
+    ├── 📁 multi-node/                     # 多節點部署
+    ├── 📁 build-docker-images/            # 自訂映像檔構建
+    └── 📁 indexer-certs-creator/          # SSL 憑證工具
 ```
 
 ---
@@ -203,6 +274,9 @@ wazuh_ai_agent/
 | 設置監控 | [監控系統指南](docs/MONITORING.md) |
 | 查看所有文件 | [完整文件目錄](docs/DOCUMENT_CATALOG.md) |
 | 了解專案進展 | [專案報告總覽](docs/PROJECT_REPORTS.md) |
+| 了解最新優化 | [自動化優化報告](docs/AUTOMATION_OPTIMIZATION_REPORT.md) |
+| 了解智能快取 | [智能快取實作](docs/INTELLIGENT_CACHING_IMPLEMENTATION.md) |
+| 進行異步遷移 | [異步遷移指南](docs/wazuh-docker/single-node/ai-agent-project/docs/ASYNC_ONLY_MIGRATION.md) |
 | 了解測試策略 | [測試策略文件](docs/TESTING_STRATEGY.md) |
 
 ---
