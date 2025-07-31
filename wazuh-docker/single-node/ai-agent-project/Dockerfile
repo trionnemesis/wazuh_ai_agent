@@ -95,5 +95,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # --- ✨ 修正點 4: 修正生產環境的啟動命令 ---
-# 同樣，直接引用位於工作目錄頂層的 `main_new:app`
-CMD ["uvicorn", "main_new:app", "--host", "0.0.0.0", "--port", "8000"]
+# 使用 main.py 作為入口點（它會導入 main_new.py）
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
