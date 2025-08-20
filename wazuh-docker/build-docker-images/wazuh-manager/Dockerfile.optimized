@@ -1,0 +1,118 @@
+# Wazuh Manager 優化版 Dockerfile - 多階段構建
+# 版本: 2.0
+# 使用多階段構建減少映像大小並提高安全性
+
+# ===== 構建階段 =====
+FROM ubuntu:focal AS builder
+
+# 構建參數
+ARG WAZUH_VERSION
+ARG WAZUH_TAG_REVISION
+ARG FILEBEAT_TEMPLATE_BRANCH
+ARG FILEBEAT_CHANNEL=filebeat-oss
+ARG FILEBEAT_VERSION=7.10.2
+ARG WAZUH_FILEBEAT_MODULE
+
+# 安裝構建工具
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    gnupg \
+    lsb-release \
+    apt-transport-https \
+    && rm -rf /var/lib/apt/lists/*
+
+# 設定 Wazuh 儲存庫
+COPY config/check_repository.sh /tmp/
+RUN chmod +x /tmp/check_repository.sh && \
+    bash /tmp/check_repository.sh
+
+# 下載 Wazuh 套件（但不安裝）
+RUN apt-get update && \
+    apt-get download wazuh-manager=${WAZUH_VERSION}-${WAZUH_TAG_REVISION} && \
+    apt-get download ${FILEBEAT_CHANNEL}=${FILEBEAT_VERSION}
+
+# 下載 S6 overlay
+ARG S6_VERSION="v2.2.0.3"
+RUN curl --fail --silent -L \
+    https://github.com/just-containers/s6-overlay/releases/download/${S6_VERSION}/s6-overlay-amd64.tar.gz \
+    -o /tmp/s6-overlay-amd64.tar.gz
+
+# 下載 Filebeat 模組和模板
+COPY config/filebeat_module.sh /tmp/
+RUN chmod +x /tmp/filebeat_module.sh && \
+    bash /tmp/filebeat_module.sh
+
+# 下載 Wazuh 模板
+ADD https://raw.githubusercontent.com/wazuh/wazuh/$FILEBEAT_TEMPLATE_BRANCH/extensions/elasticsearch/7.x/wazuh-template.json /tmp/wazuh-template.json
+
+# ===== 執行階段 =====
+FROM ubuntu:focal AS runtime
+
+# 設定環境變數
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=UTC
+
+# 安裝執行時依賴
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    net-tools \
+    hostname \
+    python3 \
+    python3-pip \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/* /var/tmp/*
+
+# 從構建階段複製套件
+COPY --from=builder /*.deb /tmp/
+
+# 安裝 Wazuh 和 Filebeat
+RUN dpkg -i /tmp/*.deb || apt-get -f install -y --no-install-recommends \
+    && rm -f /tmp/*.deb \
+    && apt-get clean
+
+# 安裝 S6 overlay
+COPY --from=builder /tmp/s6-overlay-amd64.tar.gz /tmp/
+RUN tar xzf /tmp/s6-overlay-amd64.tar.gz -C / --exclude="./bin" && \
+    tar xzf /tmp/s6-overlay-amd64.tar.gz -C /usr ./bin && \
+    rm /tmp/s6-overlay-amd64.tar.gz
+
+# 複製配置檔案
+COPY config/etc/ /etc/
+COPY --chown=root:wazuh config/create_user.py /var/ossec/framework/scripts/
+COPY config/filebeat.yml /etc/filebeat/
+COPY --from=builder /tmp/wazuh-template.json /etc/filebeat/
+COPY config/permanent_data.env config/permanent_data.sh /
+
+# 設定權限
+RUN chmod go-w /etc/filebeat/filebeat.yml && \
+    chmod go-w /etc/filebeat/wazuh-template.json && \
+    chmod 755 /permanent_data.sh
+
+# 準備持久資料目錄
+RUN /permanent_data.sh && rm /permanent_data.sh
+
+# 創建必要的目錄並設定權限
+RUN mkdir -p /var/ossec/var/multigroups \
+             /var/ossec/agentless \
+             /var/ossec/active-response/bin && \
+    chown -R root:wazuh /var/ossec/var/multigroups \
+                        /var/ossec/agentless \
+                        /var/ossec/active-response/bin && \
+    chmod -R 770 /var/ossec/var/multigroups \
+                 /var/ossec/agentless \
+                 /var/ossec/active-response/bin
+
+# 健康檢查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:55000/health || exit 1
+
+# 服務連接埠
+EXPOSE 55000/tcp 1514/tcp 1515/tcp 514/udp 1516/tcp
+
+# 使用非 root 使用者（在 S6 啟動後會處理）
+ENTRYPOINT ["/init"]
