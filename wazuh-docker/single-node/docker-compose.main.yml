@@ -176,7 +176,7 @@ services:
     container_name: ai-agent
     restart: unless-stopped
     env_file:
-      - ./ai-agent-project/.env
+      - ./.env
     environment:
       # Neo4j 連接配置
       - NEO4J_URI=bolt://neo4j:7687

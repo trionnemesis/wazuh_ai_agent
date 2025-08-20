@@ -25,6 +25,15 @@
 
 這個協作生態系能夠實現 24/7 全自動威脅監控、分析、狩獵與防禦，大幅提升 SOC 團隊的威脅應對能力。
 
+## 🆕 最新更新
+
+### Docker 環境優化 (2024-12)
+- **簡化啟動流程**：將複雜的 `start-unified-stack.sh` 簡化為更清晰的 `start-services.sh`
+- **統一環境變數**：整合多個 .env 檔案為單一配置檔案，提升管理效率
+- **優化映像構建**：導入多階段構建，減少映像大小約 30%
+- **改善服務依賴**：利用 Docker Compose 的 `depends_on` 和 `healthcheck` 機制
+- 詳見 [Docker 優化指南](docs/DOCKER_OPTIMIZATION_GUIDE.md) 與 [遷移指南](docs/DOCKER_MIGRATION_GUIDE.md)
+
 ## 🏗️ 系統架構圖
 
 ```mermaid
@@ -117,6 +126,8 @@ graph TD
 |------|------|----------|
 | **[系統架構設計](docs/ARCHITECTURE.md)** | 完整技術架構與核心組件 | 架構師、技術主管 |
 | **[部署指南](docs/DEPLOYMENT.md)** | 詳細部署與配置說明 | DevOps、系統管理員 |
+| **[Docker 優化指南](docs/DOCKER_OPTIMIZATION_GUIDE.md)** | 🆕 Docker 環境優化詳解 | DevOps、架構師 |
+| **[Docker 遷移指南](docs/DOCKER_MIGRATION_GUIDE.md)** | 🆕 從舊架構遷移到優化架構 | 系統管理員 |
 | **[監控系統指南](docs/MONITORING.md)** | 監控配置與運維指南 | 運維工程師 |
 | **[智能快取實作](docs/INTELLIGENT_CACHING_IMPLEMENTATION.md)** | 記憶體快取機制詳解 | 開發工程師、架構師 |
 
