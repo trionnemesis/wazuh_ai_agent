@@ -1,170 +1,239 @@
-# Security Agent System - GraphRAG & Agential RAG Hybrid Architecture
+# Security Agent System - LangGraph Multi-Agent Orchestration
 
-一個基於三代理協作的先進資安事件回應系統，結合 GraphRAG 和 Agential RAG 技術。
+A state-of-the-art security orchestration system built with LangChain's LangGraph framework. This system implements a directed acyclic graph (DAG) for coordinating three specialized AI agents that work together to detect, investigate, and remediate security threats.
 
-## 系統架構
+## 🏗️ Architecture Overview
 
-本系統將傳統的單一 AI Agent 拆分為三個職責分明、可獨立運作與優化的專業代理：
+The system uses LangGraph to orchestrate three intelligent agents:
 
-### 1. 管理者代理 (Manager Agent) - 控制中心
-- **核心職責**：接收、分派、追蹤
-- **主要功能**：
-  - 接收來自 Wazuh、SIEM 等的原始警報
-  - 初步分類與去重
-  - 創建任務並分派給獵人代理
-  - 監控任務生命週期
+1. **Manager Agent**: Analyzes alerts and coordinates response
+2. **Hunter Agent**: Performs deep threat investigation  
+3. **Executor Agent**: Executes remediation actions
 
-### 2. 獵人代理 (Hunter Agent) - 調查專家  
-- **核心職責**：深度調查、關聯分析、上下文擴充
-- **主要功能**：
-  - 執行 GraphRAG 分析尋找攻擊路徑
-  - 向量相似性搜尋歷史事件
-  - 多源資料關聯與威脅情資查詢
-  - 建構完整威脅檔案
+### Workflow Graph
 
-### 3. 執行者代理 (Executor Agent) - 行動單位
-- **核心職責**：綜合分析、生成報告、執行回應
-- **主要功能**：
-  - 使用強大 LLM 進行最終分析
-  - 生成人類可讀的分析報告
-  - 提出分級處置建議
-  - Human-in-the-Loop 批准機制
-  - 執行已批准的安全回應
+```mermaid
+graph TB
+    Start([Alert Intake]) --> Manager[Manager Agent]
+    Manager -->|investigate| Hunter[Hunter Agent]
+    Manager -->|remediate| Executor[Executor Agent]
+    Manager -->|dismiss| Complete[Completion]
+    Hunter --> Review[Manager Review]
+    Review -->|remediate| Executor
+    Review -->|escalate| Human[Human Approval]
+    Review -->|dismiss| Complete
+    Executor -->|completed| Complete
+    Executor -->|approval_needed| Human
+    Human -->|approved| Executor
+    Human -->|rejected| Complete
+    Complete --> End([End])
+```
 
-## 技術特色
+## ✨ Key Features
 
-- **異步消息隊列架構**：使用 RabbitMQ/Kafka 實現代理間通訊
-- **GraphRAG 整合**：Neo4j 圖資料庫進行實體關係分析
-- **向量搜尋**：ChromaDB 進行相似事件檢索
-- **多 LLM 支援**：可配置使用 OpenAI、Anthropic、Google 模型
-- **人機協作**：關鍵決策需要人工批准
-- **可擴展性**：每個代理可獨立擴展
+- **LangGraph DAG**: State-based workflow with conditional routing
+- **LCEL Chains**: Composable AI operations using LangChain Expression Language
+- **State Persistence**: Automatic checkpointing for failure recovery
+- **Human-in-the-Loop**: Built-in approval workflows for high-risk actions
+- **Parallel Processing**: Efficient batch alert processing
+- **Multi-LLM Support**: Configure different LLMs per agent (OpenAI, Anthropic, Google)
 
-## 快速開始
+## 🚀 Quick Start
 
-### 環境需求
+### Prerequisites
+
 - Python 3.10+
-- Docker & Docker Compose
-- API Keys (OpenAI/Anthropic/Google)
+- Docker and Docker Compose
+- API keys for LLM providers (OpenAI/Anthropic/Google)
 
-### 安裝步驟
+### Installation
 
-1. 複製專案並安裝依賴：
 ```bash
-git clone <repository>
+# Clone the repository
+git clone <repository-url>
 cd security-agent-system
+
+# Install dependencies
 pip install -r requirements.txt
-```
 
-2. 設定環境變數：
-```bash
+# Configure environment
 cp .env.example .env
-# 編輯 .env 填入您的 API keys 和配置
-```
+# Edit .env with your API keys and settings
 
-3. 啟動基礎設施：
-```bash
+# Start infrastructure
 docker-compose up -d
-```
 
-4. 啟動系統：
-```bash
+# Run the system
 python main.py start
 ```
 
-## 使用方式
+## 🧪 Testing the System
 
-### 提交警報
+### Send a test alert:
 ```bash
-# 使用 CLI 提交測試警報
-python main.py submit-alert -t "Suspicious Activity" -d "Multiple failed login attempts" -s HIGH
-
-# 或使用 API
-curl -X POST http://localhost:8000/alerts \
-  -H "Content-Type: application/json" \
-  -d '{"title": "Test Alert", "severity": "HIGH", ...}'
+python main.py test-alert \
+    --severity high \
+    --type malware \
+    --source endpoint \
+    "Ransomware detected on production server"
 ```
 
-### 查看系統狀態
+### Check system status:
 ```bash
 python main.py status
 ```
 
-### 執行攻擊模擬
+### Visualize the workflow:
 ```bash
-python main.py simulate
+python main.py visualize --output workflow.png
 ```
 
-## API 端點
+## 📁 Project Structure
 
-- `GET /health` - 系統健康檢查
-- `POST /alerts` - 提交新警報
-- `GET /tasks/{task_id}` - 查詢任務狀態
-- `POST /approvals/{request_id}` - 處理批准請求
-- `GET /metrics` - 獲取系統指標
-
-## 配置說明
-
-### 代理配置
-每個代理可獨立配置 LLM 提供者和模型：
-- Manager Agent：使用快速、便宜的模型（如 Gemini Flash）
-- Hunter Agent：使用中階模型進行檢索
-- Executor Agent：使用最強大的模型（如 GPT-4o、Claude Opus）
-
-### 安全設定
-- `ENABLE_HUMAN_APPROVAL`：是否啟用人工批准（建議保持開啟）
-- `AUTO_EXECUTE_LOW_RISK`：是否自動執行低風險操作
-
-## 監控與維運
-
-系統包含 Prometheus + Grafana 監控堆疊：
-- Prometheus：http://localhost:9090
-- Grafana：http://localhost:3000 (admin/admin)
-
-## 架構優勢
-
-1. **職責分離**：每個代理專注其核心能力
-2. **可擴展性**：可根據負載獨立擴展各代理
-3. **容錯性**：單一代理故障不影響整體系統
-4. **靈活性**：可輕鬆更換或升級個別組件
-5. **成本優化**：不同任務使用適合的模型
-
-## 開發指南
-
-### 新增動作類型
-在 `src/services/action_executor.py` 中實現新的動作處理器。
-
-### 自定義威脅分析
-修改 `src/agents/hunter_agent.py` 中的分析邏輯。
-
-### 擴展通知管道
-在 `src/infrastructure/notifications.py` 中新增通知服務。
-
-## 故障排除
-
-### RabbitMQ 連接失敗
-確認 Docker 容器正在運行：
-```bash
-docker ps | grep rabbitmq
+```
+security-agent-system/
+├── src/
+│   ├── langgraph/          # LangGraph implementation
+│   │   ├── __init__.py
+│   │   ├── state.py        # Agent state definitions
+│   │   ├── graph.py        # Main workflow graph
+│   │   ├── orchestrator.py # System orchestrator
+│   │   └── agents/         # Agent implementations
+│   │       ├── manager_node.py
+│   │       ├── hunter_node.py
+│   │       └── executor_node.py
+│   ├── core/               # Core models and config
+│   ├── infrastructure/     # External integrations
+│   └── services/           # Service layer
+├── tests/                  # Test suite
+├── config/                 # Configuration files
+├── docker-compose.yml      # Infrastructure setup
+├── main.py                # CLI entry point
+└── requirements.txt       # Python dependencies
 ```
 
-### Neo4j 連接問題
-檢查 Neo4j 是否正確啟動並可訪問：
+## 🔧 Configuration
+
+The system is configured through environment variables in `.env`:
+
 ```bash
-curl http://localhost:7474
+# LLM Configuration
+DEFAULT_LLM_PROVIDER=openai
+OPENAI_API_KEY=your-openai-key
+ANTHROPIC_API_KEY=your-anthropic-key
+GOOGLE_API_KEY=your-google-key
+
+# Agent-specific LLMs
+MANAGER_LLM_PROVIDER=openai
+HUNTER_LLM_PROVIDER=anthropic
+EXECUTOR_LLM_PROVIDER=google
+
+# Infrastructure
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=password
+CHROMADB_PATH=./chroma_db
+MESSAGE_BROKER_TYPE=rabbitmq
+RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+
+# Notifications
+SLACK_WEBHOOK_URL=your-webhook-url
 ```
 
-### LLM API 錯誤
-確認 API keys 正確設置在 .env 文件中。
+## 📊 Monitoring
 
-## 授權
+The system provides comprehensive monitoring through Prometheus metrics:
 
-本專案採用 MIT 授權條款。
+- Alert processing rates
+- Agent performance metrics
+- Workflow execution times
+- Error rates and types
 
-## 貢獻指南
+Access monitoring dashboards:
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000
 
-歡迎提交 Issue 和 Pull Request！
+## 🤖 Agent Details
 
-## 聯絡方式
+### Manager Agent
+- **Role**: Central coordinator and decision maker
+- **Capabilities**:
+  - Alert severity assessment
+  - Workflow routing decisions
+  - Remediation plan creation
+  - Investigation result review
 
-如有問題請聯繫：[your-email@example.com]
+### Hunter Agent
+- **Role**: Threat investigation specialist
+- **Capabilities**:
+  - Graph database queries (Neo4j)
+  - Vector similarity search (ChromaDB)
+  - Threat intelligence lookups
+  - Attack pattern identification
+
+### Executor Agent
+- **Role**: Remediation action executor
+- **Capabilities**:
+  - Action planning and validation
+  - Security control execution
+  - Rollback management
+  - Result verification
+
+## 🔄 Workflow States
+
+The system maintains a comprehensive state that flows through the graph:
+
+- `current_alert`: Alert being processed
+- `investigations`: Investigation results
+- `remediation_plans`: Planned actions
+- `execution_results`: Action outcomes
+- `workflow_history`: Complete audit trail
+
+## 🛠️ Development
+
+### Running Tests
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=src tests/
+
+# Run specific test module
+pytest tests/test_agents.py
+```
+
+### Adding New Actions
+1. Add action to `ExecutorNode.action_registry`
+2. Implement action method
+3. Update action documentation
+4. Add tests
+
+### Extending the Graph
+1. Define new nodes in the graph
+2. Add routing logic
+3. Update state definitions
+4. Test the new workflow
+
+## 📚 Documentation
+
+- [LangGraph Architecture](../docs/LANGGRAPH_ARCHITECTURE.md) - Detailed system design
+- [API Reference](../docs/API.md) - REST API documentation
+- [Deployment Guide](../docs/DEPLOYMENT.md) - Production deployment
+- [Contributing Guide](CONTRIBUTING.md) - Development guidelines
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+Built with:
+- [LangChain](https://langchain.com/) - LLM application framework
+- [LangGraph](https://github.com/langchain-ai/langgraph) - Multi-agent orchestration
+- [Neo4j](https://neo4j.com/) - Graph database for threat relationships
+- [ChromaDB](https://www.trychroma.com/) - Vector database for similarity search
