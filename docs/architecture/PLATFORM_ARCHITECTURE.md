@@ -19,6 +19,12 @@
 
 ## 系統架構概述
 
+### 2025 重構重點
+- 將核心程式碼封裝於 `security_agent_system` 套件，明確區分代理、基礎設施與工作流。
+- 新增 `apps/` 目錄，提供 CLI、LangServe 與 MCP 三種執行環境。
+- 調整文件架構，集中於 `docs/architecture`、`docs/guides`、`docs/operations`、`docs/reports`。
+- LangChain / LangGraph 元件統一由 `LangGraphOrchestrator` 管理，支援狀態檢查點與多代理協同。
+
 ### 整體架構圖
 
 ```mermaid
@@ -128,12 +134,12 @@ class GraphRAGEngine:
 系統採用模組化設計，提升可維護性與擴展性：
 
 ```
-app/
-├── api/                    # API 路由層
-├── core/                   # 核心業務邏輯
-├── services/               # 服務層
-├── stages/                 # 階段性模組
-└── utils/                  # 工具模組
+security-agent-system/
+├── apps/                   # CLI、LangServe、MCP 三種運行時
+├── security_agent_system/  # 核心套件（agents、core、infrastructure、workflows）
+├── config/                 # 設定檔與環境樣板
+├── examples/               # 示範警報與腳本
+└── tests/                  # 測試與驗證
 ```
 
 #### 服務層接口設計
