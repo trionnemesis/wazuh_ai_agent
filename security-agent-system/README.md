@@ -63,8 +63,14 @@ cp .env.example .env
 # Start infrastructure
 docker-compose up -d
 
-# Run the system
+# Run the CLI orchestrator
 python main.py start
+
+# Launch LangServe API
+python main.py serve-langserve
+
+# Launch MCP server
+python main.py serve-mcp
 ```
 
 ## 🧪 Testing the System
@@ -92,24 +98,22 @@ python main.py visualize --output workflow.png
 
 ```
 security-agent-system/
-├── src/
-│   ├── langgraph/          # LangGraph implementation
-│   │   ├── __init__.py
-│   │   ├── state.py        # Agent state definitions
-│   │   ├── graph.py        # Main workflow graph
-│   │   ├── orchestrator.py # System orchestrator
-│   │   └── agents/         # Agent implementations
-│   │       ├── manager_node.py
-│   │       ├── hunter_node.py
-│   │       └── executor_node.py
-│   ├── core/               # Core models and config
-│   ├── infrastructure/     # External integrations
-│   └── services/           # Service layer
+├── apps/
+│   ├── cli/                # Click-based CLI entrypoints
+│   ├── langserve/          # LangServe FastAPI application
+│   └── mcp/                # Model Context Protocol server
+├── security_agent_system/
+│   ├── agents/             # Manager, Hunter, Executor implementations
+│   ├── core/               # Settings, models, and enums
+│   ├── infrastructure/     # Brokers, databases, notifications
+│   ├── services/           # Support services and orchestrators
+│   └── workflows/
+│       └── langgraph/      # LangGraph DAG, state, and nodes
 ├── tests/                  # Test suite
-├── config/                 # Configuration files
+├── config/                 # Environment templates and configs
 ├── docker-compose.yml      # Infrastructure setup
-├── main.py                # CLI entry point
-└── requirements.txt       # Python dependencies
+├── main.py                 # CLI shim (imports apps.cli.main)
+└── requirements.txt        # Python dependencies
 ```
 
 ## 🔧 Configuration
@@ -197,7 +201,7 @@ The system maintains a comprehensive state that flows through the graph:
 pytest
 
 # Run with coverage
-pytest --cov=src tests/
+pytest --cov=security_agent_system tests/
 
 # Run specific test module
 pytest tests/test_agents.py
@@ -217,10 +221,14 @@ pytest tests/test_agents.py
 
 ## 📚 Documentation
 
-- [LangGraph Architecture](../docs/LANGGRAPH_ARCHITECTURE.md) - Detailed system design
-- [API Reference](../docs/API.md) - REST API documentation
-- [Deployment Guide](../docs/DEPLOYMENT.md) - Production deployment
-- [Contributing Guide](CONTRIBUTING.md) - Development guidelines
+- [Platform Architecture](../docs/architecture/PLATFORM_ARCHITECTURE.md)
+- [LangGraph Workflow](../docs/architecture/LANGGRAPH_WORKFLOW.md)
+- [Runtime Services Overview](../docs/architecture/RUNTIME_SERVICES.md)
+- [Deployment Guide](../docs/guides/DEPLOYMENT.md)
+- [Monitoring Guide](../docs/guides/MONITORING.md)
+- [LangServe Deployment](../docs/guides/LANGSERVE_DEPLOYMENT.md)
+- [MCP Server Operations](../docs/guides/MCP_SERVER_GUIDE.md)
+- [Document Catalog](../docs/reference/DOCUMENT_CATALOG.md)
 
 ## 🤝 Contributing
 

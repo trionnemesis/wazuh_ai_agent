@@ -2,15 +2,26 @@
 
 [![LangChain](https://img.shields.io/badge/LangChain-0.3.14-blue.svg)](https://langchain.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2.65-green.svg)](https://github.com/langchain-ai/langgraph)
+[![LangServe](https://img.shields.io/badge/LangServe-ready-purple.svg)](https://github.com/langchain-ai/langserve)
+[![MCP](https://img.shields.io/badge/MCP-integrated-teal.svg)](https://modelcontextprotocol.io/)
 [![Neo4j](https://img.shields.io/badge/Neo4j-5.18-red.svg)](https://neo4j.com/)
 [![ChromaDB](https://img.shields.io/badge/ChromaDB-0.4.22-orange.svg)](https://www.trychroma.com/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 
 ## 🎯 Overview
+A multi-agent security orchestration platform powered by LangChain and LangGraph. The 2025 refactor consolidates the codebase into a reusable package (`security_agent_system`) and introduces dedicated runtime services for CLI operations, LangServe APIs, and MCP integrations.
 
-A multi-agent security orchestration system built with LangChain's LangGraph framework. The system uses a directed acyclic graph (DAG) to coordinate three specialized AI agents for automated threat detection, investigation, and remediation.
+## 🧱 Project Layout
+```
+security-agent-system/
+├── apps/                       # CLI, LangServe, and MCP entrypoints
+├── security_agent_system/      # Core package (agents, core, infrastructure, workflows)
+├── tests/                      # Automated test suites
+├── config/, examples/          # Deployment assets and runnable samples
+└── docs/                       # Architecture, guides, operations, and reports
+```
+Refer to [Directory Structure](docs/reference/DIRECTORY_STRUCTURE.md) for the complete breakdown.
 
-## 🏗️ Architecture
+## 🧠 Architecture
 
 ```mermaid
 graph TB
@@ -29,106 +40,61 @@ graph TB
     Complete --> End([End])
 ```
 
-## ✨ Key Features
+### Key Capabilities
+- **LangGraph DAG orchestration** with LCEL chains per agent.
+- **State persistence** via SQLite checkpoints to support recovery and audit.
+- **GraphRAG context** using Neo4j plus ChromaDB for hybrid investigations.
+- **Human-in-the-loop workflows** supporting approvals and rollbacks.
+- **Modular runtimes** (CLI, LangServe, MCP) that reuse a single orchestrator implementation.
 
-- **LangGraph DAG Orchestration**: State-based workflow management with conditional routing
-- **LCEL Integration**: LangChain Expression Language for composable AI chains
-- **Multi-Agent Collaboration**: Three specialized agents working in concert
-- **State Persistence**: Checkpointing for failure recovery and human-in-the-loop
-- **Parallel Processing**: Efficient batch alert processing
-- **Human Approval Workflow**: Built-in support for high-risk action approval
-- **GraphRAG**: Neo4j for threat relationship mapping
-- **Vector Search**: ChromaDB for similarity-based threat hunting
+## 🚀 Runtimes
+| Runtime | Command | Description |
+| --- | --- | --- |
+| CLI | `python security-agent-system/main.py start` | Production-grade orchestration with Click commands. |
+| LangServe | `uvicorn apps.langserve.app:app --host 0.0.0.0 --port 8001` | REST API powered by LangServe and FastAPI. |
+| MCP | `python -m apps.mcp.server --host 127.0.0.1 --port 8765` | Model Context Protocol server for IDE/tool integrations. |
 
 ## 🤖 Agent Roles
-
-### Manager Agent
-- Analyzes security alerts and determines response strategy
-- Creates remediation plans
-- Reviews investigation results
-- Routes workflow based on threat severity
-
-### Hunter Agent
-- Performs deep threat investigation
-- Queries graph and vector databases
-- Identifies attack patterns
-- Provides risk assessment and recommendations
-
-### Executor Agent
-- Plans and executes remediation actions
-- Validates execution results
-- Handles rollback procedures
-- Sends notifications
+- **Manager Agent** – Analyses alerts, sets priorities, and builds remediation plans.
+- **Hunter Agent** – Performs graph/vector investigations and risk scoring.
+- **Executor Agent** – Validates, executes, and monitors remediation tasks.
 
 ## 🚀 Quick Start
-
-### Prerequisites
-
-- Python 3.10+
-- Docker and Docker Compose
-- Neo4j 5.x
-- Message broker (RabbitMQ or Kafka)
-
-### Installation
-
-1. Clone the repository:
-```bash
-git clone https://github.com/your-org/security-agent-system.git
-cd security-agent-system
-```
-
-2. Install dependencies:
-```bash
-pip install -r security-agent-system/requirements.txt
-```
-
-3. Configure environment:
-```bash
-cp .env.example .env
-# Edit .env with your API keys and settings
-```
-
-4. Start infrastructure:
-```bash
-docker-compose up -d
-```
-
-5. Run the system:
-```bash
-python security-agent-system/main.py start
-```
+1. Clone and install dependencies:
+   ```bash
+   git clone https://github.com/your-org/security-agent-system.git
+   cd security-agent-system
+   pip install -r security-agent-system/requirements.txt
+   ```
+2. Configure environment variables (`cp .env.example .env`).
+3. Launch supporting services: `docker-compose up -d`.
+4. Start your preferred runtime (see table above).
 
 ## 📖 Documentation
-
-- [LangGraph Architecture](docs/LANGGRAPH_ARCHITECTURE.md) - Detailed system design
-- [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment instructions
-- [API Documentation](docs/API.md) - REST API reference
-- [Configuration Guide](docs/CONFIGURATION.md) - System configuration options
+- [Platform Architecture](docs/architecture/PLATFORM_ARCHITECTURE.md)
+- [LangGraph Workflow](docs/architecture/LANGGRAPH_WORKFLOW.md)
+- [Runtime Services Overview](docs/architecture/RUNTIME_SERVICES.md)
+- [Deployment Guide](docs/guides/DEPLOYMENT.md)
+- [Monitoring Guide](docs/guides/MONITORING.md)
+- [LangServe Deployment](docs/guides/LANGSERVE_DEPLOYMENT.md)
+- [MCP Server Operations](docs/guides/MCP_SERVER_GUIDE.md)
+- [Document Catalog](docs/reference/DOCUMENT_CATALOG.md)
 
 ## 🧪 Testing
-
-### Run a test alert:
 ```bash
-python main.py test-alert \
+cd security-agent-system
+pytest
+```
+Trigger a manual alert for smoke testing:
+```bash
+python security-agent-system/main.py test-alert \
     --severity high \
     --type malware \
     "Suspicious process detected on server"
 ```
 
-### Check system status:
-```bash
-python main.py status
-```
-
-### Visualize the graph:
-```bash
-python main.py visualize --output graph.png
-```
-
 ## 🔧 Configuration
-
-Key configuration options in `.env`:
-
+Important `.env` variables:
 ```bash
 # LLM Providers
 DEFAULT_LLM_PROVIDER=openai
@@ -148,41 +114,17 @@ MESSAGE_BROKER_TYPE=rabbitmq
 ```
 
 ## 📊 Monitoring
-
-The system exposes Prometheus metrics:
-
-- Alert processing metrics
-- Agent performance metrics
-- Workflow execution times
-- Error rates and types
-
-Access Grafana dashboards at `http://localhost:3000`
+Prometheus metrics cover alert throughput, agent performance, execution latency, and error rates. Grafana dashboards are available at `http://localhost:3000`.
 
 ## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests: `pytest tests/`
-5. Submit a pull request
+1. Fork the repository.
+2. Create a feature branch.
+3. Make changes and add tests.
+4. Run `pytest`.
+5. Submit a pull request.
 
 ## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License – see [LICENSE](LICENSE).
 
 ## 🙏 Acknowledgments
-
-Built with:
-- [LangChain](https://langchain.com/) - LLM application framework
-- [LangGraph](https://github.com/langchain-ai/langgraph) - Multi-agent orchestration
-- [Neo4j](https://neo4j.com/) - Graph database
-- [ChromaDB](https://www.trychroma.com/) - Vector database
-
-## 📞 Support
-
-- Documentation: [docs/](docs/)
-- Issues: [GitHub Issues](https://github.com/your-org/security-agent-system/issues)
-- Discussions: [GitHub Discussions](https://github.com/your-org/security-agent-system/discussions)
-
-
-
+Built with LangChain, LangGraph, LangServe, MCP, Neo4j, and ChromaDB.

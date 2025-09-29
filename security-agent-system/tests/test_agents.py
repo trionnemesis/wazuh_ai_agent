@@ -1,12 +1,26 @@
 """Tests for agent implementations."""
-import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock, patch
+import sys
+from pathlib import Path
+from unittest.mock import AsyncMock
 
-from src.agents import ManagerAgent, HunterAgent, ExecutorAgent
-from src.core.models import (
-    AlertMessage, AlertSeverity, Task, TaskStatus,
-    HuntingMessage, ExecutionMessage, ThreatProfile
+import pytest
+
+pytest.importorskip("pydantic")
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from security_agent_system.agents import ManagerAgent, HunterAgent, ExecutorAgent
+from security_agent_system.core.models import (
+    AlertMessage,
+    AlertSeverity,
+    Task,
+    TaskStatus,
+    HuntingMessage,
+    ExecutionMessage,
+    ThreatProfile,
 )
 
 

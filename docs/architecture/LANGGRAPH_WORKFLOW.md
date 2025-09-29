@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Security Agent System has been refactored to use LangChain's LangGraph for multi-agent orchestration. This document describes the new architecture, its components, and how they work together.
+The Security Agent System has been refactored to use LangChain's LangGraph for multi-agent orchestration. The refactor consolidates domain modules under the `security_agent_system` package and exposes runtime entrypoints through `apps/cli`, `apps/langserve`, and `apps/mcp`. This document describes the architecture, its components, and how they work together.
 
 ## Table of Contents
 
@@ -40,7 +40,7 @@ graph TB
 
 ## Core Components
 
-### 1. SecurityAgentGraph (`src/langgraph/graph.py`)
+### 1. SecurityAgentGraph (`security_agent_system/workflows/langgraph/graph.py`)
 
 The main graph that orchestrates the agent workflow:
 
@@ -62,7 +62,7 @@ class SecurityAgentGraph:
         self.app = self.graph.compile(checkpointer=self.checkpointer)
 ```
 
-### 2. LangGraphOrchestrator (`src/langgraph/orchestrator.py`)
+### 2. LangGraphOrchestrator (`security_agent_system/workflows/langgraph/orchestrator.py`)
 
 Manages the lifecycle of the LangGraph system:
 
@@ -71,7 +71,7 @@ Manages the lifecycle of the LangGraph system:
 - Manages alert consumption and processing
 - Handles system metrics and monitoring
 
-### 3. Agent State (`src/langgraph/state.py`)
+### 3. Agent State (`security_agent_system/workflows/langgraph/state.py`)
 
 Defines the shared state that flows through the graph:
 
