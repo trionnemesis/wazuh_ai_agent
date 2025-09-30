@@ -1,4 +1,4 @@
-"""Hunter Agent Node for LangGraph implementation."""
+"""LangGraph 實作的獵人代理節點。"""
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import structlog
@@ -15,120 +15,120 @@ logger = structlog.get_logger()
 
 
 class ThreatIntelligence(BaseModel):
-    """Threat intelligence findings."""
-    indicators: List[str] = Field(description="Threat indicators found")
-    ttps: List[str] = Field(description="Tactics, Techniques, and Procedures identified")
-    related_campaigns: List[str] = Field(description="Related threat campaigns")
-    confidence_score: float = Field(description="Confidence score 0-1")
+    """威脅情報發現。"""
+    indicators: List[str] = Field(description="發現的威脅指標")
+    ttps: List[str] = Field(description="識別出的戰術、技術和程序")
+    related_campaigns: List[str] = Field(description="相關的威脅活動")
+    confidence_score: float = Field(description="信賴度分數 0-1")
 
 
 class InvestigationResult(BaseModel):
-    """Hunter investigation result."""
-    risk_score: float = Field(description="Risk score 0-100")
-    affected_assets: List[str] = Field(description="List of affected assets")
-    attack_indicators: List[str] = Field(description="Attack indicators found")
-    findings: List[Dict[str, Any]] = Field(description="Detailed findings")
-    recommendations: List[str] = Field(description="Recommended actions")
+    """獵人調查結果。"""
+    risk_score: float = Field(description="風險分數 0-100")
+    affected_assets: List[str] = Field(description="受影響的資產清單")
+    attack_indicators: List[str] = Field(description="發現的攻擊指標")
+    findings: List[Dict[str, Any]] = Field(description="詳細的發現")
+    recommendations: List[str] = Field(description="建議的行動")
     evidence: Dict[str, Any] = Field(default_factory=dict)
     threat_intel: Optional[ThreatIntelligence] = None
 
 
 class HunterNode:
-    """Hunter agent node that performs threat investigation."""
+    """執行威脅調查的獵人代理節點。"""
     
     def __init__(self, llm_provider, graph_db=None, vector_db=None):
-        """Initialize Hunter node with LLM provider and databases."""
+        """使用 LLM 供應商和資料庫初始化獵人節點。"""
         self.llm = llm_provider
         self.graph_db = graph_db
         self.vector_db = vector_db
         self.parser = JsonOutputParser(pydantic_object=InvestigationResult)
         
-        # Create investigation prompt
+        # 建立調查提示
         self.investigation_prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are the Hunter Agent in a security orchestration system.
-            Your responsibilities include:
-            1. Deep investigation of security alerts
-            2. Threat hunting and correlation
-            3. Identifying attack patterns and indicators
-            4. Risk assessment and scoring
-            5. Gathering evidence and context
-            6. Providing actionable recommendations
+            ("system", """您是安全協調系統中的獵人代理。
+            您的職責包括：
+            1. 對安全警報進行深度調查
+            2. 威脅狩獵和關聯
+            3. 識別攻擊模式和指標
+            4. 風險評估和評分
+            5. 收集證據和上下文
+            6. 提供可行的建議
             
-            Investigation approach:
-            - Analyze the alert details thoroughly
-            - Look for patterns and anomalies
-            - Correlate with historical data
-            - Identify potential attack vectors
-            - Assess business impact
-            - Gather forensic evidence
+            調查方法：
+            - 徹底分析警報詳細資訊
+            - 尋找模式和異常
+            - 與歷史資料關聯
+            - 識別潛在的攻擊向量
+            - 評估業務影響
+            - 收集鑑識證據
             
-            Output your findings in the specified JSON format."""),
+            以指定的 JSON 格式輸出您的發現。"""),
             MessagesPlaceholder(variable_name="messages", optional=True),
-            ("human", """Investigate this security alert:
+            ("human", """調查此安全警報：
             
-            Alert Details:
+            警報詳細資訊：
             ID: {alert_id}
-            Type: {alert_type}
-            Severity: {severity}
-            Source: {source}
-            Description: {description}
-            Timestamp: {timestamp}
+            類型: {alert_type}
+            嚴重性: {severity}
+            來源: {source}
+            描述: {description}
+            時間戳: {timestamp}
             
-            Alert Context:
+            警報上下文：
             {alert_context}
             
-            Historical Context:
+            歷史上下文：
             {historical_context}
             
-            External Intelligence:
+            外部情報：
             {threat_intel}
             
-            Perform a thorough investigation and provide findings.
+            進行徹底調查並提供發現。
             
             {format_instructions}""")
         ])
         
-        # Create tool-based investigation chains
+        # 建立基於工具的調查鏈
         self._setup_investigation_tools()
         self._build_chains()
     
     def _setup_investigation_tools(self):
-        """Setup investigation tools for the Hunter agent."""
+        """為獵人代理設定調查工具。"""
         self.tools = []
         
-        # Graph database query tool
+        # 圖形資料庫查詢工具
         if self.graph_db:
             graph_tool = Tool(
                 name="query_graph_db",
-                description="Query the graph database for entity relationships and patterns",
+                description="查詢圖形資料庫以獲取實體關係和模式",
                 func=self._query_graph_db
             )
             self.tools.append(graph_tool)
         
-        # Vector database search tool
+        # 向量資料庫搜索工具
         if self.vector_db:
             vector_tool = Tool(
                 name="search_vector_db",
-                description="Search vector database for similar alerts and patterns",
+                description="搜索向量資料庫以查找相似的警報和模式",
                 func=self._search_vector_db
             )
             self.tools.append(vector_tool)
         
-        # Threat intelligence lookup tool
+        # 威脅情報查詢工具
         threat_intel_tool = Tool(
             name="lookup_threat_intel",
-            description="Look up threat intelligence for indicators",
+            description="查詢指標的威脅情報",
             func=self._lookup_threat_intel
         )
         self.tools.append(threat_intel_tool)
         
-        # Create tool node if tools are available
+        # 如果有可用的工具，則建立工具節點
         if self.tools:
             self.tool_node = ToolNode(self.tools)
     
     def _build_chains(self):
-        """Build LCEL chains for investigation."""
-        # Main investigation chain
+        """建立用於調查的 LCEL 鏈。"""
+        # 主要調查鏈
         self.investigation_chain = (
             RunnablePassthrough.assign(
                 format_instructions=lambda x: self.parser.get_format_instructions()
@@ -138,7 +138,7 @@ class HunterNode:
             | self.parser
         )
         
-        # Parallel investigation chain for gathering context
+        # 用於收集上下文的平行調查鏈
         self.context_gathering_chain = RunnableParallel(
             historical_context=RunnableLambda(self._get_historical_context),
             threat_intel=RunnableLambda(self._get_threat_intelligence),
@@ -146,99 +146,99 @@ class HunterNode:
         )
     
     async def _query_graph_db(self, query: str) -> str:
-        """Query the graph database."""
+        """查詢圖形資料庫。"""
         if not self.graph_db:
-            return "Graph database not available"
+            return "圖形資料庫不可用"
         
         try:
-            # Implement actual graph query logic
+            # 實作實際的圖形查詢邏輯
             result = await self.graph_db.query(query)
             return str(result)
         except Exception as e:
-            logger.error("Graph DB query error", error=str(e))
-            return f"Error querying graph DB: {str(e)}"
+            logger.error("圖形資料庫查詢錯誤", error=str(e))
+            return f"查詢圖形資料庫時發生錯誤：{str(e)}"
     
     async def _search_vector_db(self, query: str) -> str:
-        """Search the vector database."""
+        """搜索向量資料庫。"""
         if not self.vector_db:
-            return "Vector database not available"
+            return "向量資料庫不可用"
         
         try:
-            # Implement actual vector search logic
+            # 實作實際的向量搜索邏輯
             results = await self.vector_db.search(query, limit=5)
             return str(results)
         except Exception as e:
-            logger.error("Vector DB search error", error=str(e))
-            return f"Error searching vector DB: {str(e)}"
+            logger.error("向量資料庫搜索錯誤", error=str(e))
+            return f"搜索向量資料庫時發生錯誤：{str(e)}"
     
     async def _lookup_threat_intel(self, indicators: str) -> str:
-        """Look up threat intelligence for given indicators."""
-        # This would integrate with actual threat intel feeds
-        # For now, return mock data
-        return f"Threat intel lookup for: {indicators} - No known campaigns identified"
+        """查詢給定指標的威脅情報。"""
+        # 這將與實際的威脅情報來源整合
+        # 目前，返回模擬資料
+        return f"查詢威脅情報：{indicators} - 未識別出已知活動"
     
     async def _get_historical_context(self, alert_data: Dict[str, Any]) -> str:
-        """Get historical context for the alert."""
-        # Query historical data
+        """獲取警報的歷史上下文。"""
+        # 查詢歷史資料
         if self.vector_db:
             similar_alerts = await self._search_vector_db(
-                f"similar alerts to {alert_data.get('type', 'unknown')}"
+                f"與 {alert_data.get('type', 'unknown')} 相似的警報"
             )
-            return f"Historical context: {similar_alerts}"
-        return "No historical data available"
+            return f"歷史上下文：{similar_alerts}"
+        return "無可用歷史資料"
     
     async def _get_threat_intelligence(self, alert_data: Dict[str, Any]) -> str:
-        """Get threat intelligence for the alert."""
-        # Extract indicators from alert
+        """獲取警報的威脅情報。"""
+        # 從警報中提取指標
         indicators = []
         if "details" in alert_data:
-            # Extract IPs, domains, hashes, etc.
+            # 提取 IP、域名、雜湊值等
             details = alert_data["details"]
             if isinstance(details, dict):
                 indicators.extend(details.get("indicators", []))
         
         if indicators:
             return await self._lookup_threat_intel(", ".join(indicators))
-        return "No indicators to lookup"
+        return "沒有可查詢的指標"
     
     async def _analyze_graph_relationships(self, alert_data: Dict[str, Any]) -> str:
-        """Analyze entity relationships in graph database."""
+        """分析圖形資料庫中的實體關係。"""
         if self.graph_db:
-            # Extract entities from alert
+            # 從警報中提取實體
             entities = alert_data.get("details", {}).get("entities", [])
             if entities:
                 query = f"MATCH path = (n)-[*..3]-(m) WHERE n.name IN {entities} RETURN path"
                 return await self._query_graph_db(query)
-        return "No graph analysis performed"
+        return "未執行圖形分析"
     
     async def __call__(self, state: AgentState) -> AgentState:
-        """Process the current state and perform investigation."""
-        logger.info("Hunter node processing", 
+        """處理目前狀態並執行調查。"""
+        logger.info("獵人節點處理中",
                    workflow_step=state.get("workflow_step"),
                    current_alert=state.get("current_alert"))
         
         try:
-            # Check if we should investigate
+            # 檢查是否應進行調查
             if state.get("workflow_step") != "investigation":
-                logger.info("Not in investigation phase, skipping")
+                logger.info("不在調查階段，略過")
                 return state
             
-            # Get current alert
+            # 獲取目前警報
             current_alert = state.get("current_alert")
             if not current_alert:
-                logger.warning("No current alert to investigate")
+                logger.warning("沒有要調查的目前警報")
                 return state
             
-            # Convert to dict if needed
+            # 如果需要，轉換為字典
             if isinstance(current_alert, SecurityAlert):
                 alert_dict = current_alert.model_dump()
             else:
                 alert_dict = current_alert
             
-            # Gather context in parallel
+            # 平行收集上下文
             context_data = await self.context_gathering_chain.ainvoke(alert_dict)
             
-            # Prepare investigation context
+            # 準備調查上下文
             investigation_context = {
                 "alert_id": alert_dict.get("id", "unknown"),
                 "alert_type": alert_dict.get("type", "unknown"),
@@ -252,16 +252,16 @@ class HunterNode:
                 "messages": state.get("messages", [])
             }
             
-            # Perform investigation
+            # 執行調查
             investigation_result = await self.investigation_chain.ainvoke(investigation_context)
             
-            # Log investigation results
-            logger.info("Investigation completed",
+            # 記錄調查結果
+            logger.info("調查完成",
                        alert_id=investigation_context["alert_id"],
                        risk_score=investigation_result.risk_score,
                        affected_assets=len(investigation_result.affected_assets))
             
-            # Create Investigation object
+            # 建立調查物件
             investigation = Investigation(
                 alert_id=investigation_context["alert_id"],
                 findings=investigation_result.findings,
@@ -272,20 +272,20 @@ class HunterNode:
                 evidence=investigation_result.evidence
             )
             
-            # Update state
+            # 更新狀態
             state["investigations"] = state.get("investigations", {})
             state["investigations"][investigation_context["alert_id"]] = investigation
             
-            # Update alert status
+            # 更新警報狀態
             if isinstance(current_alert, dict):
                 current_alert["investigation_status"] = "completed"
             
-            # Update workflow
+            # 更新工作流程
             state["workflow_step"] = "decision"
             state["agent_status"]["hunter"] = "completed"
-            state["agent_status"]["manager"] = "pending"  # Manager needs to review
+            state["agent_status"]["manager"] = "pending"  # 管理者需要審查
             
-            # Add to workflow history
+            # 新增到工作流程歷史記錄
             state["workflow_history"] = state.get("workflow_history", [])
             state["workflow_history"].append({
                 "step": "hunter_investigation",
@@ -297,13 +297,13 @@ class HunterNode:
                 }
             })
             
-            # Update metrics
+            # 更新指標
             state["metrics"] = state.get("metrics", {})
             state["metrics"]["investigations_completed"] = \
                 state["metrics"].get("investigations_completed", 0) + 1
             
         except Exception as e:
-            logger.error("Hunter node error", error=str(e), exc_info=True)
+            logger.error("獵人節點錯誤", error=str(e), exc_info=True)
             state["errors"] = state.get("errors", [])
             state["errors"].append({
                 "agent": "hunter",
@@ -311,7 +311,7 @@ class HunterNode:
                 "error": str(e)
             })
             state["agent_status"]["hunter"] = "error"
-            # Fall back to manager for decision
+            # 退回到管理者進行決策
             state["workflow_step"] = "decision"
             state["agent_status"]["manager"] = "pending"
         

@@ -1,4 +1,4 @@
-"""Notification service implementations."""
+"""通知服務實作。"""
 import asyncio
 from typing import Dict, Any, List, Optional
 import json
@@ -14,12 +14,12 @@ logger = structlog.get_logger()
 
 
 class SlackNotificationService(INotificationService):
-    """Slack notification service implementation."""
+    """Slack 通知服務實作。"""
     
     def __init__(self, webhook_url: Optional[str] = None):
         self.webhook_url = webhook_url or settings.slack_webhook_url
         if not self.webhook_url:
-            logger.warning("Slack webhook URL not configured")
+            logger.warning("未設定 Slack webhook URL")
             
         self.client = AsyncWebhookClient(self.webhook_url) if self.webhook_url else None
         self.channel = settings.slack_channel
@@ -31,34 +31,34 @@ class SlackNotificationService(INotificationService):
         severity: str,
         attachments: Optional[List[Dict[str, Any]]] = None
     ) -> bool:
-        """Send an alert notification to Slack."""
+        """傳送警報通知到 Slack。"""
         if not self.client:
-            logger.warning("Slack client not configured, skipping notification")
+            logger.warning("未設定 Slack 客戶端，略過通知")
             return False
             
         try:
-            # Map severity to color
+            # 將嚴重性對應到顏色
             color_map = {
-                "low": "#36a64f",      # Green
-                "medium": "#ff9900",   # Orange
-                "high": "#ff6600",     # Dark Orange
-                "critical": "#ff0000", # Red
-                "info": "#0099ff"      # Blue
+                "low": "#36a64f",      # 綠色
+                "medium": "#ff9900",   # 橘色
+                "high": "#ff6600",     # 深橘色
+                "critical": "#ff0000", # 紅色
+                "info": "#0099ff"      # 藍色
             }
             
             color = color_map.get(severity.lower(), "#808080")
             
-            # Build Slack message
+            # 建立 Slack 訊息
             slack_attachments = [{
                 "fallback": f"{title}: {message}",
                 "color": color,
                 "pretext": title,
                 "text": message,
-                "footer": "Security Agent System",
+                "footer": "安全代理系統",
                 "ts": int(asyncio.get_event_loop().time())
             }]
             
-            # Add custom attachments
+            # 新增自訂附件
             if attachments:
                 for att in attachments:
                     slack_attachments.append({
@@ -68,7 +68,7 @@ class SlackNotificationService(INotificationService):
                         "fields": att.get("fields", [])
                     })
                     
-            # Send to Slack
+            # 傳送到 Slack
             response = await self.client.send(
                 text=title,
                 attachments=slack_attachments,
@@ -76,16 +76,16 @@ class SlackNotificationService(INotificationService):
             )
             
             if response.status_code == 200:
-                logger.debug("Slack alert sent", title=title)
+                logger.debug("已傳送 Slack 警報", title=title)
                 return True
             else:
-                logger.error("Slack alert failed",
+                logger.error("Slack 警報傳送失敗",
                            status_code=response.status_code,
                            body=response.body)
                 return False
                 
         except Exception as e:
-            logger.error("Failed to send Slack alert", error=str(e))
+            logger.error("傳送 Slack 警報失敗", error=str(e))
             return False
             
     async def request_approval(
@@ -95,13 +95,13 @@ class SlackNotificationService(INotificationService):
         actions: List[Dict[str, Any]],
         callback_url: str
     ) -> str:
-        """Request approval with interactive buttons."""
+        """使用互動式按鈕請求批准。"""
         if not self.client:
-            logger.warning("Slack client not configured, auto-approving")
+            logger.warning("未設定 Slack 客戶端，自動批准")
             return "auto-approved"
             
         try:
-            # Create interactive message with buttons
+            # 建立帶有按鈕的互動式訊息
             blocks = [
                 {
                     "type": "header",
@@ -122,19 +122,19 @@ class SlackNotificationService(INotificationService):
                 }
             ]
             
-            # Add action details
+            # 新增動作詳細資訊
             for i, action in enumerate(actions):
                 blocks.append({
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*Action {i+1}:* {action['description']}\n"
-                                f"*Type:* `{action['type']}`\n"
-                                f"*Risk:* {action['risk']}"
+                        "text": f"*動作 {i+1}:* {action['description']}\n"
+                                f"*類型:* `{action['type']}`\n"
+                                f"*風險:* {action['risk']}"
                     }
                 })
                 
-            # Add approval buttons
+            # 新增批准按鈕
             request_id = f"approval_{int(asyncio.get_event_loop().time())}"
             
             blocks.append({
@@ -144,7 +144,7 @@ class SlackNotificationService(INotificationService):
                         "type": "button",
                         "text": {
                             "type": "plain_text",
-                            "text": "Approve All"
+                            "text": "全部批准"
                         },
                         "style": "primary",
                         "value": json.dumps({
@@ -158,7 +158,7 @@ class SlackNotificationService(INotificationService):
                         "type": "button",
                         "text": {
                             "type": "plain_text",
-                            "text": "Reject All"
+                            "text": "全部拒絕"
                         },
                         "style": "danger",
                         "value": json.dumps({
@@ -171,7 +171,7 @@ class SlackNotificationService(INotificationService):
                 ]
             })
             
-            # Send interactive message
+            # 傳送互動式訊息
             response = await self.client.send(
                 text=title,
                 blocks=blocks,
@@ -179,17 +179,17 @@ class SlackNotificationService(INotificationService):
             )
             
             if response.status_code == 200:
-                logger.info("Approval request sent",
+                logger.info("已傳送批准請求",
                           request_id=request_id,
                           num_actions=len(actions))
                 return request_id
             else:
-                logger.error("Failed to send approval request",
+                logger.error("傳送批准請求失敗",
                            status_code=response.status_code)
                 return ""
                 
         except Exception as e:
-            logger.error("Failed to send approval request", error=str(e))
+            logger.error("傳送批准請求失敗", error=str(e))
             return ""
             
     async def send_report(
@@ -197,26 +197,26 @@ class SlackNotificationService(INotificationService):
         report: ExecutionReport,
         recipients: List[str]
     ) -> bool:
-        """Send execution report."""
+        """傳送執行報告。"""
         if not self.client:
-            logger.warning("Slack client not configured, skipping report")
+            logger.warning("未設定 Slack 客戶端，略過報告")
             return False
             
         try:
-            # Format report for Slack
+            # 格式化 Slack 報告
             blocks = [
                 {
                     "type": "header",
                     "text": {
                         "type": "plain_text",
-                        "text": f"Security Report - {report.task_id}"
+                        "text": f"安全報告 - {report.task_id}"
                     }
                 },
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*Executive Summary:*\n{report.executive_summary}"
+                        "text": f"*高階主管摘要:*\n{report.executive_summary}"
                     }
                 },
                 {
@@ -227,11 +227,11 @@ class SlackNotificationService(INotificationService):
                     "fields": [
                         {
                             "type": "mrkdwn",
-                            "text": f"*Confidence:* {report.analysis_confidence:.0%}"
+                            "text": f"*信賴度:* {report.analysis_confidence:.0%}"
                         },
                         {
                             "type": "mrkdwn",
-                            "text": f"*False Positive:* {report.false_positive_probability:.0%}"
+                            "text": f"*誤報率:* {report.false_positive_probability:.0%}"
                         }
                     ]
                 },
@@ -239,16 +239,16 @@ class SlackNotificationService(INotificationService):
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*Threat Narrative:*\n{report.threat_narrative[:500]}..."
+                        "text": f"*威脅敘述:*\n{report.threat_narrative[:500]}..."
                     }
                 }
             ]
             
-            # Add recommendations summary
+            # 新增建議摘要
             if report.recommended_actions:
-                rec_text = "*Recommended Actions:*\n"
+                rec_text = "*建議動作:*\n"
                 for i, action in enumerate(report.recommended_actions[:5]):
-                    rec_text += f"{i+1}. {action.description} (Priority: {action.priority})\n"
+                    rec_text += f"{i+1}. {action.description} (優先級: {action.priority})\n"
                     
                 blocks.append({
                     "type": "section",
@@ -258,9 +258,9 @@ class SlackNotificationService(INotificationService):
                     }
                 })
                 
-            # Add timeline summary
+            # 新增時間軸摘要
             if report.timeline:
-                timeline_text = "*Key Events:*\n"
+                timeline_text = "*關鍵事件:*\n"
                 for event in report.timeline[:5]:
                     timeline_text += f"• {event['timestamp']}: {event['event']}\n"
                     
@@ -272,19 +272,19 @@ class SlackNotificationService(INotificationService):
                     }
                 })
                 
-            # Send to Slack
+            # 傳送到 Slack
             response = await self.client.send(
-                text=f"Security Report - {report.task_id}",
+                text=f"安全報告 - {report.task_id}",
                 blocks=blocks,
                 channel=self.channel
             )
             
             if response.status_code == 200:
-                logger.info("Report sent", report_id=report.report_id)
+                logger.info("已傳送報告", report_id=report.report_id)
                 
-                # Notify recipients via mention (if supported)
+                # 透過提及通知收件人 (如果支援)
                 if recipients:
-                    mention_text = f"Report sent to: {', '.join(f'<@{r}>' for r in recipients)}"
+                    mention_text = f"報告已傳送給: {', '.join(f'<@{r}>' for r in recipients)}"
                     await self.client.send(
                         text=mention_text,
                         channel=self.channel
@@ -292,31 +292,31 @@ class SlackNotificationService(INotificationService):
                     
                 return True
             else:
-                logger.error("Failed to send report",
+                logger.error("傳送報告失敗",
                            status_code=response.status_code)
                 return False
                 
         except Exception as e:
-            logger.error("Failed to send report", error=str(e))
+            logger.error("傳送報告失敗", error=str(e))
             return False
             
     async def handle_interaction(self, payload: Dict[str, Any]) -> None:
-        """Handle Slack interaction callbacks."""
+        """處理 Slack 互動回呼。"""
         try:
-            # Extract action details
+            # 提取動作詳細資訊
             action = payload["actions"][0]
             action_id = action["action_id"]
             value = json.loads(action["value"])
             
             user = payload["user"]["username"]
             
-            # Process approval/rejection
+            # 處理批准/拒絕
             if action_id in ["approve_all", "reject_all"]:
                 approved = value["approved"]
                 request_id = value["request_id"]
                 callback_url = value["callback_url"]
                 
-                # Send callback to executor agent
+                # 傳送回呼給執行者代理
                 async with httpx.AsyncClient() as client:
                     await client.post(
                         callback_url,
@@ -328,8 +328,8 @@ class SlackNotificationService(INotificationService):
                         }
                     )
                     
-                # Update Slack message
-                update_text = f"✅ Approved by {user}" if approved else f"❌ Rejected by {user}"
+                # 更新 Slack 訊息
+                update_text = f"✅ 已由 {user} 批准" if approved else f"❌ 已由 {user} 拒絕"
                 
                 await self.client.send(
                     text=update_text,
@@ -337,17 +337,17 @@ class SlackNotificationService(INotificationService):
                     thread_ts=payload["message"]["ts"]
                 )
                 
-                logger.info("Interaction processed",
+                logger.info("已處理互動",
                           action_id=action_id,
                           approved=approved,
                           user=user)
                           
         except Exception as e:
-            logger.error("Failed to handle interaction", error=str(e))
+            logger.error("處理互動失敗", error=str(e))
 
 
 class EmailNotificationService(INotificationService):
-    """Email notification service implementation (placeholder)."""
+    """電子郵件通知服務實作 (佔位符)。"""
     
     async def send_alert(
         self,
@@ -356,8 +356,8 @@ class EmailNotificationService(INotificationService):
         severity: str,
         attachments: Optional[List[Dict[str, Any]]] = None
     ) -> bool:
-        """Send email alert."""
-        logger.info("Email notification (not implemented)",
+        """傳送電子郵件警報。"""
+        logger.info("電子郵件通知 (未實作)",
                    title=title,
                    severity=severity)
         return True
@@ -369,8 +369,8 @@ class EmailNotificationService(INotificationService):
         actions: List[Dict[str, Any]],
         callback_url: str
     ) -> str:
-        """Request email approval."""
-        logger.info("Email approval request (not implemented)",
+        """請求電子郵件批准。"""
+        logger.info("電子郵件批准請求 (未實作)",
                    title=title,
                    num_actions=len(actions))
         return "email-approval-123"
@@ -380,15 +380,15 @@ class EmailNotificationService(INotificationService):
         report: ExecutionReport,
         recipients: List[str]
     ) -> bool:
-        """Send email report."""
-        logger.info("Email report (not implemented)",
+        """傳送電子郵件報告。"""
+        logger.info("電子郵件報告 (未實作)",
                    report_id=report.report_id,
                    recipients=recipients)
         return True
 
 
 class MultiChannelNotificationService(INotificationService):
-    """Multi-channel notification service that combines multiple services."""
+    """結合多個服務的多頻道通知服務。"""
     
     def __init__(self, services: List[INotificationService]):
         self.services = services
@@ -400,14 +400,14 @@ class MultiChannelNotificationService(INotificationService):
         severity: str,
         attachments: Optional[List[Dict[str, Any]]] = None
     ) -> bool:
-        """Send alert to all channels."""
+        """傳送警報到所有頻道。"""
         results = await asyncio.gather(
             *[service.send_alert(title, message, severity, attachments)
               for service in self.services],
             return_exceptions=True
         )
         
-        # Return True if at least one succeeded
+        # 如果至少有一個成功，則返回 True
         return any(r is True for r in results if not isinstance(r, Exception))
         
     async def request_approval(
@@ -417,7 +417,7 @@ class MultiChannelNotificationService(INotificationService):
         actions: List[Dict[str, Any]],
         callback_url: str
     ) -> str:
-        """Request approval from first available channel."""
+        """從第一個可用的頻道請求批准。"""
         for service in self.services:
             try:
                 request_id = await service.request_approval(
@@ -426,7 +426,7 @@ class MultiChannelNotificationService(INotificationService):
                 if request_id:
                     return request_id
             except Exception as e:
-                logger.error("Service approval request failed",
+                logger.error("服務批准請求失敗",
                            service=type(service).__name__,
                            error=str(e))
                 continue
@@ -438,7 +438,7 @@ class MultiChannelNotificationService(INotificationService):
         report: ExecutionReport,
         recipients: List[str]
     ) -> bool:
-        """Send report to all channels."""
+        """傳送報告到所有頻道。"""
         results = await asyncio.gather(
             *[service.send_report(report, recipients)
               for service in self.services],

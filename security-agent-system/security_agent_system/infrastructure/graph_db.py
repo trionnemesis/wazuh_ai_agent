@@ -1,4 +1,4 @@
-"""Neo4j graph database implementation."""
+"""Neo4j 圖形資料庫實作。"""
 import asyncio
 from typing import Dict, Any, List, Optional
 from neo4j import AsyncGraphDatabase
@@ -11,7 +11,7 @@ logger = structlog.get_logger()
 
 
 class Neo4jDatabase(IGraphDatabase):
-    """Neo4j graph database implementation for GraphRAG."""
+    """用於 GraphRAG 的 Neo4j 圖形資料庫實作。"""
     
     def __init__(
         self,
@@ -25,41 +25,41 @@ class Neo4jDatabase(IGraphDatabase):
         self.driver = None
         
     async def connect(self) -> None:
-        """Connect to Neo4j database."""
+        """連接到 Neo4j 資料庫。"""
         try:
             self.driver = AsyncGraphDatabase.driver(
                 self.uri,
                 auth=(self.username, self.password)
             )
             
-            # Test connection
+            # 測試連線
             async with self.driver.session() as session:
                 await session.run("RETURN 1")
                 
-            logger.info("Connected to Neo4j", uri=self.uri)
+            logger.info("已連接到 Neo4j", uri=self.uri)
             
-            # Create indexes for performance
+            # 建立索引以提升效能
             await self._create_indexes()
             
         except Exception as e:
-            logger.error("Failed to connect to Neo4j", error=str(e))
+            logger.error("連接到 Neo4j 失敗", error=str(e))
             raise
             
     async def disconnect(self) -> None:
-        """Disconnect from Neo4j database."""
+        """從 Neo4j 資料庫斷開連線。"""
         if self.driver:
             await self.driver.close()
-            logger.info("Disconnected from Neo4j")
+            logger.info("已從 Neo4j 斷開連線")
             
     async def create_node(
         self,
         node_type: str,
         properties: Dict[str, Any]
     ) -> str:
-        """Create a node in the graph."""
+        """在圖形中建立一個節點。"""
         try:
             async with self.driver.session() as session:
-                # Create node with merge to avoid duplicates
+                # 使用 MERGE 建立節點以避免重複
                 query = f"""
                 MERGE (n:{node_type} {{value: $value}})
                 ON CREATE SET n += $properties, n.created_at = datetime()
@@ -77,7 +77,7 @@ class Neo4jDatabase(IGraphDatabase):
                 return str(record["node_id"])
                 
         except Exception as e:
-            logger.error("Failed to create node", 
+            logger.error("建立節點失敗",
                         node_type=node_type,
                         error=str(e))
             raise
@@ -89,7 +89,7 @@ class Neo4jDatabase(IGraphDatabase):
         relationship_type: str,
         properties: Optional[Dict[str, Any]] = None
     ) -> str:
-        """Create a relationship between nodes."""
+        """在節點之間建立關係。"""
         try:
             async with self.driver.session() as session:
                 query = f"""
@@ -112,7 +112,7 @@ class Neo4jDatabase(IGraphDatabase):
                 return str(record["rel_id"])
                 
         except Exception as e:
-            logger.error("Failed to create relationship",
+            logger.error("建立關係失敗",
                         source_id=source_id,
                         target_id=target_id,
                         relationship_type=relationship_type,
@@ -125,11 +125,11 @@ class Neo4jDatabase(IGraphDatabase):
         end_node: Optional[str] = None,
         max_depth: int = 3
     ) -> List[List[Dict[str, Any]]]:
-        """Find paths in the graph."""
+        """在圖形中尋找路徑。"""
         try:
             async with self.driver.session() as session:
                 if end_node:
-                    # Find specific paths between nodes
+                    # 尋找節點之間的特定路徑
                     query = """
                     MATCH path = (start)-[*1..$max_depth]-(end)
                     WHERE id(start) = $start_id AND id(end) = $end_id
@@ -142,7 +142,7 @@ class Neo4jDatabase(IGraphDatabase):
                         "max_depth": max_depth
                     }
                 else:
-                    # Find all paths from start node
+                    # 尋找從起始節點出發的所有路徑
                     query = """
                     MATCH path = (start)-[*1..$max_depth]-(end)
                     WHERE id(start) = $start_id
@@ -162,7 +162,7 @@ class Neo4jDatabase(IGraphDatabase):
                     path = record["path"]
                     path_data = []
                     
-                    # Extract nodes and relationships
+                    # 提取節點和關係
                     for i, node in enumerate(path.nodes):
                         node_data = {
                             "id": str(node.id),
@@ -171,7 +171,7 @@ class Neo4jDatabase(IGraphDatabase):
                         }
                         path_data.append(node_data)
                         
-                        # Add relationship if not last node
+                        # 如果不是最後一個節點，則新增關係
                         if i < len(path.relationships):
                             rel = path.relationships[i]
                             rel_data = {
@@ -186,7 +186,7 @@ class Neo4jDatabase(IGraphDatabase):
                 return paths
                 
         except Exception as e:
-            logger.error("Failed to find paths",
+            logger.error("尋找路徑失敗",
                         start_node=start_node,
                         error=str(e))
             return []
@@ -196,7 +196,7 @@ class Neo4jDatabase(IGraphDatabase):
         cypher: str,
         parameters: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
-        """Execute a Cypher query."""
+        """執行一個 Cypher 查詢。"""
         try:
             async with self.driver.session() as session:
                 result = await session.run(cypher, parameters or {})
@@ -208,13 +208,13 @@ class Neo4jDatabase(IGraphDatabase):
                 return records
                 
         except Exception as e:
-            logger.error("Cypher query failed",
+            logger.error("Cypher 查詢失敗",
                         query=cypher[:100],
                         error=str(e))
             raise
             
     async def _create_indexes(self) -> None:
-        """Create indexes for better performance."""
+        """建立索引以提升效能。"""
         indexes = [
             "CREATE INDEX IF NOT EXISTS FOR (n:ip_address) ON (n.value)",
             "CREATE INDEX IF NOT EXISTS FOR (n:host) ON (n.value)",
@@ -229,7 +229,7 @@ class Neo4jDatabase(IGraphDatabase):
                 try:
                     await session.run(index_query)
                 except Exception as e:
-                    logger.warning("Index creation failed",
+                    logger.warning("索引建立失敗",
                                  query=index_query,
                                  error=str(e))
                                  
@@ -238,7 +238,7 @@ class Neo4jDatabase(IGraphDatabase):
         ioc_value: str,
         max_hops: int = 5
     ) -> List[Dict[str, Any]]:
-        """Find potential attack chains involving an IOC."""
+        """尋找涉及 IOC 的潛在攻擊鏈。"""
         query = """
         MATCH (ioc {value: $ioc_value})
         CALL apoc.path.expandConfig(ioc, {
@@ -273,27 +273,27 @@ class Neo4jDatabase(IGraphDatabase):
             return sorted(attack_chains, key=lambda x: x["risk_score"], reverse=True)
             
         except Exception as e:
-            logger.error("Failed to find attack chains", error=str(e))
+            logger.error("尋找攻擊鏈失敗", error=str(e))
             return []
             
     def _calculate_chain_risk(self, chain_result: Dict[str, Any]) -> float:
-        """Calculate risk score for an attack chain."""
+        """計算攻擊鏈的風險分數。"""
         risk_score = 0.0
         
-        # Longer chains indicate more complex attacks
+        # 較長的鏈表示較複雜的攻擊
         risk_score += len(chain_result["node_types"]) * 0.1
         
-        # Certain relationship types are more concerning
+        # 某些關係類型更值得關注
         high_risk_rels = ["EXECUTED", "DOWNLOADED", "PRIVILEGE_ESCALATED"]
         for rel in chain_result["rel_types"]:
             if rel in high_risk_rels:
                 risk_score += 0.2
                 
-        # Certain node sequences indicate known attack patterns
+        # 某些節點序列表示已知的攻擊模式
         node_seq = "->".join(chain_result["node_types"])
         if "ip_address->host->user_account" in node_seq:
-            risk_score += 0.3  # Lateral movement pattern
+            risk_score += 0.3  # 橫向移動模式
         if "file->host->ip_address" in node_seq:
-            risk_score += 0.3  # Data exfiltration pattern
+            risk_score += 0.3  # 資料外洩模式
             
         return min(risk_score, 1.0)

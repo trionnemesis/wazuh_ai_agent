@@ -1,4 +1,4 @@
-"""State definitions for LangGraph agents."""
+"""LangGraph 代理的狀態定義。"""
 from typing import TypedDict, List, Dict, Any, Optional
 from datetime import datetime
 from enum import Enum
@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class AlertSeverity(str, Enum):
-    """Alert severity levels."""
+    """警報嚴重性等級。"""
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
@@ -15,7 +15,7 @@ class AlertSeverity(str, Enum):
 
 
 class SecurityAlert(BaseModel):
-    """Security alert model."""
+    """安全警報模型。"""
     id: str
     timestamp: datetime
     severity: AlertSeverity
@@ -29,7 +29,7 @@ class SecurityAlert(BaseModel):
 
 
 class Investigation(BaseModel):
-    """Investigation results from Hunter agent."""
+    """來自獵人代理的調查結果。"""
     alert_id: str
     findings: List[Dict[str, Any]]
     risk_score: float
@@ -40,7 +40,7 @@ class Investigation(BaseModel):
 
 
 class RemediationPlan(BaseModel):
-    """Remediation plan from Manager agent."""
+    """來自管理代理的修復計畫。"""
     alert_id: str
     priority: int
     actions: List[Dict[str, Any]]
@@ -50,7 +50,7 @@ class RemediationPlan(BaseModel):
 
 
 class ExecutionResult(BaseModel):
-    """Execution result from Executor agent."""
+    """來自執行者代理的執行結果。"""
     alert_id: str
     action_id: str
     status: str
@@ -60,43 +60,43 @@ class ExecutionResult(BaseModel):
 
 
 class AgentState(TypedDict):
-    """Shared state for all agents in the graph."""
-    # Current alert being processed
+    """圖中所有代理的共享狀態。"""
+    # 正在處理的目前警報
     current_alert: Optional[SecurityAlert]
     
-    # Alert queue
+    # 警報佇列
     alert_queue: List[SecurityAlert]
     
-    # Investigation results
+    # 調查結果
     investigations: Dict[str, Investigation]
     
-    # Remediation plans
+    # 修復計畫
     remediation_plans: Dict[str, RemediationPlan]
     
-    # Execution results
+    # 執行結果
     execution_results: List[ExecutionResult]
     
-    # Agent metadata
+    # 代理元資料
     agent_status: Dict[str, str]
     
-    # Workflow state
+    # 工作流程狀態
     workflow_step: str
     workflow_history: List[Dict[str, Any]]
     
-    # Error tracking
+    # 錯誤追蹤
     errors: List[Dict[str, Any]]
     
-    # Performance metrics
+    # 效能指標
     metrics: Dict[str, Any]
     
-    # Configuration
+    # 設定
     config: Dict[str, Any]
     
-    # Message history for LCEL chains
+    # LCEL 鏈的訊息歷史記錄
     messages: List[Dict[str, Any]]
     
-    # Decision tracking
+    # 決策追蹤
     decisions: List[Dict[str, Any]]
     
-    # Context from external systems
+    # 來自外部系統的上下文
     external_context: Dict[str, Any]

@@ -1,4 +1,4 @@
-"""Hunter Agent: Deep investigation and threat hunting specialist."""
+"""獵人代理：深度調查與威脅狩獵專家。"""
 import asyncio
 from typing import Dict, Any, List, Optional, Set, Tuple
 from datetime import datetime, timedelta
@@ -23,13 +23,13 @@ logger = structlog.get_logger()
 
 class HunterAgent(IHunterAgent):
     """
-    Hunter Agent - The Investigation Specialist
+    獵人代理 - 調查專家
     
-    Responsibilities:
-    1. Deep threat investigation
-    2. GraphRAG analysis for entity relationships
-    3. Vector similarity search for patterns
-    4. Context enrichment and correlation
+    職責：
+    1. 深度威脅調查
+    2. 實體關係的 GraphRAG 分析
+    3. 模式的向量相似性搜索
+    4. 上下文豐富與關聯
     """
     
     def __init__(
@@ -46,11 +46,11 @@ class HunterAgent(IHunterAgent):
         self.vector_db = vector_db
         self.llm = llm_provider
         
-        # Processing state
+        # 處理狀態
         self.active_hunts: Dict[str, HuntingMessage] = {}
         self.hunt_results: Dict[str, ThreatProfile] = {}
         
-        # Performance tracking
+        # 效能追蹤
         self.metrics = {
             "hunts_started": 0,
             "hunts_completed": 0,
@@ -69,26 +69,26 @@ class HunterAgent(IHunterAgent):
         return self._agent_type
         
     async def initialize(self) -> None:
-        """Initialize the Hunter Agent."""
+        """初始化獵人代理。"""
         await asyncio.gather(
             self.broker.connect(),
             self.graph_db.connect(),
             self.vector_db.connect()
         )
         
-        # Subscribe to hunting queue
+        # 訂閱狩獵佇列
         await self.broker.subscribe(
             settings.hunting_queue,
             self._handle_hunting_request
         )
         
-        logger.info("Hunter Agent initialized", agent_id=self.agent_id)
+        logger.info("獵人代理已初始化", agent_id=self.agent_id)
         
     async def start(self) -> None:
-        """Start the Hunter Agent's main loop."""
-        logger.info("Hunter Agent starting", agent_id=self.agent_id)
+        """啟動獵人代理的主迴圈。"""
+        logger.info("獵人代理啟動中", agent_id=self.agent_id)
         
-        # Start background tasks
+        # 啟動背景任務
         tasks = [
             asyncio.create_task(self._process_hunts_loop()),
             asyncio.create_task(self._metrics_reporting_loop()),
@@ -98,21 +98,21 @@ class HunterAgent(IHunterAgent):
         try:
             await asyncio.gather(*tasks)
         except asyncio.CancelledError:
-            logger.info("Hunter Agent stopping")
+            logger.info("獵人代理停止中")
             for task in tasks:
                 task.cancel()
                 
     async def stop(self) -> None:
-        """Stop the Hunter Agent."""
+        """停止獵人代理。"""
         await asyncio.gather(
             self.broker.disconnect(),
             self.graph_db.disconnect(),
             self.vector_db.disconnect()
         )
-        logger.info("Hunter Agent stopped", agent_id=self.agent_id)
+        logger.info("獵人代理已停止", agent_id=self.agent_id)
         
     async def health_check(self) -> Dict[str, Any]:
-        """Return agent health status."""
+        """返回代理健康狀態。"""
         return {
             "agent_id": self.agent_id,
             "agent_type": self.agent_type,
@@ -122,12 +122,12 @@ class HunterAgent(IHunterAgent):
         }
         
     async def hunt_threat(self, message: HuntingMessage) -> ThreatProfile:
-        """Perform comprehensive threat hunting."""
+        """執行全面的威脅狩獵。"""
         start_time = datetime.utcnow()
         task = message.task
         alert = message.alert
         
-        logger.info("Starting threat hunt",
+        logger.info("開始威脅狩獵",
                    task_id=task.task_id,
                    alert_id=alert.alert_id,
                    priority=message.priority)
@@ -135,7 +135,7 @@ class HunterAgent(IHunterAgent):
         self.metrics["hunts_started"] += 1
         
         try:
-            # Parallel execution of investigation tasks
+            # 並行執行調查任務
             graph_task = asyncio.create_task(
                 self.query_graph({
                     "alert": alert,
@@ -156,25 +156,25 @@ class HunterAgent(IHunterAgent):
                 self.enrich_context(alert)
             )
             
-            # Wait for all tasks to complete
+            # 等待所有任務完成
             graph_context_data, vector_context_data, enrichment_data = await asyncio.gather(
                 graph_task, vector_task, enrichment_task
             )
             
-            # Build comprehensive threat profile
+            # 建立全面的威脅設定檔
             threat_profile = await self._build_threat_profile(
                 task, alert, graph_context_data, vector_context_data, enrichment_data
             )
             
-            # Store result
+            # 儲存結果
             self.hunt_results[task.task_id] = threat_profile
             
-            # Calculate metrics
+            # 計算指標
             hunt_time = (datetime.utcnow() - start_time).total_seconds()
             self._update_avg_hunt_time(hunt_time)
             self.metrics["hunts_completed"] += 1
             
-            logger.info("Threat hunt completed",
+            logger.info("威脅狩獵完成",
                        task_id=task.task_id,
                        risk_score=threat_profile.overall_risk_score,
                        hunt_time_seconds=hunt_time)
@@ -182,43 +182,43 @@ class HunterAgent(IHunterAgent):
             return threat_profile
             
         except Exception as e:
-            logger.error("Threat hunt failed",
+            logger.error("威脅狩獵失敗",
                         task_id=task.task_id,
                         error=str(e))
             raise
             
     async def query_graph(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Query GraphRAG for entity relationships and attack paths."""
+        """查詢 GraphRAG 以獲取實體關係和攻擊路徑。"""
         self.metrics["graph_queries"] += 1
         alert = context["alert"]
         max_depth = context.get("max_depth", 3)
         
         try:
-            # Extract entities from alert
+            # 從警報中提取實體
             entities = await self._extract_entities(alert)
             
-            # Create or update nodes in graph
+            # 在圖形中建立或更新節點
             node_ids = await self._create_graph_nodes(entities, alert)
             
-            # Find attack paths and relationships
+            # 尋找攻擊路徑和關係
             attack_paths = []
             relationships = []
             
             for node_id in node_ids:
-                # Find paths from this node
+                # 從此節點尋找路徑
                 paths = await self.graph_db.find_paths(
                     start_node=node_id,
                     max_depth=max_depth
                 )
                 attack_paths.extend(paths)
                 
-            # Query for specific patterns
+            # 查詢特定模式
             patterns = await self._query_attack_patterns(entities, alert)
             
-            # Calculate graph-based risk score
+            # 計算基於圖形的風險分數
             risk_score = await self._calculate_graph_risk(attack_paths, relationships)
             
-            # Find related campaigns
+            # 尋找相關活動
             campaigns = await self._find_related_campaigns(entities)
             
             return {
@@ -231,7 +231,7 @@ class HunterAgent(IHunterAgent):
             }
             
         except Exception as e:
-            logger.error("Graph query failed", error=str(e))
+            logger.error("圖形查詢失敗", error=str(e))
             return {
                 "entities": [],
                 "relationships": [],
@@ -240,18 +240,18 @@ class HunterAgent(IHunterAgent):
             }
             
     async def search_vectors(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Search vector database for similar alerts and patterns."""
+        """在向量資料庫中搜索相似的警報和模式。"""
         self.metrics["vector_searches"] += 1
         alert = context["alert"]
         time_window = context.get("time_window", 24)
         top_k = context.get("top_k", 10)
         
         try:
-            # Generate embedding for alert
+            # 為警報產生嵌入
             alert_text = f"{alert.title} {alert.description}"
             alert_embedding = await self.llm.embed(alert_text)
             
-            # Search for similar alerts
+            # 搜索相似的警報
             similar_alerts = await self.vector_db.search(
                 vector=alert_embedding,
                 top_k=top_k,
@@ -262,15 +262,15 @@ class HunterAgent(IHunterAgent):
                 }
             )
             
-            # Analyze patterns in similar alerts
+            # 分析相似警報中的模式
             patterns = await self._analyze_alert_patterns(similar_alerts)
             
-            # Calculate anomaly score
+            # 計算異常分數
             anomaly_score = await self._calculate_anomaly_score(
                 alert_embedding, similar_alerts
             )
             
-            # Get resolution history
+            # 獲取解決歷史記錄
             resolution_history = await self._get_resolution_history(similar_alerts)
             
             return {
@@ -284,7 +284,7 @@ class HunterAgent(IHunterAgent):
             }
             
         except Exception as e:
-            logger.error("Vector search failed", error=str(e))
+            logger.error("向量搜索失敗", error=str(e))
             return {
                 "similar_alerts": [],
                 "similarity_scores": [],
@@ -294,11 +294,11 @@ class HunterAgent(IHunterAgent):
             }
             
     async def enrich_context(self, alert: AlertMessage) -> Dict[str, Any]:
-        """Enrich alert with additional context from various sources."""
+        """從各種來源豐富警報的上下文。"""
         self.metrics["enrichments"] += 1
         
         try:
-            # Parallel enrichment tasks
+            # 並行豐富任務
             tasks = {
                 "asset_info": self._enrich_asset_information(alert.affected_assets),
                 "user_info": self._enrich_user_information(alert.user_accounts),
@@ -312,28 +312,28 @@ class HunterAgent(IHunterAgent):
                 try:
                     results[name] = await task
                 except Exception as e:
-                    logger.error(f"Enrichment failed: {name}", error=str(e))
+                    logger.error(f"豐富失敗：{name}", error=str(e))
                     results[name] = {}
                     
             return results
             
         except Exception as e:
-            logger.error("Context enrichment failed", error=str(e))
+            logger.error("上下文豐富失敗", error=str(e))
             return {}
             
     async def _handle_hunting_request(self, message: Dict[str, Any]) -> None:
-        """Handle incoming hunting request from Manager Agent."""
+        """處理來自管理代理的狩獵請求。"""
         try:
             hunting_message = HuntingMessage(**message)
             task_id = hunting_message.task.task_id
             
-            # Store active hunt
+            # 儲存活動中的狩獵
             self.active_hunts[task_id] = hunting_message
             
-            # Perform threat hunting
+            # 執行威脅狩獵
             threat_profile = await self.hunt_threat(hunting_message)
             
-            # Create execution message
+            # 建立執行訊息
             execution_message = ExecutionMessage(
                 task=hunting_message.task,
                 threat_profile=threat_profile,
@@ -341,42 +341,42 @@ class HunterAgent(IHunterAgent):
                 analysis_depth="comprehensive" if hunting_message.priority == "critical" else "standard"
             )
             
-            # Publish to Executor Agent
+            # 發布到執行者代理
             await self.broker.publish(
                 settings.execution_queue,
                 execution_message.dict()
             )
             
-            # Clean up
+            # 清理
             del self.active_hunts[task_id]
             
         except Exception as e:
-            logger.error("Failed to handle hunting request", error=str(e))
+            logger.error("處理狩獵請求失敗", error=str(e))
             
     async def _extract_entities(self, alert: AlertMessage) -> List[Dict[str, Any]]:
-        """Extract entities from alert using NLP."""
+        """使用 NLP 從警報中提取實體。"""
         prompt = f"""
-        Extract security-relevant entities from this alert:
+        從此警報中提取與安全相關的實體：
         
-        Title: {alert.title}
-        Description: {alert.description}
+        標題：{alert.title}
+        描述：{alert.description}
         
-        Extract:
-        1. IP addresses (with type: source/destination/c2)
-        2. Hostnames/Domains
-        3. User accounts
-        4. File paths and hashes
-        5. Process names
-        6. Registry keys
-        7. Network ports
+        提取：
+        1. IP 位址 (附帶類型：來源/目的地/C2)
+        2. 主機名/域名
+        3. 使用者帳戶
+        4. 檔案路徑與雜湊值
+        5. 行程名稱
+        6. 登錄機碼
+        7. 網路連接埠
         
-        Return as JSON list of entities with type and value.
+        以包含類型和值的 JSON 實體列表格式返回。
         """
         
         response = await self.llm.generate(prompt, temperature=0.0, max_tokens=500)
         entities = json.loads(response)
         
-        # Add entities from structured data
+        # 從結構化資料中新增實體
         for ip in alert.source_ips:
             entities.append({"type": "ip_address", "value": ip, "role": "source"})
         for ip in alert.destination_ips:
@@ -393,11 +393,11 @@ class HunterAgent(IHunterAgent):
         entities: List[Dict[str, Any]],
         alert: AlertMessage
     ) -> List[str]:
-        """Create or update nodes in the graph database."""
+        """在圖形資料庫中建立或更新節點。"""
         node_ids = []
         
         for entity in entities:
-            # Create node
+            # 建立節點
             node_id = await self.graph_db.create_node(
                 node_type=entity["type"],
                 properties={
@@ -410,7 +410,7 @@ class HunterAgent(IHunterAgent):
             )
             node_ids.append(node_id)
             
-        # Create alert node
+        # 建立警報節點
         alert_node_id = await self.graph_db.create_node(
             node_type="alert",
             properties={
@@ -421,7 +421,7 @@ class HunterAgent(IHunterAgent):
             }
         )
         
-        # Create relationships
+        # 建立關係
         for node_id in node_ids:
             await self.graph_db.create_relationship(
                 source_id=alert_node_id,
@@ -436,26 +436,26 @@ class HunterAgent(IHunterAgent):
         entities: List[Dict[str, Any]],
         alert: AlertMessage
     ) -> List[str]:
-        """Query for known attack patterns in the graph."""
+        """在圖形中查詢已知的攻擊模式。"""
         patterns = []
         
-        # MITRE ATT&CK pattern matching
+        # MITRE ATT&CK 模式匹配
         cypher_queries = [
-            # Lateral movement pattern
+            # 橫向移動模式
             """
             MATCH (a:ip_address)-[:CONNECTS_TO]->(b:host)-[:HAS_USER]->(u:user_account)
             WHERE a.value IN $source_ips
             RETURN 'LATERAL_MOVEMENT' as pattern
             """,
             
-            # C2 communication pattern
+            # C2 通訊模式
             """
             MATCH (h:host)-[:CONNECTS_TO]->(ip:ip_address)
             WHERE ip.reputation = 'malicious' AND h.value IN $hosts
             RETURN 'C2_COMMUNICATION' as pattern
             """,
             
-            # Data exfiltration pattern
+            # 資料外洩模式
             """
             MATCH (u:user_account)-[:ACCESSED]->(f:file)-[:SENT_TO]->(ip:ip_address)
             WHERE u.value IN $users AND ip.external = true
@@ -481,20 +481,20 @@ class HunterAgent(IHunterAgent):
         attack_paths: List[List[Dict[str, Any]]],
         relationships: List[Dict[str, Any]]
     ) -> float:
-        """Calculate risk score based on graph analysis."""
+        """根據圖形分析計算風險分數。"""
         risk_score = 0.0
         
-        # Factor 1: Number of attack paths
+        # 因素 1：攻擊路徑數量
         path_score = min(len(attack_paths) * 10, 30)
         
-        # Factor 2: Path criticality (shortest paths are more dangerous)
+        # 因素 2：路徑重要性（最短路徑更危險）
         if attack_paths:
             avg_path_length = sum(len(p) for p in attack_paths) / len(attack_paths)
             criticality_score = max(0, 30 - (avg_path_length * 5))
         else:
             criticality_score = 0
             
-        # Factor 3: Entity reputation
+        # 因素 3：實體信譽
         reputation_score = 0
         for path in attack_paths:
             for node in path:
@@ -506,16 +506,16 @@ class HunterAgent(IHunterAgent):
         reputation_score = min(reputation_score, 40)
         
         risk_score = path_score + criticality_score + reputation_score
-        return min(risk_score / 100, 1.0)  # Normalize to 0-1
+        return min(risk_score / 100, 1.0)  # 正規化至 0-1
         
     async def _find_related_campaigns(
         self,
         entities: List[Dict[str, Any]]
     ) -> List[str]:
-        """Find related threat campaigns."""
+        """尋找相關的威脅活動。"""
         campaigns = []
         
-        # Query for campaigns involving these entities
+        # 查詢涉及這些實體的活動
         for entity in entities:
             query = """
             MATCH (e:{type})-[:PART_OF]->(c:campaign)
@@ -536,30 +536,30 @@ class HunterAgent(IHunterAgent):
         self,
         similar_alerts: List[Dict[str, Any]]
     ) -> List[str]:
-        """Analyze patterns in similar alerts."""
+        """分析相似警報中的模式。"""
         if not similar_alerts:
             return []
             
         patterns = []
         
-        # Time-based patterns
+        # 基於時間的模式
         timestamps = [a["timestamp"] for a in similar_alerts]
         if self._detect_time_pattern(timestamps):
             patterns.append("PERIODIC_ACTIVITY")
             
-        # Source patterns
+        # 來源模式
         sources = [a.get("source_ip") for a in similar_alerts if a.get("source_ip")]
         if len(set(sources)) == 1:
             patterns.append("SINGLE_SOURCE")
         elif len(set(sources)) < len(sources) * 0.2:
             patterns.append("CONCENTRATED_SOURCE")
             
-        # Target patterns
+        # 目標模式
         targets = [a.get("target") for a in similar_alerts if a.get("target")]
         if len(set(targets)) == 1:
             patterns.append("TARGETED_ATTACK")
             
-        # Severity escalation
+        # 嚴重性升級
         severities = [a.get("severity", 0) for a in similar_alerts]
         if severities == sorted(severities):
             patterns.append("ESCALATING_SEVERITY")
@@ -567,18 +567,18 @@ class HunterAgent(IHunterAgent):
         return patterns
         
     def _detect_time_pattern(self, timestamps: List[datetime]) -> bool:
-        """Detect if timestamps follow a pattern."""
+        """偵測時間戳是否遵循模式。"""
         if len(timestamps) < 3:
             return False
             
-        # Calculate time differences
+        # 計算時間差
         sorted_times = sorted(timestamps)
         diffs = []
         for i in range(1, len(sorted_times)):
             diff = (sorted_times[i] - sorted_times[i-1]).total_seconds()
             diffs.append(diff)
             
-        # Check for regularity (standard deviation < 20% of mean)
+        # 檢查規律性（標準差 < 平均值的 20%）
         if diffs:
             mean_diff = sum(diffs) / len(diffs)
             if mean_diff > 0:
@@ -593,25 +593,25 @@ class HunterAgent(IHunterAgent):
         alert_embedding: List[float],
         similar_alerts: List[Dict[str, Any]]
     ) -> float:
-        """Calculate anomaly score based on vector similarity."""
+        """根據向量相似性計算異常分數。"""
         if not similar_alerts:
-            return 1.0  # Highly anomalous if no similar alerts
+            return 1.0  # 如果沒有相似警報，則為高度異常
             
-        # Average similarity of top matches
+        # 前幾個匹配項的平均相似性
         similarities = [a.get("score", 0) for a in similar_alerts[:5]]
         avg_similarity = sum(similarities) / len(similarities)
         
-        # Anomaly score is inverse of similarity
+        # 異常分數是相似性的倒數
         return 1.0 - avg_similarity
         
     async def _get_resolution_history(
         self,
         similar_alerts: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Get resolution history for similar alerts."""
+        """獲取相似警報的解決歷史記錄。"""
         history = []
         
-        for alert in similar_alerts[:10]:  # Limit to recent alerts
+        for alert in similar_alerts[:10]:  # 限制為最近的警報
             if alert.get("resolution"):
                 history.append({
                     "alert_id": alert.get("alert_id"),
@@ -627,11 +627,11 @@ class HunterAgent(IHunterAgent):
         self,
         assets: List[str]
     ) -> Dict[str, Any]:
-        """Enrich asset information from CMDB or inventory."""
+        """從 CMDB 或資產清單中豐富資產資訊。"""
         asset_info = {}
         
         for asset in assets:
-            # Simulate CMDB lookup
+            # 模擬 CMDB 查詢
             asset_info[asset] = {
                 "criticality": "high" if "server" in asset.lower() else "medium",
                 "owner": "IT Operations",
@@ -647,11 +647,11 @@ class HunterAgent(IHunterAgent):
         self,
         users: List[str]
     ) -> Dict[str, Any]:
-        """Enrich user information from directory services."""
+        """從目錄服務中豐富使用者資訊。"""
         user_info = {}
         
         for user in users:
-            # Simulate AD lookup
+            # 模擬 AD 查詢
             user_info[user] = {
                 "department": "Finance",
                 "role": "Administrator",
@@ -666,11 +666,11 @@ class HunterAgent(IHunterAgent):
         self,
         ips: List[str]
     ) -> Dict[str, Any]:
-        """Check IP reputation from threat intelligence."""
+        """從威脅情報中檢查 IP 信譽。"""
         ip_reputation = {}
         
         for ip in ips:
-            # Simulate threat intel lookup
+            # 模擬威脅情報查詢
             ip_reputation[ip] = {
                 "reputation": "suspicious",
                 "country": "CN",
@@ -685,11 +685,11 @@ class HunterAgent(IHunterAgent):
         self,
         hashes: List[str]
     ) -> Dict[str, Any]:
-        """Analyze file hashes against threat intelligence."""
+        """根據威脅情報分析檔案雜湊值。"""
         file_analysis = {}
         
         for hash_val in hashes:
-            # Simulate file analysis
+            # 模擬檔案分析
             file_analysis[hash_val] = {
                 "malware_family": "Emotet",
                 "file_type": "PE32 executable",
@@ -704,8 +704,8 @@ class HunterAgent(IHunterAgent):
         self,
         alert: AlertMessage
     ) -> Dict[str, Any]:
-        """Query external threat intelligence sources."""
-        # Simulate threat intel query
+        """查詢外部威脅情報來源。"""
+        # 模擬威脅情報查詢
         return {
             "iocs": [
                 {"type": "ip", "value": ip, "confidence": 0.8}
@@ -724,13 +724,13 @@ class HunterAgent(IHunterAgent):
         vector_context: Dict[str, Any],
         enrichment: Dict[str, Any]
     ) -> ThreatProfile:
-        """Build comprehensive threat profile from all sources."""
-        # Determine threat category
+        """從所有來源建立全面的威脅設定檔。"""
+        # 確定威脅類別
         threat_category = await self._determine_threat_category(
             alert, graph_context, vector_context
         )
         
-        # Calculate overall risk score
+        # 計算總體風險分數
         risk_components = {
             "graph_risk": graph_context.get("risk_score", 0) * 0.3,
             "anomaly_risk": vector_context.get("anomaly_score", 0) * 0.2,
@@ -740,7 +740,7 @@ class HunterAgent(IHunterAgent):
         
         overall_risk = sum(risk_components.values())
         
-        # Generate recommendations
+        # 產生建議
         recommendations = await self._generate_recommendations(
             threat_category, overall_risk, enrichment
         )
@@ -778,8 +778,8 @@ class HunterAgent(IHunterAgent):
         graph_context: Dict[str, Any],
         vector_context: Dict[str, Any]
     ) -> ThreatCategory:
-        """Determine the threat category using ML/rules."""
-        # Use patterns detected
+        """使用機器學習/規則確定威脅類別。"""
+        # 使用偵測到的模式
         patterns = graph_context.get("patterns", []) + vector_context.get("detected_patterns", [])
         
         category_mapping = {
@@ -793,11 +793,11 @@ class HunterAgent(IHunterAgent):
             if pattern in category_mapping:
                 return category_mapping[pattern]
                 
-        # Fallback to alert category
+        # 後備為警報類別
         return alert.suspected_category or ThreatCategory.UNKNOWN
         
     def _calculate_asset_risk(self, asset_info: Dict[str, Any]) -> float:
-        """Calculate risk based on asset criticality."""
+        """根據資產重要性計算風險。"""
         if not asset_info:
             return 0.5
             
@@ -821,10 +821,10 @@ class HunterAgent(IHunterAgent):
         risk_score: float,
         enrichment: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
-        """Generate actionable recommendations."""
+        """產生可行的建議。"""
         recommendations = []
         
-        # Category-specific recommendations
+        # 特定類別的建議
         if threat_category == ThreatCategory.LATERAL_MOVEMENT:
             recommendations.extend([
                 {
@@ -853,7 +853,7 @@ class HunterAgent(IHunterAgent):
                 }
             ])
             
-        # Risk-based recommendations
+        # 基於風險的建議
         if risk_score > 0.8:
             recommendations.append({
                 "action": "CREATE_TICKET",
@@ -867,33 +867,33 @@ class HunterAgent(IHunterAgent):
         return recommendations
         
     def _update_avg_hunt_time(self, hunt_time: float) -> None:
-        """Update average hunt time metric."""
+        """更新平均狩獵時間指標。"""
         current_avg = self.metrics["avg_hunt_time"]
         hunt_count = self.metrics["hunts_completed"]
         
-        # Calculate new average
+        # 計算新平均值
         self.metrics["avg_hunt_time"] = (
             (current_avg * (hunt_count - 1) + hunt_time) / hunt_count
         )
         
     async def _process_hunts_loop(self) -> None:
-        """Process active hunts and handle timeouts."""
+        """處理活動中的狩獵並處理逾時。"""
         while True:
             try:
-                await asyncio.sleep(30)  # Check every 30 seconds
+                await asyncio.sleep(30)  # 每 30 秒檢查一次
                 
                 current_time = datetime.utcnow()
                 
                 for task_id, hunt in list(self.active_hunts.items()):
-                    # Check for timeout
+                    # 檢查逾時
                     elapsed = (current_time - hunt.task.created_at).total_seconds()
                     
                     if elapsed > hunt.timeout_seconds:
-                        logger.warning("Hunt timeout",
+                        logger.warning("狩獵逾時",
                                      task_id=task_id,
                                      elapsed_seconds=elapsed)
                                      
-                        # Create minimal threat profile
+                        # 建立最小威脅設定檔
                         threat_profile = ThreatProfile(
                             task_id=task_id,
                             alert=hunt.alert,
@@ -904,7 +904,7 @@ class HunterAgent(IHunterAgent):
                             priority_score=5.0
                         )
                         
-                        # Send to executor anyway
+                        # 無論如何都發送到執行者
                         execution_message = ExecutionMessage(
                             task=hunt.task,
                             threat_profile=threat_profile,
@@ -919,30 +919,30 @@ class HunterAgent(IHunterAgent):
                         del self.active_hunts[task_id]
                         
             except Exception as e:
-                logger.error("Hunt processing loop error", error=str(e))
+                logger.error("狩獵處理迴圈錯誤", error=str(e))
                 
     async def _metrics_reporting_loop(self) -> None:
-        """Report metrics periodically."""
+        """定期回報指標。"""
         while True:
             try:
-                await asyncio.sleep(300)  # Report every 5 minutes
+                await asyncio.sleep(300)  # 每 5 分鐘回報一次
                 
-                logger.info("Hunter Agent metrics",
+                logger.info("獵人代理指標",
                           metrics=dict(self.metrics),
                           active_hunts=len(self.active_hunts))
                           
             except Exception as e:
-                logger.error("Metrics reporting failed", error=str(e))
+                logger.error("指標回報失敗", error=str(e))
                 
     async def _cleanup_loop(self) -> None:
-        """Clean up old hunt results."""
+        """清理舊的狩獵結果。"""
         while True:
             try:
-                await asyncio.sleep(3600)  # Run hourly
+                await asyncio.sleep(3600)  # 每小時執行一次
                 
                 cutoff_time = datetime.utcnow() - timedelta(hours=24)
                 
-                # Clean old results
+                # 清理舊結果
                 old_tasks = [
                     task_id for task_id, profile in self.hunt_results.items()
                     if profile.created_at < cutoff_time
@@ -951,8 +951,8 @@ class HunterAgent(IHunterAgent):
                 for task_id in old_tasks:
                     del self.hunt_results[task_id]
                     
-                logger.debug("Cleanup completed",
+                logger.debug("清理完成",
                            removed_results=len(old_tasks))
                            
             except Exception as e:
-                logger.error("Cleanup failed", error=str(e))
+                logger.error("清理失敗", error=str(e))

@@ -1,4 +1,4 @@
-"""Model Context Protocol server exposing LangGraph workflows as tools."""
+"""將 LangGraph 工作流程公開為工具的模型內容協定 (MCP) 伺服器。"""
 from __future__ import annotations
 
 import argparse
@@ -38,7 +38,7 @@ async def list_tools() -> ListToolsResult:
         tools=[
             Tool(
                 name="process_alert",
-                description="Process a security alert through the LangGraph orchestrator",
+                description="透過 LangGraph 協調器處理安全警報",
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -54,7 +54,7 @@ async def list_tools() -> ListToolsResult:
             ),
             Tool(
                 name="system_status",
-                description="Return orchestrator health metadata",
+                description="返回協調器的健康狀態元資料",
                 input_schema={"type": "object", "properties": {}},
             ),
         ]
@@ -94,7 +94,7 @@ async def call_tool(name: str, arguments: Dict[str, Any] | None = None) -> CallT
             content=[TextContent(type="text", text=json.dumps(status, indent=2))]
         )
 
-    raise ValueError(f"Unknown tool: {name}")
+    raise ValueError(f"未知的工具：{name}")
 
 
 async def run_server(host: str = "127.0.0.1", port: int = 8765) -> None:
@@ -102,9 +102,9 @@ async def run_server(host: str = "127.0.0.1", port: int = 8765) -> None:
 
 
 def main(argv: List[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Start the MCP server")
-    parser.add_argument("--host", default="127.0.0.1", help="Bind address")
-    parser.add_argument("--port", default=8765, type=int, help="Bind port")
+    parser = argparse.ArgumentParser(description="啟動 MCP 伺服器")
+    parser.add_argument("--host", default="127.0.0.1", help="綁定地址")
+    parser.add_argument("--port", default=8765, type=int, help="綁定連接埠")
     args = parser.parse_args(argv)
 
     asyncio.run(run_server(host=args.host, port=args.port))

@@ -1,4 +1,4 @@
-"""Executor Agent: Final analysis and response execution specialist."""
+"""執行者代理：最終分析與回應執行的專家。"""
 import asyncio
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
@@ -22,13 +22,13 @@ logger = structlog.get_logger()
 
 class ExecutorAgent(IExecutorAgent):
     """
-    Executor Agent - The Action Specialist
+    執行者代理 - 行動專家
     
-    Responsibilities:
-    1. Final threat analysis and synthesis
-    2. Generate human-readable reports
-    3. Request human approval for actions
-    4. Execute approved security responses
+    職責：
+    1. 最終威脅分析與綜合
+    2. 產生人類可讀的報告
+    3. 請求人類批准行動
+    4. 執行已批准的安全回應
     """
     
     def __init__(
@@ -45,12 +45,12 @@ class ExecutorAgent(IExecutorAgent):
         self.notifier = notification_service
         self.action_executor = action_executor
         
-        # Execution state
+        # 執行狀態
         self.active_executions: Dict[str, ExecutionMessage] = {}
         self.pending_approvals: Dict[str, ApprovalRequest] = {}
         self.execution_reports: Dict[str, ExecutionReport] = {}
         
-        # Performance tracking
+        # 效能追蹤
         self.metrics = {
             "reports_generated": 0,
             "approvals_requested": 0,
@@ -70,22 +70,22 @@ class ExecutorAgent(IExecutorAgent):
         return self._agent_type
         
     async def initialize(self) -> None:
-        """Initialize the Executor Agent."""
+        """初始化執行者代理。"""
         await self.broker.connect()
         
-        # Subscribe to execution queue
+        # 訂閱執行佇列
         await self.broker.subscribe(
             settings.execution_queue,
             self._handle_execution_request
         )
         
-        logger.info("Executor Agent initialized", agent_id=self.agent_id)
+        logger.info("執行者代理已初始化", agent_id=self.agent_id)
         
     async def start(self) -> None:
-        """Start the Executor Agent's main loop."""
-        logger.info("Executor Agent starting", agent_id=self.agent_id)
+        """啟動執行者代理的主迴圈。"""
+        logger.info("執行者代理啟動中", agent_id=self.agent_id)
         
-        # Start background tasks
+        # 啟動背景任務
         tasks = [
             asyncio.create_task(self._approval_monitor_loop()),
             asyncio.create_task(self._metrics_reporting_loop()),
@@ -95,17 +95,17 @@ class ExecutorAgent(IExecutorAgent):
         try:
             await asyncio.gather(*tasks)
         except asyncio.CancelledError:
-            logger.info("Executor Agent stopping")
+            logger.info("執行者代理停止中")
             for task in tasks:
                 task.cancel()
                 
     async def stop(self) -> None:
-        """Stop the Executor Agent."""
+        """停止執行者代理。"""
         await self.broker.disconnect()
-        logger.info("Executor Agent stopped", agent_id=self.agent_id)
+        logger.info("執行者代理已停止", agent_id=self.agent_id)
         
     async def health_check(self) -> Dict[str, Any]:
-        """Return agent health status."""
+        """返回代理健康狀態。"""
         return {
             "agent_id": self.agent_id,
             "agent_type": self.agent_type,
@@ -116,12 +116,12 @@ class ExecutorAgent(IExecutorAgent):
         }
         
     async def analyze_threat(self, message: ExecutionMessage) -> ExecutionReport:
-        """Perform final comprehensive threat analysis."""
+        """執行最終的全面威脅分析。"""
         start_time = datetime.utcnow()
         task = message.task
         profile = message.threat_profile
         
-        logger.info("Starting threat analysis",
+        logger.info("開始威脅分析",
                    task_id=task.task_id,
                    risk_score=profile.overall_risk_score,
                    category=profile.threat_category)
@@ -129,28 +129,28 @@ class ExecutorAgent(IExecutorAgent):
         self.metrics["reports_generated"] += 1
         
         try:
-            # Generate executive summary
+            # 產生高階主管摘要
             executive_summary = await self._generate_executive_summary(profile)
             
-            # Generate threat narrative
+            # 產生威脅敘述
             threat_narrative = await self._generate_threat_narrative(profile)
             
-            # Generate technical details
+            # 產生技術分析
             technical_details = await self._generate_technical_analysis(profile)
             
-            # Create timeline
+            # 建立時間軸
             timeline = await self._create_incident_timeline(profile)
             
-            # Generate recommendations
+            # 產生建議
             recommendations = await self.generate_recommendations(profile)
             
-            # Calculate confidence metrics
+            # 計算信賴度指標
             confidence_metrics = self._calculate_confidence_metrics(profile)
             
-            # Compile evidence
+            # 編譯證據
             evidence = self._compile_evidence(profile)
             
-            # Create execution report
+            # 建立執行報告
             report = ExecutionReport(
                 task_id=task.task_id,
                 executive_summary=executive_summary,
@@ -165,14 +165,14 @@ class ExecutorAgent(IExecutorAgent):
                 references=self._generate_references(profile)
             )
             
-            # Store report
+            # 儲存報告
             self.execution_reports[task.task_id] = report
             
-            # Update metrics
+            # 更新指標
             analysis_time = (datetime.utcnow() - start_time).total_seconds()
             self._update_avg_analysis_time(analysis_time)
             
-            logger.info("Threat analysis completed",
+            logger.info("威脅分析完成",
                        task_id=task.task_id,
                        num_recommendations=len(recommendations),
                        analysis_time_seconds=analysis_time)
@@ -180,7 +180,7 @@ class ExecutorAgent(IExecutorAgent):
             return report
             
         except Exception as e:
-            logger.error("Threat analysis failed",
+            logger.error("威脅分析失敗",
                         task_id=task.task_id,
                         error=str(e))
             raise
@@ -189,32 +189,32 @@ class ExecutorAgent(IExecutorAgent):
         self,
         threat_profile: ThreatProfile
     ) -> List[RecommendedAction]:
-        """Generate detailed action recommendations using advanced LLM."""
+        """使用進階 LLM 產生詳細的行動建議。"""
         prompt = f"""
-        Based on this comprehensive threat analysis, generate specific security response recommendations:
+        根據這份全面的威脅分析，產生具體的安全回應建議：
         
-        Threat Category: {threat_profile.threat_category}
-        Risk Score: {threat_profile.overall_risk_score:.2f}
-        Threat Actor: {threat_profile.threat_actor or 'Unknown'}
+        威脅類別：{threat_profile.threat_category}
+        風險分數：{threat_profile.overall_risk_score:.2f}
+        威脅行為者：{threat_profile.threat_actor or '未知'}
         
-        Key Findings:
-        - Attack Paths: {len(threat_profile.graph_context.attack_paths)} identified
-        - Similar Incidents: {len(threat_profile.vector_context.similar_alerts)} found
-        - Affected Assets: {list(threat_profile.asset_criticality.keys())}
-        - Detected Patterns: {', '.join(threat_profile.vector_context.detected_patterns)}
+        主要發現：
+        - 攻擊路徑：識別出 {len(threat_profile.graph_context.attack_paths)} 條
+        - 相似事件：找到 {len(threat_profile.vector_context.similar_alerts)} 起
+        - 受影響資產：{list(threat_profile.asset_criticality.keys())}
+        - 偵測到的模式：{', '.join(threat_profile.vector_context.detected_patterns)}
         
-        Asset Criticality:
+        資產重要性：
         {json.dumps(threat_profile.asset_criticality, indent=2)}
         
-        Generate 3-5 specific, actionable recommendations with:
-        1. Action type (ISOLATE_HOST, BLOCK_IP, DISABLE_USER, etc.)
-        2. Priority (1-5, where 1 is highest)
-        3. Specific parameters
-        4. Risk assessment
-        5. Estimated impact
+        產生 3-5 條具體、可行的建議，包含：
+        1. 行動類型 (ISOLATE_HOST, BLOCK_IP, DISABLE_USER 等)
+        2. 優先級 (1-5，1為最高)
+        3. 具體參數
+        4. 風險評估
+        5. 預估影響
         
-        Consider the organization's security posture and minimize business disruption.
-        Return as JSON list.
+        考量組織的安全狀況並最小化業務中斷。
+        以 JSON 列表格式返回。
         """
         
         try:
@@ -242,34 +242,34 @@ class ExecutorAgent(IExecutorAgent):
                 )
                 recommendations.append(recommendation)
                 
-            # Sort by priority
+            # 按優先級排序
             recommendations.sort(key=lambda x: x.priority)
             
             return recommendations
             
         except Exception as e:
-            logger.error("Failed to generate recommendations", error=str(e))
+            logger.error("產生建議失敗", error=str(e))
             
-            # Fallback recommendations based on threat category
+            # 根據威脅類別的後備建議
             return self._generate_fallback_recommendations(threat_profile)
             
     async def request_approval(self, report: ExecutionReport) -> bool:
-        """Request human approval for recommended actions."""
+        """請求人類批准建議的行動。"""
         task_id = report.task_id
         
-        logger.info("Requesting approval",
+        logger.info("請求批准中",
                    task_id=task_id,
                    num_actions=len(report.recommended_actions))
                    
         self.metrics["approvals_requested"] += 1
         
-        # Filter actions requiring approval
+        # 過濾需要批准的行動
         actions_for_approval = [
             action for action in report.recommended_actions
             if action.requires_approval
         ]
         
-        # Auto-execute low-risk actions if enabled
+        # 如果啟用，自動執行低風險行動
         if settings.auto_execute_low_risk:
             auto_actions = [
                 action for action in report.recommended_actions
@@ -282,9 +282,9 @@ class ExecutorAgent(IExecutorAgent):
                 )
                 
         if not actions_for_approval:
-            return True  # No approval needed
+            return True  # 不需要批准
             
-        # Create approval request
+        # 建立批准請求
         approval_request = ApprovalRequest(
             task_id=task_id,
             execution_report=report,
@@ -295,14 +295,14 @@ class ExecutorAgent(IExecutorAgent):
         
         self.pending_approvals[approval_request.request_id] = approval_request
         
-        # Send notification
+        # 發送通知
         approval_sent = await self._send_approval_notification(approval_request)
         
         if not approval_sent:
-            logger.error("Failed to send approval request", task_id=task_id)
+            logger.error("發送批准請求失敗", task_id=task_id)
             return False
             
-        # Wait for approval (async - handled by callback)
+        # 等待批准 (非同步 - 由回呼處理)
         return True
         
     async def execute_action(
@@ -310,32 +310,32 @@ class ExecutorAgent(IExecutorAgent):
         action: Dict[str, Any],
         approval_id: str
     ) -> Dict[str, Any]:
-        """Execute an approved security action."""
+        """執行已批准的安全行動。"""
         start_time = datetime.utcnow()
         
-        logger.info("Executing action",
+        logger.info("執行行動中",
                    action_type=action["action_type"],
                    approval_id=approval_id)
                    
         self.metrics["actions_executed"] += 1
         
         try:
-            # Validate action
+            # 驗證行動
             is_valid = await self.action_executor.validate_action(
                 action["action_type"],
                 action["parameters"]
             )
             
             if not is_valid:
-                raise ValueError("Action validation failed")
+                raise ValueError("行動驗證失敗")
                 
-            # Execute action
+            # 執行行動
             result = await self.action_executor.execute(
                 action["action_type"],
                 action["parameters"]
             )
             
-            # Create execution result
+            # 建立執行結果
             execution_result = ExecutionResult(
                 action_id=action["action_id"],
                 task_id=action.get("task_id", "unknown"),
@@ -346,14 +346,14 @@ class ExecutorAgent(IExecutorAgent):
                 approval_id=approval_id
             )
             
-            logger.info("Action executed successfully",
+            logger.info("行動成功執行",
                        action_id=action["action_id"],
                        duration_seconds=execution_result.execution_time_seconds)
                        
             return execution_result.dict()
             
         except Exception as e:
-            logger.error("Action execution failed",
+            logger.error("行動執行失敗",
                         action_type=action["action_type"],
                         error=str(e))
                         
@@ -367,49 +367,49 @@ class ExecutorAgent(IExecutorAgent):
             }
             
     async def _handle_execution_request(self, message: Dict[str, Any]) -> None:
-        """Handle incoming execution request from Hunter Agent."""
+        """處理來自獵人代理的執行請求。"""
         try:
             execution_message = ExecutionMessage(**message)
             task_id = execution_message.task.task_id
             
-            # Store active execution
+            # 儲存活動中的執行
             self.active_executions[task_id] = execution_message
             
-            # Perform threat analysis
+            # 執行威脅分析
             report = await self.analyze_threat(execution_message)
             
-            # Send initial notification
+            # 發送初始通知
             await self._send_threat_notification(report)
             
-            # Request approval if needed
+            # 如果需要，請求批准
             if settings.enable_human_approval:
                 await self.request_approval(report)
             else:
-                # Execute all recommendations automatically (dangerous!)
-                logger.warning("Human approval disabled - executing all actions",
+                # 自動執行所有建議 (危險!)
+                logger.warning("人類批准已禁用 - 執行所有行動",
                              task_id=task_id)
                              
                 for action in report.recommended_actions:
                     await self._execute_action_async(action, task_id, "auto-approved")
                     
-            # Clean up
+            # 清理
             del self.active_executions[task_id]
             
         except Exception as e:
-            logger.error("Failed to handle execution request", error=str(e))
+            logger.error("處理執行請求失敗", error=str(e))
             
     async def _generate_executive_summary(self, profile: ThreatProfile) -> str:
-        """Generate executive summary using LLM."""
+        """使用 LLM 產生高階主管摘要。"""
         prompt = f"""
-        Generate a concise executive summary (3-4 sentences) for this security incident:
+        為此安全事件產生一份簡潔的高階主管摘要（3-4句話）：
         
-        Threat Type: {profile.threat_category}
-        Risk Level: {profile.overall_risk_score:.2f} (scale 0-1)
-        Affected Assets: {len(profile.asset_criticality)} systems
-        Impact: {json.dumps(profile.impact_assessment)}
+        威脅類型：{profile.threat_category}
+        風險等級：{profile.overall_risk_score:.2f} (0-1 等級)
+        受影響資產：{len(profile.asset_criticality)} 個系統
+        影響：{json.dumps(profile.impact_assessment)}
         
-        The summary should be suitable for C-level executives and board members.
-        Focus on business impact and required actions.
+        摘要應適合 C 級主管和董事會成員閱讀。
+        專注於業務影響和所需行動。
         """
         
         summary = await self.llm.generate(
@@ -421,28 +421,28 @@ class ExecutorAgent(IExecutorAgent):
         return summary.strip()
         
     async def _generate_threat_narrative(self, profile: ThreatProfile) -> str:
-        """Generate detailed threat narrative."""
+        """產生詳細的威脅敘述。"""
         prompt = f"""
-        Create a detailed threat narrative that tells the story of this security incident:
+        建立一個詳細的威脅敘述，講述此安全事件的故事：
         
-        Initial Alert: {profile.alert.title}
-        Time: {profile.alert.timestamp}
+        初始警報：{profile.alert.title}
+        時間：{profile.alert.timestamp}
         
-        Attack Patterns Detected:
+        偵測到的攻擊模式：
         {json.dumps(profile.graph_context.attack_paths[:3], indent=2)}
         
-        Similar Historical Incidents: {len(profile.vector_context.similar_alerts)}
+        相似的歷史事件：{len(profile.vector_context.similar_alerts)}
         
-        Threat Actor: {profile.threat_actor or 'Unknown'}
-        Campaign: {profile.campaign_id or 'Not linked to known campaign'}
+        威脅行為者：{profile.threat_actor or '未知'}
+        活動：{profile.campaign_id or '未與已知活動關聯'}
         
-        Write a narrative that explains:
-        1. How the attack likely started
-        2. What the attacker did
-        3. What their objectives might be
-        4. Current status and risk
+        撰寫一份敘述，解釋：
+        1. 攻擊可能如何開始
+        2. 攻擊者做了什麼
+        3. 他們的目標可能是什麼
+        4. 當前狀態和風險
         
-        Use clear, non-technical language where possible.
+        盡可能使用清晰、非技術性的語言。
         """
         
         narrative = await self.llm.generate(
@@ -454,7 +454,7 @@ class ExecutorAgent(IExecutorAgent):
         return narrative.strip()
         
     async def _generate_technical_analysis(self, profile: ThreatProfile) -> Dict[str, Any]:
-        """Generate detailed technical analysis."""
+        """產生詳細的技術分析。"""
         return {
             "attack_vectors": self._analyze_attack_vectors(profile),
             "vulnerability_analysis": self._analyze_vulnerabilities(profile),
@@ -465,46 +465,46 @@ class ExecutorAgent(IExecutorAgent):
         }
         
     async def _create_incident_timeline(self, profile: ThreatProfile) -> List[Dict[str, Any]]:
-        """Create detailed incident timeline."""
+        """建立詳細的事件時間軸。"""
         timeline = []
         
-        # Initial detection
+        # 初始偵測
         timeline.append({
             "timestamp": profile.alert.timestamp.isoformat(),
-            "event": "Initial Alert",
+            "event": "初始警報",
             "description": profile.alert.title,
             "severity": profile.alert.severity,
             "source": profile.alert.source
         })
         
-        # Add events from graph analysis
-        for path in profile.graph_context.attack_paths[:5]:  # Limit to 5 paths
+        # 從圖形分析中新增事件
+        for path in profile.graph_context.attack_paths[:5]:  # 限制為 5 條路徑
             for i, node in enumerate(path):
                 if isinstance(node, dict) and "timestamp" in node:
                     timeline.append({
                         "timestamp": node["timestamp"],
-                        "event": f"Attack Step {i+1}",
-                        "description": node.get("description", "Unknown action"),
+                        "event": f"攻擊步驟 {i+1}",
+                        "description": node.get("description", "未知行動"),
                         "entity": node.get("entity"),
                         "confidence": node.get("confidence", 0.5)
                     })
                     
-        # Add similar incidents
+        # 新增相似事件
         for alert in profile.vector_context.similar_alerts[:3]:
             timeline.append({
                 "timestamp": alert.get("timestamp", profile.alert.timestamp).isoformat(),
-                "event": "Similar Alert",
-                "description": alert.get("title", "Related incident"),
+                "event": "相似警報",
+                "description": alert.get("title", "相關事件"),
                 "correlation": alert.get("score", 0)
             })
             
-        # Sort by timestamp
+        # 按時間戳排序
         timeline.sort(key=lambda x: x["timestamp"])
         
         return timeline
         
     def _calculate_confidence_metrics(self, profile: ThreatProfile) -> Dict[str, float]:
-        """Calculate confidence in the analysis."""
+        """計算分析的信賴度指標。"""
         factors = {
             "graph_evidence": min(len(profile.graph_context.attack_paths) / 5, 1.0) * 0.3,
             "vector_similarity": (1 - profile.vector_context.anomaly_score) * 0.2,
@@ -514,7 +514,7 @@ class ExecutorAgent(IExecutorAgent):
         
         confidence = sum(factors.values())
         
-        # Calculate false positive probability
+        # 計算誤報機率
         fp_factors = {
             "low_similarity": profile.vector_context.anomaly_score * 0.4,
             "no_patterns": (0.5 if not profile.vector_context.detected_patterns else 0) * 0.3,
@@ -529,35 +529,35 @@ class ExecutorAgent(IExecutorAgent):
         }
         
     def _compile_evidence(self, profile: ThreatProfile) -> List[Dict[str, Any]]:
-        """Compile supporting evidence."""
+        """編譯支持證據。"""
         evidence = []
         
-        # Graph evidence
+        # 圖形證據
         for i, path in enumerate(profile.graph_context.attack_paths[:3]):
             evidence.append({
                 "type": "attack_path",
                 "id": f"path_{i+1}",
-                "description": f"Attack path with {len(path)} steps",
+                "description": f"包含 {len(path)} 個步驟的攻擊路徑",
                 "confidence": 0.8,
                 "details": path
             })
             
-        # Vector evidence
+        # 向量證據
         for i, alert in enumerate(profile.vector_context.similar_alerts[:3]):
             evidence.append({
                 "type": "similar_incident",
                 "id": f"incident_{i+1}",
-                "description": alert.get("title", "Similar alert"),
+                "description": alert.get("title", "相似警報"),
                 "similarity": alert.get("score", 0),
                 "timestamp": alert.get("timestamp")
             })
             
-        # IOC evidence
+        # IOC 證據
         for ioc in profile.graph_context.iocs[:5]:
             evidence.append({
                 "type": "ioc",
                 "id": f"ioc_{ioc.get('value', 'unknown')[:8]}",
-                "description": f"{ioc.get('type', 'unknown')} indicator",
+                "description": f"{ioc.get('type', 'unknown')} 指標",
                 "value": ioc.get("value"),
                 "confidence": ioc.get("confidence", 0.5)
             })
@@ -565,10 +565,10 @@ class ExecutorAgent(IExecutorAgent):
         return evidence
         
     def _extract_iocs(self, profile: ThreatProfile) -> List[Dict[str, Any]]:
-        """Extract and format IOCs."""
+        """提取並格式化 IOC。"""
         iocs = []
         
-        # From alert
+        # 從警報中提取
         for ip in profile.alert.source_ips:
             iocs.append({"type": "ip", "value": ip, "direction": "source"})
         for ip in profile.alert.destination_ips:
@@ -576,10 +576,10 @@ class ExecutorAgent(IExecutorAgent):
         for hash_val in profile.alert.file_hashes:
             iocs.append({"type": "file_hash", "value": hash_val})
             
-        # From graph context
+        # 從圖形上下文中提取
         iocs.extend(profile.graph_context.iocs)
         
-        # Deduplicate
+        # 去重
         seen = set()
         unique_iocs = []
         for ioc in iocs:
@@ -591,20 +591,20 @@ class ExecutorAgent(IExecutorAgent):
         return unique_iocs
         
     def _generate_references(self, profile: ThreatProfile) -> List[str]:
-        """Generate references and links."""
+        """產生參考資料和連結。"""
         references = []
         
-        # MITRE ATT&CK references
+        # MITRE ATT&CK 參考資料
         for ttp in profile.graph_context.ttps:
             references.append(f"https://attack.mitre.org/techniques/{ttp}/")
             
-        # Threat actor references
+        # 威脅行為者參考資料
         if profile.threat_actor:
-            references.append(f"Internal KB: /threats/actors/{profile.threat_actor}")
+            references.append(f"內部知識庫：/threats/actors/{profile.threat_actor}")
             
-        # Campaign references
+        # 活動參考資料
         if profile.campaign_id:
-            references.append(f"Internal KB: /threats/campaigns/{profile.campaign_id}")
+            references.append(f"內部知識庫：/threats/campaigns/{profile.campaign_id}")
             
         return references
         
@@ -612,26 +612,26 @@ class ExecutorAgent(IExecutorAgent):
         self,
         profile: ThreatProfile
     ) -> List[RecommendedAction]:
-        """Generate basic recommendations when LLM fails."""
+        """當 LLM 失敗時產生基本的後備建議。"""
         recommendations = []
         
-        # High-risk default action
+        # 高風險預設行動
         if profile.overall_risk_score > 0.7:
             recommendations.append(
                 RecommendedAction(
                     action_type=ActionType.ISOLATE_HOST,
                     priority=1,
-                    description="Isolate affected systems to prevent lateral movement",
+                    description="隔離受影響的系統以防止橫向移動",
                     parameters={
                         "hosts": list(profile.asset_criticality.keys())
                     },
                     risk_level="low",
-                    potential_impact="System unavailability for isolated hosts",
+                    potential_impact="隔離主機的系統不可用",
                     requires_approval=True
                 )
             )
             
-        # Block malicious IPs
+        # 封鎖惡意 IP
         malicious_ips = [
             ioc["value"] for ioc in profile.graph_context.iocs
             if ioc.get("type") == "ip" and ioc.get("confidence", 0) > 0.7
@@ -642,27 +642,27 @@ class ExecutorAgent(IExecutorAgent):
                 RecommendedAction(
                     action_type=ActionType.BLOCK_IP,
                     priority=2,
-                    description="Block confirmed malicious IP addresses",
+                    description="封鎖已確認的惡意 IP 位址",
                     parameters={"ips": malicious_ips},
                     risk_level="low",
-                    potential_impact="Minimal - blocking external IPs",
+                    potential_impact="極小 - 封鎖外部 IP",
                     requires_approval=True
                 )
             )
             
-        # Always create ticket
+        # 總是建立工單
         recommendations.append(
             RecommendedAction(
                 action_type=ActionType.CREATE_TICKET,
                 priority=3,
-                description="Create incident ticket for tracking and investigation",
+                description="建立事件工單以供追蹤和調查",
                 parameters={
                     "severity": "high" if profile.overall_risk_score > 0.7 else "medium",
-                    "title": f"Security Incident: {profile.threat_category}",
+                    "title": f"安全事件：{profile.threat_category}",
                     "assignee": "soc-team"
                 },
                 risk_level="low",
-                potential_impact="None - administrative action",
+                potential_impact="無 - 管理性行動",
                 requires_approval=False
             )
         )
@@ -670,10 +670,10 @@ class ExecutorAgent(IExecutorAgent):
         return recommendations
         
     def _analyze_attack_vectors(self, profile: ThreatProfile) -> List[Dict[str, Any]]:
-        """Analyze attack vectors from the profile."""
+        """從設定檔分析攻擊向量。"""
         vectors = []
         
-        # Analyze each attack path
+        # 分析每個攻擊路徑
         for path in profile.graph_context.attack_paths[:5]:
             vector = {
                 "type": "network_path",
@@ -683,7 +683,7 @@ class ExecutorAgent(IExecutorAgent):
                 "techniques": []
             }
             
-            # Extract techniques from path
+            # 從路徑中提取技術
             for node in path:
                 if isinstance(node, dict) and "technique" in node:
                     vector["techniques"].append(node["technique"])
@@ -693,23 +693,23 @@ class ExecutorAgent(IExecutorAgent):
         return vectors
         
     def _analyze_vulnerabilities(self, profile: ThreatProfile) -> Dict[str, Any]:
-        """Analyze vulnerabilities that may have been exploited."""
+        """分析可能被利用的漏洞。"""
         vuln_analysis = {
             "exploited": [],
             "at_risk": [],
             "patches_available": []
         }
         
-        # Check asset vulnerabilities
+        # 檢查資產漏洞
         for asset, vulns in profile.asset_vulnerabilities.items():
             for vuln in vulns:
                 vuln_info = {
                     "cve": vuln,
                     "asset": asset,
-                    "severity": "high"  # Would be looked up in real system
+                    "severity": "high"  # 在真實系統中會查詢
                 }
                 
-                # Simple heuristic - if asset is in attack path, vuln might be exploited
+                # 簡單的啟發式方法 - 如果資產在攻擊路徑中，漏洞可能被利用
                 if any(asset in str(path) for path in profile.graph_context.attack_paths):
                     vuln_analysis["exploited"].append(vuln_info)
                 else:
@@ -718,7 +718,7 @@ class ExecutorAgent(IExecutorAgent):
         return vuln_analysis
         
     def _analyze_network_activity(self, profile: ThreatProfile) -> Dict[str, Any]:
-        """Analyze network activity patterns."""
+        """分析網路活動模式。"""
         return {
             "suspicious_connections": len(profile.alert.source_ips),
             "data_exfiltration_risk": profile.impact_assessment.get("data_exposure", 0),
@@ -733,7 +733,7 @@ class ExecutorAgent(IExecutorAgent):
         }
         
     def _analyze_behavior_patterns(self, profile: ThreatProfile) -> Dict[str, Any]:
-        """Analyze behavioral patterns."""
+        """分析行為模式。"""
         return {
             "patterns_detected": profile.vector_context.detected_patterns,
             "anomaly_score": profile.vector_context.anomaly_score,
@@ -742,7 +742,7 @@ class ExecutorAgent(IExecutorAgent):
         }
         
     def _compile_threat_intel(self, profile: ThreatProfile) -> Dict[str, Any]:
-        """Compile threat intelligence information."""
+        """編譯威脅情報資訊。"""
         return {
             "threat_actor": profile.threat_actor,
             "campaign": profile.campaign_id,
@@ -752,64 +752,64 @@ class ExecutorAgent(IExecutorAgent):
         }
         
     def _identify_forensic_artifacts(self, profile: ThreatProfile) -> List[Dict[str, Any]]:
-        """Identify key forensic artifacts for investigation."""
+        """識別用於調查的關鍵鑑識產物。"""
         artifacts = []
         
-        # File artifacts
+        # 檔案產物
         for hash_val in profile.alert.file_hashes:
             artifacts.append({
                 "type": "file",
                 "value": hash_val,
-                "description": "Suspicious file hash",
+                "description": "可疑檔案雜湊",
                 "collection_method": "endpoint_agent"
             })
             
-        # Network artifacts
+        # 網路產物
         for ip in profile.alert.source_ips:
             artifacts.append({
                 "type": "network",
                 "value": f"pcap_filter: host {ip}",
-                "description": "Network traffic capture filter",
+                "description": "網路流量捕獲過濾器",
                 "collection_method": "network_tap"
             })
             
-        # Memory artifacts
+        # 記憶體產物
         if profile.threat_category in ["MALWARE", "INTRUSION"]:
             artifacts.append({
                 "type": "memory",
                 "value": "full_memory_dump",
-                "description": "Memory dump for malware analysis",
+                "description": "用於惡意軟體分析的記憶體傾印",
                 "collection_method": "endpoint_agent"
             })
             
         return artifacts
         
     async def _send_threat_notification(self, report: ExecutionReport) -> bool:
-        """Send initial threat notification."""
+        """發送初始威脅通知。"""
         try:
-            # Format notification
+            # 格式化通知
             severity = "critical" if report.analysis_confidence > 0.8 else "high"
             
             message = f"""
-🚨 **Security Threat Detected**
+🚨 **偵測到安全威脅**
 
-**Summary:** {report.executive_summary}
+**摘要：** {report.executive_summary}
 
-**Risk Level:** {report.analysis_confidence:.0%}
-**False Positive Probability:** {report.false_positive_probability:.0%}
+**風險等級：** {report.analysis_confidence:.0%}
+**誤報機率：** {report.false_positive_probability:.0%}
 
-**Recommended Actions:** {len(report.recommended_actions)}
+**建議行動：** {len(report.recommended_actions)}
 
-View full report: [Report #{report.report_id}]
+查看完整報告：[報告 #{report.report_id}]
             """
             
-            # Send notification
+            # 發送通知
             success = await self.notifier.send_alert(
-                title=f"Security Alert - Task {report.task_id}",
+                title=f"安全警報 - 任務 {report.task_id}",
                 message=message.strip(),
                 severity=severity,
                 attachments=[{
-                    "title": "Technical Details",
+                    "title": "技術細節",
                     "text": json.dumps(report.technical_details, indent=2)[:500] + "..."
                 }]
             )
@@ -817,38 +817,38 @@ View full report: [Report #{report.report_id}]
             return success
             
         except Exception as e:
-            logger.error("Failed to send threat notification", error=str(e))
+            logger.error("發送威脅通知失敗", error=str(e))
             return False
             
     async def _send_approval_notification(self, approval: ApprovalRequest) -> bool:
-        """Send approval request notification."""
+        """發送批准請求通知。"""
         try:
-            # Format approval request
+            # 格式化批准請求
             actions_summary = "\n".join([
-                f"{i+1}. {action.description} (Priority: {action.priority})"
+                f"{i+1}. {action.description} (優先級：{action.priority})"
                 for i, action in enumerate(approval.requested_actions)
             ])
             
             message = f"""
-⚠️ **Action Approval Required**
+⚠️ **需要行動批准**
 
-**Task ID:** {approval.task_id}
-**Report:** {approval.execution_report.executive_summary}
+**任務 ID：** {approval.task_id}
+**報告：** {approval.execution_report.executive_summary}
 
-**Requested Actions:**
+**請求的行動：**
 {actions_summary}
 
-**Timeout:** {approval.timeout_minutes} minutes
+**逾時：** {approval.timeout_minutes} 分鐘
 
-Please review and approve/reject these actions.
+請審查並批准/拒絕這些行動。
             """
             
-            # Create callback URL
+            # 建立回呼 URL
             callback_url = f"https://api.security.company/approvals/{approval.request_id}"
             
-            # Send approval request
+            # 發送批准請求
             request_id = await self.notifier.request_approval(
-                title=f"Approval Required - {approval.task_id}",
+                title=f"需要批准 - {approval.task_id}",
                 message=message.strip(),
                 actions=[{
                     "action_id": action.action_id,
@@ -862,7 +862,7 @@ Please review and approve/reject these actions.
             return bool(request_id)
             
         except Exception as e:
-            logger.error("Failed to send approval notification", error=str(e))
+            logger.error("發送批准通知失敗", error=str(e))
             return False
             
     async def _execute_action_async(
@@ -871,34 +871,34 @@ Please review and approve/reject these actions.
         task_id: str,
         approval_id: str
     ) -> None:
-        """Execute action asynchronously."""
+        """非同步執行行動。"""
         try:
             action_dict = action.dict()
             action_dict["task_id"] = task_id
             
             result = await self.execute_action(action_dict, approval_id)
             
-            # Send completion notification
+            # 發送完成通知
             if result.get("success"):
                 await self.notifier.send_alert(
-                    title=f"Action Completed - {action.action_type}",
-                    message=f"Successfully executed: {action.description}",
+                    title=f"行動完成 - {action.action_type}",
+                    message=f"成功執行：{action.description}",
                     severity="info"
                 )
             else:
                 await self.notifier.send_alert(
-                    title=f"Action Failed - {action.action_type}",
-                    message=f"Failed to execute: {action.description}\nError: {result.get('error')}",
+                    title=f"行動失敗 - {action.action_type}",
+                    message=f"執行失敗：{action.description}\n錯誤：{result.get('error')}",
                     severity="error"
                 )
                 
         except Exception as e:
-            logger.error("Async action execution failed",
+            logger.error("非同步行動執行失敗",
                         action_type=action.action_type,
                         error=str(e))
                         
     def _update_avg_analysis_time(self, analysis_time: float) -> None:
-        """Update average analysis time metric."""
+        """更新平均分析時間指標。"""
         current_avg = self.metrics["avg_analysis_time"]
         report_count = self.metrics["reports_generated"]
         
@@ -907,7 +907,7 @@ Please review and approve/reject these actions.
         )
         
     def _update_avg_approval_time(self, approval_time: float) -> None:
-        """Update average approval time metric."""
+        """更新平均批准時間指標。"""
         current_avg = self.metrics["avg_approval_time"]
         approval_count = self.metrics["approvals_received"]
         
@@ -917,58 +917,58 @@ Please review and approve/reject these actions.
             )
             
     async def _approval_monitor_loop(self) -> None:
-        """Monitor approval requests and handle timeouts."""
+        """監控批准請求並處理逾時。"""
         while True:
             try:
-                await asyncio.sleep(60)  # Check every minute
+                await asyncio.sleep(60)  # 每分鐘檢查一次
                 
                 current_time = datetime.utcnow()
                 
                 for request_id, approval in list(self.pending_approvals.items()):
-                    # Check timeout
+                    # 檢查逾時
                     elapsed = (current_time - approval.requested_at).total_seconds() / 60
                     
                     if elapsed > approval.timeout_minutes:
-                        logger.warning("Approval timeout",
+                        logger.warning("批准逾時",
                                      request_id=request_id,
                                      elapsed_minutes=elapsed)
                                      
-                        # Escalate
+                        # 上報
                         await self.notifier.send_alert(
-                            title=f"URGENT: Approval Timeout - {approval.task_id}",
-                            message=f"Approval request has timed out. Escalating to: {', '.join(approval.escalation_contacts)}",
+                            title=f"緊急：批准逾時 - {approval.task_id}",
+                            message=f"批准請求已逾時。上報至：{', '.join(approval.escalation_contacts)}",
                             severity="critical"
                         )
                         
-                        # Remove from pending
+                        # 從待處理中移除
                         del self.pending_approvals[request_id]
                         
             except Exception as e:
-                logger.error("Approval monitoring failed", error=str(e))
+                logger.error("批准監控失敗", error=str(e))
                 
     async def _metrics_reporting_loop(self) -> None:
-        """Report metrics periodically."""
+        """定期回報指標。"""
         while True:
             try:
-                await asyncio.sleep(300)  # Report every 5 minutes
+                await asyncio.sleep(300)  # 每 5 分鐘回報一次
                 
-                logger.info("Executor Agent metrics",
+                logger.info("執行者代理指標",
                           metrics=dict(self.metrics),
                           active_executions=len(self.active_executions),
                           pending_approvals=len(self.pending_approvals))
                           
             except Exception as e:
-                logger.error("Metrics reporting failed", error=str(e))
+                logger.error("指標回報失敗", error=str(e))
                 
     async def _cleanup_loop(self) -> None:
-        """Clean up old execution reports."""
+        """清理舊的執行報告。"""
         while True:
             try:
-                await asyncio.sleep(3600)  # Run hourly
+                await asyncio.sleep(3600)  # 每小時執行一次
                 
                 cutoff_time = datetime.utcnow() - timedelta(days=7)
                 
-                # Clean old reports
+                # 清理舊報告
                 old_reports = [
                     task_id for task_id, report in self.execution_reports.items()
                     if report.generated_at < cutoff_time
@@ -977,11 +977,11 @@ Please review and approve/reject these actions.
                 for task_id in old_reports:
                     del self.execution_reports[task_id]
                     
-                logger.debug("Cleanup completed",
+                logger.debug("清理完成",
                            removed_reports=len(old_reports))
                            
             except Exception as e:
-                logger.error("Cleanup failed", error=str(e))
+                logger.error("清理失敗", error=str(e))
                 
     async def handle_approval_response(
         self,
@@ -990,9 +990,9 @@ Please review and approve/reject these actions.
         approver: str,
         comments: Optional[str] = None
     ) -> None:
-        """Handle approval response from human."""
+        """處理來自人類的批准回應。"""
         if request_id not in self.pending_approvals:
-            logger.warning("Unknown approval request", request_id=request_id)
+            logger.warning("未知的批准請求", request_id=request_id)
             return
             
         approval = self.pending_approvals[request_id]
@@ -1001,19 +1001,19 @@ Please review and approve/reject these actions.
         approval.approval_timestamp = datetime.utcnow()
         approval.approval_comments = comments
         
-        # Update metrics
+        # 更新指標
         self.metrics["approvals_received"] += 1
         approval_time = (approval.approval_timestamp - approval.requested_at).total_seconds()
         self._update_avg_approval_time(approval_time)
         
-        logger.info("Approval received",
+        logger.info("收到批准",
                    request_id=request_id,
                    approved=approved,
                    approver=approver,
                    response_time_seconds=approval_time)
                    
         if approved:
-            # Execute approved actions
+            # 執行已批准的行動
             for action in approval.requested_actions:
                 asyncio.create_task(
                     self._execute_action_async(
@@ -1023,12 +1023,12 @@ Please review and approve/reject these actions.
                     )
                 )
         else:
-            # Send rejection notification
+            # 發送拒絕通知
             await self.notifier.send_alert(
-                title=f"Actions Rejected - {approval.task_id}",
-                message=f"Security actions were rejected by {approver}.\nReason: {comments or 'Not provided'}",
+                title=f"行動已拒絕 - {approval.task_id}",
+                message=f"安全行動被 {approver} 拒絕。\n原因：{comments or '未提供'}",
                 severity="warning"
             )
             
-        # Remove from pending
+        # 從待處理中移除
         del self.pending_approvals[request_id]

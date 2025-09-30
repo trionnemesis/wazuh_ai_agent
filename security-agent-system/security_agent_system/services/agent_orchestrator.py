@@ -1,4 +1,4 @@
-"""Agent orchestrator for managing the three-agent system."""
+"""用於管理三代理系統的代理協調器。"""
 import asyncio
 from typing import Dict, Any, List, Optional
 import structlog
@@ -19,7 +19,7 @@ logger = structlog.get_logger()
 
 
 class AgentOrchestrator:
-    """Orchestrates the three-agent security system."""
+    """協調三代理安全系統。"""
     
     def __init__(self):
         self.agents: Dict[str, Any] = {}
@@ -27,49 +27,49 @@ class AgentOrchestrator:
         self.is_running = False
         
     async def initialize(self) -> None:
-        """Initialize all system components."""
-        logger.info("Initializing Security Agent System")
+        """初始化所有系統組件。"""
+        logger.info("正在初始化安全代理系統")
         
-        # Initialize infrastructure
+        # 初始化基礎設施
         await self._initialize_infrastructure()
         
-        # Initialize agents
+        # 初始化代理
         await self._initialize_agents()
         
-        logger.info("System initialization complete")
+        logger.info("系統初始化完成")
         
     async def _initialize_infrastructure(self) -> None:
-        """Initialize infrastructure components."""
-        # Message Broker
+        """初始化基礎設施組件。"""
+        # 訊息代理
         if settings.broker_type == MessageBrokerType.RABBITMQ:
             self.infrastructure["broker"] = RabbitMQBroker()
         else:
             self.infrastructure["broker"] = KafkaBroker()
             
-        # Graph Database
+        # 圖形資料庫
         self.infrastructure["graph_db"] = Neo4jDatabase()
         
-        # Vector Database
+        # 向量資料庫
         self.infrastructure["vector_db"] = ChromaDatabase()
         
-        # LLM Providers
+        # LLM 供應商
         self.infrastructure["llm_providers"] = {
             LLMProvider.OPENAI: OpenAIProvider(),
             LLMProvider.ANTHROPIC: AnthropicProvider(),
             LLMProvider.GOOGLE: GoogleProvider()
         }
         
-        # Notification Service
+        # 通知服務
         self.infrastructure["notifier"] = SlackNotificationService()
         
-        # Action Executor
+        # 行動執行器
         self.infrastructure["action_executor"] = ActionExecutorService()
         
-        logger.info("Infrastructure components created")
+        logger.info("基礎設施組件已建立")
         
     async def _initialize_agents(self) -> None:
-        """Initialize the three agents."""
-        # Manager Agent
+        """初始化三個代理。"""
+        # 管理代理
         manager_llm = self.infrastructure["llm_providers"][
             LLMProvider[settings.manager_config["llm_provider"]]
         ]
@@ -79,7 +79,7 @@ class AgentOrchestrator:
             llm_provider=manager_llm
         )
         
-        # Hunter Agent
+        # 獵人代理
         hunter_llm = self.infrastructure["llm_providers"][
             LLMProvider[settings.hunter_config["llm_provider"]]
         ]
@@ -91,7 +91,7 @@ class AgentOrchestrator:
             llm_provider=hunter_llm
         )
         
-        # Executor Agent
+        # 執行者代理
         executor_llm = self.infrastructure["llm_providers"][
             LLMProvider[settings.executor_config["llm_provider"]]
         ]
@@ -103,61 +103,61 @@ class AgentOrchestrator:
             action_executor=self.infrastructure["action_executor"]
         )
         
-        # Initialize all agents
+        # 初始化所有代理
         await asyncio.gather(
             self.agents["manager"].initialize(),
             self.agents["hunter"].initialize(),
             self.agents["executor"].initialize()
         )
         
-        logger.info("All agents initialized")
+        logger.info("所有代理已初始化")
         
     async def start(self) -> None:
-        """Start the agent system."""
+        """啟動代理系統。"""
         if self.is_running:
-            logger.warning("System already running")
+            logger.warning("系統已在執行中")
             return
             
-        logger.info("Starting Security Agent System")
+        logger.info("正在啟動安全代理系統")
         self.is_running = True
         
-        # Start all agents
+        # 啟動所有代理
         agent_tasks = [
             asyncio.create_task(self.agents["manager"].start()),
             asyncio.create_task(self.agents["hunter"].start()),
             asyncio.create_task(self.agents["executor"].start())
         ]
         
-        # Start monitoring
+        # 啟動監控
         monitor_task = asyncio.create_task(self._monitor_system())
         
-        # Start API server
+        # 啟動 API 伺服器
         api_task = asyncio.create_task(self._start_api_server())
         
         try:
-            # Run until cancelled
+            # 執行直到被取消
             await asyncio.gather(
                 *agent_tasks,
                 monitor_task,
                 api_task
             )
         except asyncio.CancelledError:
-            logger.info("System shutdown requested")
+            logger.info("請求系統關閉")
         finally:
             self.is_running = False
             
     async def stop(self) -> None:
-        """Stop the agent system gracefully."""
-        logger.info("Stopping Security Agent System")
+        """優雅地停止代理系統。"""
+        logger.info("正在停止安全代理系統")
         
-        # Stop all agents
+        # 停止所有代理
         await asyncio.gather(
             self.agents["manager"].stop(),
             self.agents["hunter"].stop(),
             self.agents["executor"].stop()
         )
         
-        # Disconnect infrastructure
+        # 斷開基礎設施連線
         if "broker" in self.infrastructure:
             await self.infrastructure["broker"].disconnect()
         if "graph_db" in self.infrastructure:
@@ -166,29 +166,29 @@ class AgentOrchestrator:
             await self.infrastructure["vector_db"].disconnect()
             
         self.is_running = False
-        logger.info("System stopped")
+        logger.info("系統已停止")
         
     async def process_alert(self, alert_data: Dict[str, Any]) -> str:
-        """Process a new security alert."""
+        """處理新的安全警報。"""
         try:
-            # Create alert message
+            # 建立警報訊息
             alert = AlertMessage(**alert_data)
             
-            # Send to Manager Agent
+            # 傳送給管理代理
             task = await self.agents["manager"].process_alert(alert)
             
-            logger.info("Alert processed",
+            logger.info("警報已處理",
                        task_id=task.task_id,
                        alert_id=alert.alert_id)
                        
             return task.task_id
             
         except Exception as e:
-            logger.error("Failed to process alert", error=str(e))
+            logger.error("處理警報失敗", error=str(e))
             raise
             
     async def get_system_status(self) -> Dict[str, Any]:
-        """Get current system status."""
+        """獲取目前系統狀態。"""
         status = {
             "is_running": self.is_running,
             "timestamp": datetime.utcnow().isoformat(),
@@ -196,7 +196,7 @@ class AgentOrchestrator:
             "infrastructure": {}
         }
         
-        # Get agent health
+        # 獲取代理健康狀態
         for name, agent in self.agents.items():
             try:
                 health = await agent.health_check()
@@ -207,7 +207,7 @@ class AgentOrchestrator:
                     "error": str(e)
                 }
                 
-        # Check infrastructure health
+        # 檢查基礎設施健康狀態
         status["infrastructure"]["broker"] = {
             "type": settings.broker_type,
             "host": settings.broker_host,
@@ -228,53 +228,53 @@ class AgentOrchestrator:
         return status
         
     async def _monitor_system(self) -> None:
-        """Monitor system health and performance."""
+        """監控系統健康與效能。"""
         while self.is_running:
             try:
-                await asyncio.sleep(60)  # Check every minute
+                await asyncio.sleep(60)  # 每分鐘檢查一次
                 
-                # Get system status
+                # 獲取系統狀態
                 status = await self.get_system_status()
                 
-                # Check for issues
+                # 檢查問題
                 issues = []
                 
                 for agent_name, agent_status in status["agents"].items():
                     if agent_status.get("status") != "healthy":
-                        issues.append(f"Agent {agent_name} is not healthy")
+                        issues.append(f"代理 {agent_name} 不健康")
                         
-                # Alert if issues found
+                # 如果發現問題則發出警報
                 if issues:
-                    logger.warning("System health issues detected",
+                    logger.warning("偵測到系統健康問題",
                                  issues=issues)
                                  
-                    # Send notification
+                    # 傳送通知
                     if self.infrastructure.get("notifier"):
                         await self.infrastructure["notifier"].send_alert(
-                            title="System Health Alert",
-                            message=f"Issues detected: {', '.join(issues)}",
+                            title="系統健康警報",
+                            message=f"偵測到問題：{', '.join(issues)}",
                             severity="warning"
                         )
                         
             except Exception as e:
-                logger.error("System monitoring error", error=str(e))
+                logger.error("系統監控錯誤", error=str(e))
                 
     async def _start_api_server(self) -> None:
-        """Start the API server for external interactions."""
+        """啟動用於外部互動的 API 伺服器。"""
         from fastapi import FastAPI, HTTPException
         from fastapi.responses import JSONResponse
         import uvicorn
         
-        app = FastAPI(title="Security Agent System API")
+        app = FastAPI(title="安全代理系統 API")
         
         @app.get("/health")
         async def health_check():
-            """System health check endpoint."""
+            """系統健康檢查端點。"""
             return await self.get_system_status()
             
         @app.post("/alerts")
         async def submit_alert(alert_data: Dict[str, Any]):
-            """Submit a new security alert."""
+            """提交新的安全警報。"""
             try:
                 task_id = await self.process_alert(alert_data)
                 return {"task_id": task_id, "status": "accepted"}
@@ -283,27 +283,27 @@ class AgentOrchestrator:
                 
         @app.get("/tasks/{task_id}")
         async def get_task_status(task_id: str):
-            """Get task status."""
-            # Check with Manager Agent
+            """獲取任務狀態。"""
+            # 與管理代理確認
             manager = self.agents.get("manager")
             if not manager:
-                raise HTTPException(status_code=503, detail="Manager agent not available")
+                raise HTTPException(status_code=503, detail="管理代理不可用")
                 
             task = manager.active_tasks.get(task_id) or next(
                 (t for t in manager.task_history if t.task_id == task_id), None
             )
             
             if not task:
-                raise HTTPException(status_code=404, detail="Task not found")
+                raise HTTPException(status_code=404, detail="找不到任務")
                 
             return task.dict()
             
         @app.post("/approvals/{request_id}")
         async def handle_approval(request_id: str, approval_data: Dict[str, Any]):
-            """Handle approval response."""
+            """處理批准回應。"""
             executor = self.agents.get("executor")
             if not executor:
-                raise HTTPException(status_code=503, detail="Executor agent not available")
+                raise HTTPException(status_code=503, detail="執行者代理不可用")
                 
             await executor.handle_approval_response(
                 request_id=request_id,
@@ -316,7 +316,7 @@ class AgentOrchestrator:
             
         @app.get("/metrics")
         async def get_metrics():
-            """Get system metrics."""
+            """獲取系統指標。"""
             metrics = {}
             
             for name, agent in self.agents.items():
@@ -324,7 +324,7 @@ class AgentOrchestrator:
                 
             return metrics
             
-        # Run server
+        # 執行伺服器
         config = uvicorn.Config(
             app,
             host="0.0.0.0",
@@ -333,7 +333,7 @@ class AgentOrchestrator:
         )
         server = uvicorn.Server(config)
         
-        logger.info("API server starting on port 8000")
+        logger.info("API 伺服器正在 8000 連接埠啟動")
         await server.serve()
         
     async def handle_approval_callback(
@@ -343,11 +343,11 @@ class AgentOrchestrator:
         approver: str,
         comments: Optional[str] = None
     ) -> None:
-        """Handle approval callbacks from external systems."""
+        """處理來自外部系統的批准回呼。"""
         executor = self.agents.get("executor")
         if executor:
             await executor.handle_approval_response(
                 request_id, approved, approver, comments
             )
         else:
-            logger.error("Executor agent not available for approval callback")
+            logger.error("執行者代理不可用，無法處理批准回呼")

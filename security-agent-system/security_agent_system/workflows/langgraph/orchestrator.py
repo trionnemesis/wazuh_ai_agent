@@ -1,4 +1,4 @@
-"""LangGraph-based orchestrator for the Security Agent System."""
+"""基於 LangGraph 的安全代理系統協調器。"""
 import asyncio
 from typing import Dict, Any, List, Optional
 import structlog
@@ -25,10 +25,10 @@ logger = structlog.get_logger()
 
 
 class LangGraphOrchestrator:
-    """Orchestrates the LangGraph-based security agent system."""
+    """協調基於 LangGraph 的安全代理系統。"""
     
     def __init__(self):
-        """Initialize the LangGraph orchestrator."""
+        """初始化 LangGraph 協調器。"""
         self.graph: Optional[SecurityAgentGraph] = None
         self.infrastructure: Dict[str, Any] = {}
         self.llm_providers: Dict[str, Any] = {}
@@ -36,20 +36,20 @@ class LangGraphOrchestrator:
         self.is_running = False
         
     async def initialize(self) -> None:
-        """Initialize all system components."""
-        logger.info("Initializing LangGraph Security Agent System")
+        """初始化所有系統元件。"""
+        logger.info("正在初始化 LangGraph 安全代理系統")
         
         try:
-            # Initialize infrastructure
+            # 初始化基礎設施
             await self._initialize_infrastructure()
             
-            # Initialize LLM providers
+            # 初始化 LLM 供應商
             await self._initialize_llm_providers()
             
-            # Initialize checkpointer for state persistence
+            # 初始化用於狀態持久化的檢查點
             await self._initialize_checkpointer()
             
-            # Create agent nodes
+            # 建立代理節點
             manager_node = ManagerNode(
                 llm_provider=self.llm_providers[settings.manager_config["llm_provider"]]
             )
@@ -66,7 +66,7 @@ class LangGraphOrchestrator:
                 notification_service=self.infrastructure.get("notifier")
             )
             
-            # Create the graph
+            # 建立圖
             self.graph = SecurityAgentGraph(
                 manager_node=manager_node,
                 hunter_node=hunter_node,
@@ -74,44 +74,44 @@ class LangGraphOrchestrator:
                 checkpointer=self.checkpointer
             )
             
-            logger.info("LangGraph system initialization complete")
+            logger.info("LangGraph 系統初始化完成")
             
         except Exception as e:
-            logger.error("Failed to initialize LangGraph system", error=str(e), exc_info=True)
+            logger.error("初始化 LangGraph 系統失敗", error=str(e), exc_info=True)
             raise
     
     async def _initialize_infrastructure(self) -> None:
-        """Initialize infrastructure components."""
-        logger.info("Initializing infrastructure components")
+        """初始化基礎設施元件。"""
+        logger.info("正在初始化基礎設施元件")
         
-        # Message Broker
+        # 訊息代理
         if settings.broker_type == "rabbitmq":
             self.infrastructure["broker"] = RabbitMQBroker()
         else:
             self.infrastructure["broker"] = KafkaBroker()
         
-        # Initialize broker connection
+        # 初始化代理連線
         await self.infrastructure["broker"].connect()
         
-        # Graph Database
+        # 圖形資料庫
         self.infrastructure["graph_db"] = Neo4jDatabase()
         await self.infrastructure["graph_db"].connect()
         
-        # Vector Database
+        # 向量資料庫
         self.infrastructure["vector_db"] = ChromaDatabase()
         await self.infrastructure["vector_db"].initialize()
         
-        # Notification Service
+        # 通知服務
         self.infrastructure["notifier"] = SlackNotificationService()
         
-        # Action Executor
+        # 行動執行器
         self.infrastructure["action_executor"] = ActionExecutorService()
         
-        logger.info("Infrastructure components initialized")
+        logger.info("基礎設施元件已初始化")
     
     async def _initialize_llm_providers(self) -> None:
-        """Initialize LLM providers for LangChain."""
-        logger.info("Initializing LLM providers")
+        """為 LangChain 初始化 LLM 供應商。"""
+        logger.info("正在初始化 LLM 供應商")
         
         # OpenAI
         if settings.openai_api_key:
@@ -140,63 +140,63 @@ class LangGraphOrchestrator:
                 max_output_tokens=4000
             )
         
-        logger.info(f"Initialized {len(self.llm_providers)} LLM providers")
+        logger.info(f"已初始化 {len(self.llm_providers)} 個 LLM 供應商")
     
     async def _initialize_checkpointer(self) -> None:
-        """Initialize the checkpointer for state persistence."""
+        """初始化用於狀態持久化的檢查點。"""
         checkpoint_dir = Path("./checkpoints")
         checkpoint_dir.mkdir(exist_ok=True)
         
         checkpoint_path = checkpoint_dir / "security_agent.db"
         self.checkpointer = AsyncSqliteSaver.from_conn_string(str(checkpoint_path))
         
-        logger.info("Checkpointer initialized", path=str(checkpoint_path))
+        logger.info("檢查點已初始化", path=str(checkpoint_path))
     
     async def start(self) -> None:
-        """Start the orchestrator and begin processing alerts."""
+        """啟動協調器並開始處理警報。"""
         if self.is_running:
-            logger.warning("Orchestrator already running")
+            logger.warning("協調器已在執行中")
             return
         
-        logger.info("Starting LangGraph orchestrator")
+        logger.info("正在啟動 LangGraph 協調器")
         self.is_running = True
         
-        # Start alert consumer
+        # 啟動警報消費者
         asyncio.create_task(self._consume_alerts())
         
-        # Start metrics reporter
+        # 啟動指標回報器
         asyncio.create_task(self._report_metrics())
         
-        logger.info("LangGraph orchestrator started")
+        logger.info("LangGraph 協調器已啟動")
     
     async def stop(self) -> None:
-        """Stop the orchestrator and cleanup resources."""
-        logger.info("Stopping LangGraph orchestrator")
+        """停止協調器並清理資源。"""
+        logger.info("正在停止 LangGraph 協調器")
         self.is_running = False
         
-        # Disconnect infrastructure
+        # 中斷基礎設施連線
         if "broker" in self.infrastructure:
             await self.infrastructure["broker"].disconnect()
         
         if "graph_db" in self.infrastructure:
             await self.infrastructure["graph_db"].disconnect()
         
-        logger.info("LangGraph orchestrator stopped")
+        logger.info("LangGraph 協調器已停止")
     
     async def _consume_alerts(self) -> None:
-        """Consume alerts from the message broker."""
-        logger.info("Starting alert consumer")
+        """從訊息代理消費警報。"""
+        logger.info("正在啟動警報消費者")
         
         while self.is_running:
             try:
-                # Get alerts from broker
+                # 從代理獲取警報
                 alerts = await self.infrastructure["broker"].consume_alerts(
                     queue_name="security_alerts",
                     batch_size=10
                 )
                 
                 if alerts:
-                    # Convert to SecurityAlert objects
+                    # 轉換為 SecurityAlert 物件
                     security_alerts = []
                     for alert_data in alerts:
                         try:
@@ -212,54 +212,54 @@ class LangGraphOrchestrator:
                             )
                             security_alerts.append(alert)
                         except Exception as e:
-                            logger.error("Failed to parse alert", error=str(e), alert_data=alert_data)
+                            logger.error("解析警報失敗", error=str(e), alert_data=alert_data)
                     
-                    # Process alerts through the graph
+                    # 透過圖處理警報
                     if security_alerts:
                         await self._process_alerts(security_alerts)
                 
-                # Small delay between checks
+                # 檢查之間的小延遲
                 await asyncio.sleep(1)
                 
             except Exception as e:
-                logger.error("Error in alert consumer", error=str(e), exc_info=True)
-                await asyncio.sleep(5)  # Back off on error
+                logger.error("警報消費者發生錯誤", error=str(e), exc_info=True)
+                await asyncio.sleep(5)  # 發生錯誤時退避
     
     async def _process_alerts(self, alerts: List[SecurityAlert]) -> None:
-        """Process alerts through the LangGraph."""
-        logger.info(f"Processing {len(alerts)} alerts through LangGraph")
+        """透過 LangGraph 處理警報。"""
+        logger.info(f"正在透過 LangGraph 處理 {len(alerts)} 則警報")
         
-        # Process alerts in parallel batches
+        # 平行批次處理警報
         batch_size = 5
         for i in range(0, len(alerts), batch_size):
             batch = alerts[i:i + batch_size]
             
-            # Process batch in parallel
+            # 平行處理批次
             tasks = []
             for alert in batch:
                 task = asyncio.create_task(self.graph.process_alert(alert))
                 tasks.append(task)
             
-            # Wait for batch to complete
+            # 等待批次完成
             results = await asyncio.gather(*tasks, return_exceptions=True)
             
-            # Log results
+            # 記錄結果
             for alert, result in zip(batch, results):
                 if isinstance(result, Exception):
-                    logger.error("Failed to process alert", 
+                    logger.error("處理警報失敗",
                                alert_id=alert.id,
                                error=str(result))
                 else:
-                    logger.info("Alert processed",
+                    logger.info("警報已處理",
                               alert_id=alert.id,
                               status=result.get("status"),
                               metrics=result.get("metrics"))
     
     async def _report_metrics(self) -> None:
-        """Periodically report system metrics."""
+        """定期回報系統指標。"""
         while self.is_running:
             try:
-                # Collect metrics (this would be more sophisticated in production)
+                # 收集指標 (這在生產環境中會更複雜)
                 metrics = {
                     "timestamp": datetime.now().isoformat(),
                     "system": "langgraph_orchestrator",
@@ -267,19 +267,19 @@ class LangGraphOrchestrator:
                     "llm_providers": list(self.llm_providers.keys())
                 }
                 
-                logger.info("System metrics", **metrics)
+                logger.info("系統指標", **metrics)
                 
-                # Report every 60 seconds
+                # 每 60 秒回報一次
                 await asyncio.sleep(60)
                 
             except Exception as e:
-                logger.error("Error reporting metrics", error=str(e))
+                logger.error("回報指標時發生錯誤", error=str(e))
                 await asyncio.sleep(60)
     
     async def process_manual_alert(self, alert_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Process a manually submitted alert."""
+        """處理手動提交的警報。"""
         try:
-            # Create SecurityAlert object
+            # 建立 SecurityAlert 物件
             alert = SecurityAlert(
                 id=alert_data.get("id", f"manual_{datetime.now().timestamp()}"),
                 timestamp=datetime.now(),
@@ -291,11 +291,11 @@ class LangGraphOrchestrator:
                 context=alert_data.get("context", {})
             )
             
-            # Process through graph
+            # 透過圖處理
             result = await self.graph.process_alert(alert)
             
             return result
             
         except Exception as e:
-            logger.error("Failed to process manual alert", error=str(e), exc_info=True)
+            logger.error("處理手動警報失敗", error=str(e), exc_info=True)
             raise

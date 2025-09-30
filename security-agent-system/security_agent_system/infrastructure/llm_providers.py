@@ -1,4 +1,4 @@
-"""LLM provider implementations."""
+"""LLM 供應商實作。"""
 import asyncio
 from typing import List, Optional
 import openai
@@ -13,12 +13,12 @@ logger = structlog.get_logger()
 
 
 class OpenAIProvider(ILLMProvider):
-    """OpenAI LLM provider implementation."""
+    """OpenAI LLM 供應商實作。"""
     
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or settings.openai_api_key
         if not self.api_key:
-            raise ValueError("OpenAI API key not provided")
+            raise ValueError("未提供 OpenAI API 金鑰")
             
         self.client = openai.AsyncOpenAI(api_key=self.api_key)
         
@@ -29,7 +29,7 @@ class OpenAIProvider(ILLMProvider):
         temperature: float = 0.1,
         max_tokens: int = 2000
     ) -> str:
-        """Generate response from OpenAI."""
+        """從 OpenAI 產生回應。"""
         try:
             messages = []
             if system_prompt:
@@ -47,11 +47,11 @@ class OpenAIProvider(ILLMProvider):
             return response.choices[0].message.content
             
         except Exception as e:
-            logger.error("OpenAI generation failed", error=str(e))
+            logger.error("OpenAI 生成失敗", error=str(e))
             raise
             
     async def embed(self, text: str) -> List[float]:
-        """Generate embedding using OpenAI."""
+        """使用 OpenAI 產生嵌入。"""
         try:
             response = await self.client.embeddings.create(
                 model=settings.embedding_model,
@@ -61,17 +61,17 @@ class OpenAIProvider(ILLMProvider):
             return response.data[0].embedding
             
         except Exception as e:
-            logger.error("OpenAI embedding failed", error=str(e))
+            logger.error("OpenAI 嵌入失敗", error=str(e))
             raise
 
 
 class AnthropicProvider(ILLMProvider):
-    """Anthropic Claude LLM provider implementation."""
+    """Anthropic Claude LLM 供應商實作。"""
     
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or settings.anthropic_api_key
         if not self.api_key:
-            raise ValueError("Anthropic API key not provided")
+            raise ValueError("未提供 Anthropic API 金鑰")
             
         self.client = anthropic.AsyncAnthropic(api_key=self.api_key)
         
@@ -82,13 +82,13 @@ class AnthropicProvider(ILLMProvider):
         temperature: float = 0.1,
         max_tokens: int = 2000
     ) -> str:
-        """Generate response from Claude."""
+        """從 Claude 產生回應。"""
         try:
             message = await self.client.messages.create(
                 model="claude-3-opus-20240229",
                 max_tokens=max_tokens,
                 temperature=temperature,
-                system=system_prompt or "You are a helpful AI assistant.",
+                system=system_prompt or "您是一位有幫助的 AI 助理。",
                 messages=[{
                     "role": "user",
                     "content": prompt
@@ -98,24 +98,24 @@ class AnthropicProvider(ILLMProvider):
             return message.content[0].text
             
         except Exception as e:
-            logger.error("Anthropic generation failed", error=str(e))
+            logger.error("Anthropic 生成失敗", error=str(e))
             raise
             
     async def embed(self, text: str) -> List[float]:
-        """Generate embedding (not natively supported by Anthropic)."""
-        # Fallback to OpenAI for embeddings
-        logger.warning("Anthropic doesn't support embeddings, falling back to OpenAI")
+        """產生嵌入（Anthropic 原生不支援）。"""
+        # 後備使用 OpenAI 進行嵌入
+        logger.warning("Anthropic 不支援嵌入，後備使用 OpenAI")
         openai_provider = OpenAIProvider()
         return await openai_provider.embed(text)
 
 
 class GoogleProvider(ILLMProvider):
-    """Google Gemini LLM provider implementation."""
+    """Google Gemini LLM 供應商實作。"""
     
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or settings.google_api_key
         if not self.api_key:
-            raise ValueError("Google API key not provided")
+            raise ValueError("未提供 Google API 金鑰")
             
         genai.configure(api_key=self.api_key)
         self.model = genai.GenerativeModel('gemini-1.5-flash')
@@ -127,9 +127,9 @@ class GoogleProvider(ILLMProvider):
         temperature: float = 0.1,
         max_tokens: int = 2000
     ) -> str:
-        """Generate response from Gemini."""
+        """從 Gemini 產生回應。"""
         try:
-            # Combine system prompt with user prompt
+            # 將系統提示與使用者提示結合
             full_prompt = prompt
             if system_prompt:
                 full_prompt = f"{system_prompt}\n\n{prompt}"
@@ -146,13 +146,13 @@ class GoogleProvider(ILLMProvider):
             return response.text
             
         except Exception as e:
-            logger.error("Google generation failed", error=str(e))
+            logger.error("Google 生成失敗", error=str(e))
             raise
             
     async def embed(self, text: str) -> List[float]:
-        """Generate embedding using Google."""
+        """使用 Google 產生嵌入。"""
         try:
-            # Use the embedding model
+            # 使用嵌入模型
             embed_model = genai.GenerativeModel('models/embedding-001')
             response = await asyncio.to_thread(
                 embed_model.embed_content,
@@ -163,8 +163,8 @@ class GoogleProvider(ILLMProvider):
             return response['embedding']
             
         except Exception as e:
-            logger.error("Google embedding failed", error=str(e))
-            # Fallback to OpenAI
-            logger.warning("Google embedding failed, falling back to OpenAI")
+            logger.error("Google 嵌入失敗", error=str(e))
+            # 後備使用 OpenAI
+            logger.warning("Google 嵌入失敗，後備使用 OpenAI")
             openai_provider = OpenAIProvider()
             return await openai_provider.embed(text)

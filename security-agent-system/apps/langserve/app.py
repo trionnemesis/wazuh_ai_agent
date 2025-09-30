@@ -1,4 +1,4 @@
-"""FastAPI application exposing LangGraph workflows via LangServe."""
+"""透過 LangServe 公開 LangGraph 工作流程的 FastAPI 應用程式。"""
 from __future__ import annotations
 
 from datetime import datetime
@@ -14,27 +14,27 @@ from security_agent_system.workflows.langgraph import LangGraphOrchestrator
 
 app = FastAPI(
     title="Security Agent LangServe",
-    description="Hosted LangGraph workflows for automated security orchestration",
+    description="用於自動化安全協調的託管 LangGraph 工作流程",
     version="1.0.0",
 )
 
 
 class AlertInput(BaseModel):
-    """Schema for incoming security alerts."""
+    """傳入安全警報的結構。"""
 
-    description: str = Field(..., description="Human-readable alert description")
-    severity: str = Field("medium", description="Severity label: critical/high/medium/low/info")
-    type: str = Field("manual", description="Alert type identifier")
-    source: str = Field("langserve", description="Alert source identifier")
-    details: Dict[str, Any] = Field(default_factory=dict, description="Alert details payload")
-    context: Dict[str, Any] = Field(default_factory=dict, description="Additional context metadata")
+    description: str = Field(..., description="人類可讀的警報描述")
+    severity: str = Field("medium", description="嚴重性標籤：critical/high/medium/low/info")
+    type: str = Field("manual", description="警報類型識別碼")
+    source: str = Field("langserve", description="警報來源識別碼")
+    details: Dict[str, Any] = Field(default_factory=dict, description="警報詳細資訊負載")
+    context: Dict[str, Any] = Field(default_factory=dict, description="額外的上下文元資料")
 
 
 orchestrator = LangGraphOrchestrator()
 
 
 async def _ensure_initialized() -> None:
-    """Initialize orchestrator lazily for LangServe requests."""
+    """為 LangServe 請求延遲初始化協調器。"""
     if orchestrator.graph is None:
         await orchestrator.initialize()
 
