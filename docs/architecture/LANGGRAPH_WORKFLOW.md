@@ -1,505 +1,148 @@
-# LangGraph Architecture Documentation
+# LangGraph 工作流程解析
 
-## Overview
+本文件說明 `security_agent_system` 內部採用的 LangGraph DAG 結構、狀態模型與三個代理節點的協作方式。內容著重於工程實作細節與最佳實務，協助維運與開發人員快速掌握多代理流程。
 
-The Security Agent System has been refactored to use LangChain's LangGraph for multi-agent orchestration. The refactor consolidates domain modules under the `security_agent_system` package and exposes runtime entrypoints through `apps/cli`, `apps/langserve`, and `apps/mcp`. This document describes the architecture, its components, and how they work together.
+---
 
-## Table of Contents
+## 目錄
 
-1. [Architecture Overview](#architecture-overview)
-2. [Core Components](#core-components)
-3. [Agent Nodes](#agent-nodes)
-4. [State Management](#state-management)
-5. [Workflow Execution](#workflow-execution)
-6. [LCEL Integration](#lcel-integration)
-7. [Human-in-the-Loop](#human-in-the-loop)
-8. [Error Handling](#error-handling)
-9. [Configuration](#configuration)
-10. [Usage Examples](#usage-examples)
+1. [流程概觀](#流程概觀)
+2. [狀態模型](#狀態模型)
+3. [節點與邊](#節點與邊)
+4. [LCEL 鏈整合](#lcel-鏈整合)
+5. [錯誤處理與重試](#錯誤處理與重試)
+6. [人機協作節點](#人機協作節點)
+7. [擴充範例](#擴充範例)
 
-## Architecture Overview
+---
 
-The LangGraph implementation provides a directed acyclic graph (DAG) for orchestrating three security agents:
+## 流程概觀
 
 ```mermaid
-graph TB
-    Start([Alert Intake]) --> Manager[Manager Analysis]
-    Manager -->|investigate| Hunter[Hunter Investigation]
-    Manager -->|remediate| Executor[Executor Remediation]
-    Manager -->|dismiss| Complete[Completion]
-    Hunter --> Review[Manager Review]
-    Review -->|remediate| Executor
-    Review -->|escalate| Human[Human Approval]
-    Review -->|dismiss| Complete
-    Executor -->|completed| Complete
-    Executor -->|approval_needed| Human
-    Human -->|approved| Executor
-    Human -->|rejected| Complete
-    Complete --> End([End])
+graph TD
+    A[警報接收] --> M[Manager 節點]
+    M -->|需調查| H[Hunter 節點]
+    M -->|直接修復| E[Executor 節點]
+    M -->|結案| C[完成]
+    H --> MR[Manager 覆核]
+    MR -->|升級| E
+    MR -->|結案| C
+    E -->|執行成功| C
+    E -->|需批准| HA[人工批准]
+    HA -->|批准| E
+    HA -->|駁回| C
 ```
 
-## Core Components
+`LangGraphOrchestrator` 會根據來源（CLI / LangServe / MCP）包裝告警並投遞到圖上。每個節點皆為可重用的 Runnable，負責讀寫共享的 `AgentState`。
 
-### 1. SecurityAgentGraph (`security_agent_system/workflows/langgraph/graph.py`)
+---
 
-The main graph that orchestrates the agent workflow:
+## 狀態模型
 
-```python
-class SecurityAgentGraph:
-    """LangGraph-based security agent orchestration system."""
-    
-    def __init__(self, manager_node, hunter_node, executor_node, checkpointer=None):
-        # Nodes for each agent
-        self.manager_node = manager_node
-        self.hunter_node = hunter_node
-        self.executor_node = executor_node
-        
-        # State persistence
-        self.checkpointer = checkpointer
-        
-        # Build and compile the graph
-        self.graph = self._build_graph()
-        self.app = self.graph.compile(checkpointer=self.checkpointer)
-```
-
-### 2. LangGraphOrchestrator (`security_agent_system/workflows/langgraph/orchestrator.py`)
-
-Manages the lifecycle of the LangGraph system:
-
-- Initializes infrastructure (databases, message brokers)
-- Sets up LLM providers for each agent
-- Manages alert consumption and processing
-- Handles system metrics and monitoring
-
-### 3. Agent State (`security_agent_system/workflows/langgraph/state.py`)
-
-Defines the shared state that flows through the graph:
+狀態類型定義於 `workflows.langgraph.state.AgentState`，為 `TypedDict` 結構：
 
 ```python
-class AgentState(TypedDict):
-    """Shared state for all agents in the graph."""
-    current_alert: Optional[SecurityAlert]
-    alert_queue: List[SecurityAlert]
-    investigations: Dict[str, Investigation]
-    remediation_plans: Dict[str, RemediationPlan]
-    execution_results: List[ExecutionResult]
-    agent_status: Dict[str, str]
+class AgentState(TypedDict, total=False):
+    alert_queue: deque[SecurityAlert]
+    current_alert: SecurityAlert | None
+    investigations: dict[str, Investigation]
+    remediation_plans: dict[str, RemediationPlan]
+    execution_results: list[ExecutionResult]
+    decisions: list[DecisionLog]
     workflow_step: str
-    workflow_history: List[Dict[str, Any]]
-    errors: List[Dict[str, Any]]
-    metrics: Dict[str, Any]
-    config: Dict[str, Any]
-    messages: List[Dict[str, Any]]
-    decisions: List[Dict[str, Any]]
-    external_context: Dict[str, Any]
+    errors: list[ErrorLog]
+    human_actions: list[HumanApproval]
+    metrics: dict[str, Any]
+    config: dict[str, Any]
 ```
 
-## Agent Nodes
-
-### 1. ManagerNode
-
-The Manager agent coordinates the security response:
-
-```python
-class ManagerNode:
-    """Manager agent node that coordinates security response."""
-    
-    def __init__(self, llm_provider):
-        self.llm = llm_provider
-        # LCEL chains for decision making
-        self.decision_chain = self._build_decision_chain()
-        self.remediation_chain = self._build_remediation_chain()
-```
-
-**Responsibilities:**
-- Analyze incoming alerts
-- Decide whether to investigate, remediate, escalate, or dismiss
-- Create remediation plans
-- Review investigation results
-
-**LCEL Chains:**
-- Decision Chain: Analyzes alerts and makes routing decisions
-- Remediation Chain: Creates detailed remediation plans
-
-### 2. HunterNode
-
-The Hunter agent performs deep investigation:
-
-```python
-class HunterNode:
-    """Hunter agent node that performs threat investigation."""
-    
-    def __init__(self, llm_provider, graph_db=None, vector_db=None):
-        self.llm = llm_provider
-        self.graph_db = graph_db
-        self.vector_db = vector_db
-        # Investigation tools and chains
-        self._setup_investigation_tools()
-```
-
-**Responsibilities:**
-- Deep investigation of security alerts
-- Query graph and vector databases for context
-- Identify attack patterns and indicators
-- Risk assessment and scoring
-- Provide recommendations
-
-**LCEL Features:**
-- Parallel context gathering using RunnableParallel
-- Tool integration for database queries
-- Structured output parsing with Pydantic
-
-### 3. ExecutorNode
-
-The Executor agent performs remediation actions:
-
-```python
-class ExecutorNode:
-    """Executor agent node that performs remediation actions."""
-    
-    def __init__(self, llm_provider, action_executor=None, notification_service=None):
-        self.llm = llm_provider
-        self.action_executor = action_executor
-        self.action_registry = self._setup_action_registry()
-```
-
-**Responsibilities:**
-- Plan remediation actions
-- Execute security actions (block IP, isolate host, etc.)
-- Validate execution results
-- Handle rollback procedures
-- Send notifications
-
-**Available Actions:**
-- `block_ip`: Block IP address at firewall
-- `isolate_host`: Isolate compromised host
-- `disable_account`: Disable user account
-- `update_rule`: Update security rules
-- `patch_system`: Apply security patches
-- `revoke_access`: Revoke access permissions
-- `quarantine_file`: Quarantine malicious files
-- `reset_credentials`: Reset compromised credentials
-
-## State Management
-
-LangGraph manages state flow through the graph:
-
-1. **State Initialization**: Alert enters the system
-2. **State Updates**: Each node modifies the state
-3. **State Persistence**: Checkpointing saves state for recovery
-4. **State Routing**: Conditional edges route based on state
-
-### Checkpointing
-
-The system uses AsyncSqliteSaver for state persistence:
-
-```python
-checkpoint_path = Path("./checkpoints/security_agent.db")
-checkpointer = AsyncSqliteSaver.from_conn_string(str(checkpoint_path))
-```
-
-This enables:
-- Recovery from failures
-- Human-in-the-loop workflows
-- State inspection and debugging
-
-## Workflow Execution
-
-### 1. Alert Processing Flow
-
-```python
-async def process_alert(self, alert: SecurityAlert) -> Dict[str, Any]:
-    # Initialize state
-    initial_state = {
-        "current_alert": alert,
-        "workflow_step": "intake",
-        # ... other state fields
-    }
-    
-    # Run through graph
-    final_state = await self.app.ainvoke(initial_state)
-    
-    # Return results
-    return extract_results(final_state)
-```
-
-### 2. Streaming Execution
-
-For processing multiple alerts:
-
-```python
-async def process_alert_stream(self, alerts: List[SecurityAlert]):
-    initial_state = {
-        "alert_queue": alerts,
-        # ... other state fields
-    }
-    
-    async for event in self.app.astream(initial_state):
-        # Process streaming events
-        handle_event(event)
-```
-
-## LCEL Integration
-
-The system extensively uses LangChain Expression Language (LCEL):
-
-### 1. Chain Composition
-
-```python
-# Manager decision chain
-self.decision_chain = (
-    RunnablePassthrough.assign(
-        format_instructions=lambda x: self.parser.get_format_instructions()
-    )
-    | self.decision_prompt
-    | self.llm
-    | self.parser
-)
-```
-
-### 2. Parallel Execution
-
-```python
-# Hunter parallel context gathering
-self.context_gathering_chain = RunnableParallel(
-    historical_context=RunnableLambda(self._get_historical_context),
-    threat_intel=RunnableLambda(self._get_threat_intelligence),
-    graph_analysis=RunnableLambda(self._analyze_graph_relationships)
-)
-```
-
-### 3. Structured Output
-
-Using Pydantic models with JsonOutputParser:
-
-```python
-class ManagerDecision(BaseModel):
-    action: str
-    priority: int
-    reasoning: str
-    remediation_required: bool
-    escalation_required: bool
-
-parser = JsonOutputParser(pydantic_object=ManagerDecision)
-```
-
-## Human-in-the-Loop
-
-The system supports human approval for high-risk actions:
-
-1. **Approval Triggers**:
-   - High-risk remediation actions
-   - Critical alerts requiring escalation
-   - Actions with significant business impact
-
-2. **Implementation**:
-   ```python
-   # In graph compilation
-   self.app = self.graph.compile(
-       checkpointer=self.checkpointer,
-       interrupt_before=["human_approval"]
-   )
-   ```
-
-3. **Approval Flow**:
-   - System pauses at human_approval node
-   - State is checkpointed
-   - Human reviews and provides decision
-   - System resumes with decision
-
-## Error Handling
-
-Comprehensive error handling throughout the system:
-
-### 1. Node-Level Error Handling
-
-Each agent node includes try-catch blocks:
-
-```python
-async def __call__(self, state: AgentState) -> AgentState:
-    try:
-        # Agent logic
-        pass
-    except Exception as e:
-        state["errors"].append({
-            "agent": "manager",
-            "timestamp": datetime.now().isoformat(),
-            "error": str(e)
-        })
-        state["agent_status"]["manager"] = "error"
-```
-
-### 2. Graph-Level Error Routing
-
-Error handler node with retry logic:
-
-```python
-def _route_from_error(self, state: AgentState):
-    error_count = len(state.get("errors", []))
-    
-    if error_count < 3:
-        return "retry"
-    elif error_count < 5:
-        return "escalate"
-    else:
-        return "abort"
-```
-
-## Configuration
-
-### 1. Environment Variables
-
-```bash
-# LLM Configuration
-DEFAULT_LLM_PROVIDER=openai
-DEFAULT_LLM_MODEL=gpt-4-turbo-preview
-
-# Agent-specific LLM settings
-MANAGER_LLM_PROVIDER=openai
-HUNTER_LLM_PROVIDER=anthropic
-EXECUTOR_LLM_PROVIDER=google
-
-# Infrastructure
-NEO4J_URI=bolt://localhost:7687
-CHROMADB_PATH=./chroma_db
-MESSAGE_BROKER_TYPE=rabbitmq
-```
-
-### 2. Agent Configuration
-
-```python
-settings.manager_config = {
-    "llm_provider": "openai",
-    "temperature": 0.1,
-    "max_tokens": 4000
-}
-```
-
-## Usage Examples
-
-### 1. Starting the System
-
-```bash
-# Start with default configuration
-python main.py start
-
-# Start with custom config
-python main.py start --config custom.env
-```
-
-### 2. Processing a Test Alert
-
-```bash
-python main.py test-alert \
-    --severity high \
-    --type malware \
-    --source endpoint \
-    "Suspicious process detected on production server"
-```
-
-### 3. Visualizing the Graph
-
-```bash
-# Generate graph visualization
-python main.py visualize --output graph.png
-```
-
-### 4. Checking System Status
-
-```bash
-python main.py status
-```
-
-## Advanced Features
-
-### 1. State Persistence
-
-- Automatic checkpointing at each node
-- Recovery from failures
-- State inspection for debugging
-
-### 2. Parallel Processing
-
-- Batch alert processing
-- Parallel investigation queries
-- Concurrent action execution
-
-### 3. Extensibility
-
-- Easy to add new agent nodes
-- Pluggable LLM providers
-- Custom action implementations
-
-### 4. Observability
-
-- Comprehensive logging with structlog
-- Workflow history tracking
-- Performance metrics collection
-
-## Best Practices
-
-1. **State Management**:
-   - Keep state updates atomic
-   - Use proper error handling
-   - Clean up completed alerts
-
-2. **LLM Usage**:
-   - Use structured outputs with Pydantic
-   - Implement proper prompts with clear instructions
-   - Handle LLM failures gracefully
-
-3. **Performance**:
-   - Use parallel execution where possible
-   - Batch process alerts
-   - Implement proper caching
-
-4. **Security**:
-   - Validate all inputs
-   - Implement proper access controls
-   - Audit all actions
-
-## Migration from Previous Architecture
-
-The key changes from the previous architecture:
-
-1. **Agent Communication**: Direct state passing instead of message queues
-2. **Workflow Management**: DAG-based instead of orchestrator-based
-3. **State Persistence**: Built-in checkpointing
-4. **Error Handling**: Graph-level error routing
-5. **Human Interaction**: Native support for human-in-the-loop
-
-## Troubleshooting
-
-### Common Issues
-
-1. **LLM Provider Errors**:
-   - Check API keys in environment
-   - Verify model availability
-   - Check rate limits
-
-2. **State Persistence**:
-   - Ensure checkpoint directory is writable
-   - Check disk space
-   - Verify SQLite installation
-
-3. **Graph Execution**:
-   - Check node connections
-   - Verify conditional routing logic
-   - Review state updates
-
-### Debug Mode
-
-Enable debug logging:
-
-```python
-import logging
-logging.basicConfig(level=logging.DEBUG)
-```
-
-## Future Enhancements
-
-1. **Dynamic Graph Construction**: Build graphs based on alert type
-2. **Multi-Tenant Support**: Separate graphs per tenant
-3. **Advanced Checkpointing**: Cloud-based state storage
-4. **Graph Optimization**: Automatic path optimization
-5. **Enhanced Monitoring**: Real-time graph visualization
+- **alert_queue**：支援批次告警與平行處理。
+- **workflow_step**：於 Grafana 與檢查點中追蹤進度。
+- **decisions / human_actions**：提供稽核與回溯依據。
+- **metrics**：累積單次流程的延遲、LLM Token 等指標。
+
+狀態透過 LangGraph 的 checkpoint API 持久化，預設採 SQLite，亦可替換成 Postgres 或雲端儲存。
+
+---
+
+## 節點與邊
+
+### ManagerNode
+- **位置**：`workflows.langgraph.nodes.manager`
+- **職責**：解析警報、判斷是否調查/修復/結案、建立 remediation plan。
+- **LCEL 鏈**：`decision_chain`、`plan_chain`，輸出結構化 JSON。
+- **輸出**：更新 `decisions`、可能新增 `remediation_plans`。
+
+### HunterNode
+- **位置**：`workflows.langgraph.nodes.hunter`
+- **職責**：呼叫 GraphRAG 取得上下文、計算風險評分、產生攻擊路徑。
+- **依賴**：`core.context`、`infrastructure.graph`、`infrastructure.vector`。
+- **輸出**：於 `investigations` 填寫發現、建議與相關證據。
+
+### ExecutorNode
+- **位置**：`workflows.langgraph.nodes.executor`
+- **職責**：選擇 Playbook、執行自動化任務或要求人工批准。
+- **機制**：若 `requires_approval=True`，寫入 `human_actions` 並返回待批准狀態。
+- **輸出**：更新 `execution_results` 與 `workflow_step`。
+
+### 邊條件
+- Manager → Hunter：僅在決策為 `investigate` 或 Hunter 要求二次調查時觸發。
+- Manager → Executor：直接修復或覆核後的執行任務。
+- Executor → Manager：失敗或需要補充資訊時回退。
+- 任意節點 → `Completion`：完成處理或判定為誤報。
+
+---
+
+## LCEL 鏈整合
+
+每個代理節點皆由多個 Runnable 組合而成：
+
+1. **輸入正規化**：將 `AgentState` 轉成提示字串與工具上下文。
+2. **LLM 呼叫**：依照設定選擇 OpenAI、Anthropic 或 Google 提供者。
+3. **後處理**：驗證 JSON schema，並轉換為資料類型。
+4. **狀態回寫**：透過 reducer 函式合併回 `AgentState`。
+
+鏈定義集中於 `workflows.langgraph.chains`，方便共享提示模板與工具函式。
+
+---
+
+## 錯誤處理與重試
+
+- **自動重試**：節點層級支援指數退避與最大重試次數（預設 3 次）。
+- **錯誤記錄**：所有例外會寫入 `errors` 陣列並標注節點、錯誤碼與 payload。
+- **恢復策略**：
+  - 若為可忽略錯誤（例如資料缺漏），Manager 會標記為 `needs_human_review`。
+  - 若為系統錯誤，可透過 CLI 指令 `resume-run` 從檢查點復原。
+
+---
+
+## 人機協作節點
+
+LangGraph 內的人工節點以虛擬邊實現：
+
+1. Executor 將需要批准的事項寫入 `human_actions`，並將 `workflow_step` 設為 `awaiting_approval`。
+2. MCP 或 CLI 透過工具命令 `approve_execution` / `reject_execution` 寫回結果。
+3. Orchestrator 重新啟動圖，依批准結果決定後續流程。
+
+此設計允許跨通道（例如 ChatGPT、VS Code）進行一致的覆核操作。
+
+---
+
+## 擴充範例
+
+### 新增威脅獵捕任務
+
+1. 於 `workflows.langgraph.nodes` 新增 `ThreatHuntingNode`，實作 `__call__` 以處理 state。
+2. 在 `graph.py` 中於 Manager → Hunter 之間插入新節點與條件。
+3. 將必要的 GraphRAG 工具注入至新節點的 LCEL 鏈。
+4. 更新測試與 `docs/operations/TESTING_STRATEGY.md` 的案例描述。
+
+### 自訂檢查點儲存
+
+1. 實作 `BaseCheckpointSaver` 介面（例如連接雲端資料庫）。
+2. 於 `LangGraphOrchestrator` 建構時注入自訂 saver。
+3. 調整部署設定與密鑰管理，確保跨執行層皆能使用。
+
+---
+
+經由模組化節點與狀態模型，LangGraph 工作流程能在保持嚴謹審計的前提下快速演進，支援複雜的安全事件調查與修復情境。
