@@ -61,6 +61,11 @@ class Task(BaseModel):
     alert_source: str  # e.g., "wazuh", "siem", "edr"
     alert_timestamp: datetime
     severity: AlertSeverity
+
+    # Extended Alert Information for Manager Agent
+    title: Optional[str] = None
+    affected_assets: List[str] = []
+    source_ips: List[str] = []
     
     # Processing Metadata
     assigned_to: Optional[str] = None
@@ -154,7 +159,7 @@ class ThreatProfile(BaseModel):
     vector_context: VectorContext
     
     # Asset Information
-    asset_criticality: Dict[str, float] = {}
+    asset_criticality: Dict[str, Union[float, str]] = {}
     asset_vulnerabilities: Dict[str, List[str]] = {}
     
     # Threat Assessment

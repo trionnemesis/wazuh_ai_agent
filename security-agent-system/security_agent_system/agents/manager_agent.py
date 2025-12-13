@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import json
 import hashlib
 import structlog
+import difflib
 from collections import defaultdict
 
 from ..core.interfaces import IManagerAgent, IMessageBroker, ILLMProvider
@@ -130,7 +131,10 @@ class ManagerAgent(IManagerAgent):
             alert_source=alert.source,
             alert_timestamp=alert.timestamp,
             severity=alert.severity,
-            status=TaskStatus.PENDING
+            status=TaskStatus.PENDING,
+            title=alert.title,
+            affected_assets=alert.affected_assets,
+            source_ips=alert.source_ips
         )
         
         # Store task
@@ -270,10 +274,22 @@ class ManagerAgent(IManagerAgent):
         if alert.severity != task.severity:
             return False
             
-        # TODO: Implement more sophisticated similarity checks
-        # - Fuzzy matching on titles
-        # - IP/Asset overlap
-        # - Pattern matching
+        # Fuzzy matching on titles
+        if task.title:
+            similarity = difflib.SequenceMatcher(None, alert.title, task.title).ratio()
+            if similarity > 0.8:
+                return True
+
+        # IP/Asset overlap
+        if task.affected_assets:
+            # Check if any asset overlaps
+            if any(asset in task.affected_assets for asset in alert.affected_assets):
+                return True
+
+        if task.source_ips:
+            # Check if any source IP overlaps
+            if any(ip in task.source_ips for ip in alert.source_ips):
+                return True
         
         return False
         

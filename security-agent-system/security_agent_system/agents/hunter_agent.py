@@ -872,9 +872,12 @@ class HunterAgent(IHunterAgent):
         hunt_count = self.metrics["hunts_completed"]
         
         # Calculate new average
-        self.metrics["avg_hunt_time"] = (
-            (current_avg * (hunt_count - 1) + hunt_time) / hunt_count
-        )
+        if hunt_count > 0:
+            self.metrics["avg_hunt_time"] = (
+                (current_avg * (hunt_count - 1) + hunt_time) / hunt_count
+            )
+        else:
+            self.metrics["avg_hunt_time"] = hunt_time
         
     async def _process_hunts_loop(self) -> None:
         """Process active hunts and handle timeouts."""
