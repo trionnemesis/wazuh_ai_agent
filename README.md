@@ -132,6 +132,10 @@ docker-compose up -d
 - [aiops-rag-system](https://github.com/trionnemesis/aiops-rag-system) — 基於 LangChain LCEL + LangGraph 的智慧維運報告 RAG 系統
 - [mcp-ai-agent](https://github.com/trionnemesis/mcp-ai-agent) — 基於 Google Gemini SDK 與 MCP (Model Context Protocol) 的智能 Linux 系統管理助手
 
+針對 AI agent 本身的安全測試則拆分為獨立專案，不在本 repo 內：
+
+- [AgentSec](https://github.com/trionnemesis/AgentSec) — AI agent 的 purple-team harness：Attack–Detection Contract、deterministic verdict engine、MCP gateway。本 repo 的 Wazuh 規則是它的 detection 斷言對象之一（目前為 private repo）。
+
 ## License
 
 AI Agent 整合程式碼與本文件採用 [MIT License](LICENSE)（trionnemesis）。`wazuh-docker/` 目錄為上游 [Wazuh Docker](https://github.com/wazuh/wazuh-docker) 專案的 vendored 副本，保留其原始 GPLv2 授權，詳見 `wazuh-docker/LICENSE`。
