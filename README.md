@@ -78,7 +78,9 @@ flowchart TD
 
 ## Quick Start
 
-**需求**：Linux、8GB+ RAM、20GB+ 硬碟空間、可連外網際網路（LLM API 呼叫）
+**需求**：Linux、Docker Engine 與 Compose plugin、8GB+ RAM、20GB+ 硬碟空間、可連外網際網路（LLM API 呼叫）
+
+此入口是完整 demo/lab，不適用於直接接入既有 Wazuh；獨立部署見 [#68](https://github.com/trionnemesis/wazuh_ai_agent/issues/68)。Compose 會建立專案預設網路（此目錄預設為 `single-node_default`），無須預先建立 external network。
 
 ```bash
 # 1. Clone
@@ -89,7 +91,7 @@ cd wazuh_ai_agent/wazuh-docker/single-node
 sudo sysctl -w vm.max_map_count=262144
 
 # 3. 設定 AI Agent 環境變數
-cat > ai-agent-project/.env << EOF
+cat > ai-agent-project/.env << 'EOF'
 LLM_PROVIDER=anthropic
 GEMINI_API_KEY=your_gemini_api_key_here
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
@@ -98,13 +100,16 @@ OPENSEARCH_USER=admin
 OPENSEARCH_PASSWORD=SecretPassword
 EOF
 
-# 4. 產生 SSL 憑證並啟動所有服務
-docker-compose -f generate-indexer-certs.yml run --rm generator
-docker-compose up -d
+# 4. 驗證設定、產生 SSL 憑證並啟動完整 lab
+docker compose config --quiet
+docker compose -f generate-indexer-certs.yml run --rm generator
+docker compose up -d
 ```
 
 - Wazuh Dashboard: https://localhost (`admin` / `SecretPassword`)
-- AI Agent API: http://localhost:8000
+- AI Agent API: http://127.0.0.1:8000（僅主機 loopback；服務啟動成功後可存取）
+
+**驗證界線**：Compose 路徑、網路、port 與 Wazuh 設定保留由[離線回歸測試](tests/test_compose_config.py)驗證；live Wazuh／LLM triage 尚未驗證。現行硬編碼模型、TLS 與帳號設定仍待 [#68](https://github.com/trionnemesis/wazuh_ai_agent/issues/68) 處理；範例帳密僅限隔離 lab。
 
 ## 設定
 
