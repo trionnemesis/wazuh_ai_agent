@@ -13,12 +13,15 @@
 - **定時掃描**：AI Agent 每 60 秒查詢 `wazuh-alerts-*` 索引中未分析的警報
 - **智慧篩選**：僅處理不含 `ai_analysis` 欄位的新警報，避免重複分析
 - **動態 LLM 選擇**：根據環境變數 `LLM_PROVIDER` 自動選擇 Gemini 或 Claude
-- **結構化分析**：使用 LangChain 框架進行提示工程，產生結構化分析報告
+- **RAG 上下文檢索**：查詢同主機近期警報，用本機 `sentence-transformers` 模型 embedding 後依語意相似度排序，取 top-k 作為上下文（取代單純的假字串）
+- **Agent 決策迴圈**：先請 LLM 判斷現有上下文是否足夠；若判斷不足，才觸發「擴大查詢」——依來源 IP (`data.srcip`) 或規則 ID (`rule.id`) 跨主機找關聯事件，再併入上下文重新分析
+- **結構化分析**：使用 LangChain 框架進行提示工程，產生結構化分析報告，並強制輸出可解析的 `RISK_LEVEL` 欄位
 
 #### 3. 分析結果整合
-- **即時更新**：分析完成後立即更新原始警報，新增 `ai_analysis` 欄位
+- **即時更新**：分析完成後立即更新原始警報，新增 `ai_analysis` 欄位（含 `risk_level`、`used_broadened_context`）
 - **元資料記錄**：包含分析提供商、時間戳記等元資料
 - **視覺化展示**：安全分析師可在 Dashboard 中直接查看 AI 註解的警報
+- **高風險通知**：`risk_level` 為 Critical/High 時，自動 POST 到 `AI_AGENT_WEBHOOK_URL`（未設定則略過）
 
 ## 技術架構詳解
 
@@ -50,8 +53,11 @@ services:
 ```python
 # 關鍵元件
 ├── LLM 選擇器 (get_llm())          # 動態選擇 Gemini/Claude
+├── Embedding 模型 (sentence-transformers)  # RAG 上下文相似度排序，無需額外向量資料庫
+├── 決策鏈 (decision_chain)        # agent 判斷是否需要擴大查詢
 ├── LangChain 分析鏈              # 提示模板 + LLM + 輸出解析
-├── OpenSearch 非同步客戶端        # 與 Wazuh Indexer 通訊
+├── OpenSearch 非同步客戶端        # 與 Wazuh Indexer 通訊 (含窄/廣兩種上下文查詢)
+├── Webhook 通知 (aiohttp)        # 高風險警報自動通知
 ├── APScheduler 排程器           # 每 60 秒執行分析任務
 └── FastAPI Web 服務            # 健康檢查與狀態監控
 ```
